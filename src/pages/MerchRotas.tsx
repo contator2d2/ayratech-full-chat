@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, User, Eye, Copy, Trash2, Edit, Filter, Repeat, Sparkles, Package, RefreshCw, X, CheckCircle2, Activity, Store, Info, ChevronsUpDown, Check } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, User, Eye, Copy, Trash2, Edit, Filter, Repeat, Sparkles, Package, RefreshCw, X, CheckCircle2, Activity, Store, Info, ChevronsUpDown, Check, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AIRoutePlanner from "@/components/merch/AIRoutePlanner";
 import { useMerchRoutes, useCreateMerchRoute, useUpdateMerchRoute, useDeleteMerchRoute, useDuplicateMerchRoute, useBulkDeleteMerchRoutes, useBrandChecklists, useBrandPromoters, useRouteMixPreview, useRouteProducts, useAddRouteProduct, useRemoveRouteProduct, useSyncRouteProducts } from "@/hooks/use-merch-routes";
@@ -393,6 +393,11 @@ export default function MerchRotas() {
                               </div>
                               <div className="flex items-center gap-2 cursor-pointer" onClick={() => setViewRoute(r)}>
                                 {r.progress_pct > 0 && <span className="text-xs font-mono">{Math.round(r.progress_pct)}%</span>}
+                                {(r.has_alert || r.not_done_reason) && (
+                                  <span title={r.not_done_reason || 'Alerta'}>
+                                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                                  </span>
+                                )}
                                 <Badge className={STATUS_COLORS[r.status] || 'bg-muted'}>{STATUS_LABELS[r.status] || r.status}</Badge>
                               </div>
                             </div>
@@ -453,7 +458,24 @@ export default function MerchRotas() {
                   )}
                 </div>
 
-                {/* Info grid */}
+                {(viewRoute.has_alert || viewRoute.not_done_reason) && (
+                  <Card className="border-red-500/40 bg-red-500/5">
+                    <CardContent className="p-3">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
+                        <div className="text-sm">
+                          <div className="font-semibold text-red-700 dark:text-red-300">Rota fechada com justificativa</div>
+                          <div className="text-muted-foreground mt-1">{viewRoute.not_done_reason || 'Sem detalhes'}</div>
+                          {viewRoute.not_done_at && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {format(parseISO(viewRoute.not_done_at), "dd/MM/yyyy HH:mm")}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-muted-foreground" />
