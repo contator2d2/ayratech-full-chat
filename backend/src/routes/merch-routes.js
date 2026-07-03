@@ -2246,6 +2246,21 @@ router.post('/promotor/routes/:id/checkin', promotorAuth, async (req, res) => {
     }
     const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
     const todayStr = `${nowBR.getFullYear()}-${String(nowBR.getMonth()+1).padStart(2,'0')}-${String(nowBR.getDate()).padStart(2,'0')}`;
+
+    // Block check-in when there are past open routes still awaiting justification
+    try {
+      await ensureNotDoneColumns();
+      const pending = await query(
+        `SELECT COUNT(*)::int AS cnt FROM merch_routes
+         WHERE promoter_id=$1 AND visit_date < $2
+           AND status IN ('scheduled','confirmed','in_progress')`,
+        [req.employeeId, todayStr]
+      );
+      if (pending.rows[0].cnt > 0) {
+        return res.status(409).json({ error: 'pending_justifications', message: 'Existem rotas anteriores em aberto. Justifique antes de iniciar uma nova.' });
+      }
+    } catch (e) { /* ignore */ }
+
     const pdvId = route.rows[0].pdv_id;
     let effectivePhotoUrl = photo_url || null;
 
