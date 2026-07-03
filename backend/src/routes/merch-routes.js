@@ -1347,11 +1347,15 @@ router.get('/photo-book', authenticate, async (req, res) => {
 
     // Ensure live_photo_books has upload_source column
     try { await query(`ALTER TABLE live_photo_books ADD COLUMN IF NOT EXISTS upload_source VARCHAR(20) DEFAULT 'app'`); } catch(e) {}
+    // Ensure rotation column exists on both photo tables
+    try { await query(`ALTER TABLE live_photo_books ADD COLUMN IF NOT EXISTS rotation INT DEFAULT 0`); } catch(e) {}
+    try { await query(`ALTER TABLE route_photos ADD COLUMN IF NOT EXISTS rotation INT DEFAULT 0`); } catch(e) {}
 
     // Query from both live_photo_books AND route_photos (union for completeness)
     let sql = `SELECT * FROM (
       SELECT lpb.id, lpb.organization_id, lpb.brand_id, lpb.pdv_id, lpb.route_id, lpb.category_id, lpb.product_id,
              lpb.photo_type, lpb.photo_url, lpb.promoter_id, lpb.captured_at, lpb.upload_source,
+             COALESCE(lpb.rotation,0) as rotation,
              e.full_name as promoter_name, pc.name as category_name, pr.name as product_name,
              p.name as pdv_name, b.name as brand_name
       FROM live_photo_books lpb
@@ -1364,6 +1368,7 @@ router.get('/photo-book', authenticate, async (req, res) => {
       UNION ALL
       SELECT rp.id, r.organization_id, r.brand_id, r.pdv_id, rp.route_id, rp.category_id, rp.product_id,
              rp.photo_type, rp.photo_url, r.promoter_id, COALESCE(rp.captured_at, rp.created_at) as captured_at, rp.upload_source,
+             COALESCE(rp.rotation,0) as rotation,
              e2.full_name as promoter_name, pc2.name as category_name, pr2.name as product_name,
              p2.name as pdv_name, b2.name as brand_name
       FROM route_photos rp
