@@ -44,6 +44,89 @@ const STATUS_LABELS: Record<string, string> = {
   awaiting_checkout: 'Aguardando Checkout',
 };
 
+function PendingJustificationsGate() {
+  const { data: pending = [], isLoading } = usePromotorPendingJustifications();
+  const justify = usePromotorJustifyRoute();
+  const { toast } = useToast();
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
+
+  if (isLoading || !pending.length) return null;
+
+  const submit = async (r: any) => {
+    const reason = (reasons[r.id] || '').trim();
+    if (reason.length < 5) {
+      toast({ title: 'Motivo obrigatório', description: 'Descreva com pelo menos 5 caracteres.', variant: 'destructive' });
+      return;
+    }
+    setSubmittingId(r.id);
+    try {
+      await justify.mutateAsync({ id: r.id, reason });
+      toast({ title: 'Rota justificada', description: `${r.pdv_name} • ${r.brand_name}` });
+    } catch (e: any) {
+      toast({ title: 'Erro ao justificar', description: e?.message || 'Tente novamente', variant: 'destructive' });
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={() => { /* blocking */ }}>
+      <DialogContent
+        className="max-w-lg max-h-[90vh] overflow-y-auto"
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-600">
+            <AlertTriangle className="h-5 w-5" />
+            Rotas anteriores em aberto
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Você tem {pending.length} rota(s) de dias anteriores que não foram finalizadas.
+            Justifique o motivo para poder iniciar novas rotas hoje.
+          </p>
+          {pending.map((r: any) => (
+            <Card key={r.id} className="border-red-500/30 bg-red-500/5">
+              <CardContent className="p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{r.pdv_name}</div>
+                    <div className="text-xs text-muted-foreground">{r.brand_name}</div>
+                  </div>
+                  <Badge variant="destructive" className="text-[10px]">
+                    {r.visit_date ? format(new Date(r.visit_date), "dd/MM/yyyy", { locale: ptBR }) : ''}
+                  </Badge>
+                </div>
+                <Textarea
+                  placeholder="Motivo da não execução..."
+                  value={reasons[r.id] || ''}
+                  onChange={(e) => setReasons(prev => ({ ...prev, [r.id]: e.target.value }))}
+                  rows={2}
+                  className="text-sm"
+                />
+                <Button
+                  size="sm"
+                  className="w-full"
+                  onClick={() => submit(r)}
+                  disabled={submittingId === r.id}
+                >
+                  {submittingId === r.id ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
+                  Justificar e fechar
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
 export default function PromotorHome() {
   const { data, isLoading } = usePromotorHome();
   const punch = usePromotorPunch();
