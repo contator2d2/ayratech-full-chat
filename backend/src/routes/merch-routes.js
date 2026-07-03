@@ -1396,6 +1396,50 @@ router.get('/photo-book', authenticate, async (req, res) => {
   }
 });
 
+// ===== PHOTO ROTATION (persistent) =====
+router.patch('/photos/:id/rotate', authenticate, async (req, res) => {
+  try {
+    const orgRes = await query('SELECT organization_id FROM organization_members WHERE user_id=$1 LIMIT 1', [req.userId]);
+    if (!orgRes.rows.length) return res.status(403).json({ error: 'Sem organização' });
+    const orgId = orgRes.rows[0].organization_id;
+    const id = req.params.id;
+    let { rotation, delta } = req.body || {};
+    // Ensure columns exist
+    try { await query(`ALTER TABLE live_photo_books ADD COLUMN IF NOT EXISTS rotation INT DEFAULT 0`); } catch(e) {}
+    try { await query(`ALTER TABLE route_photos ADD COLUMN IF NOT EXISTS rotation INT DEFAULT 0`); } catch(e) {}
+
+    // Try live_photo_books first (scoped by org), then route_photos (scoped via route.org)
+    const norm = (v) => {
+      let n = Math.round(Number(v) || 0) % 360;
+      if (n < 0) n += 360;
+      return n;
+    };
+
+    // live_photo_books
+    let cur = await query(`SELECT rotation FROM live_photo_books WHERE id=$1 AND organization_id=$2`, [id, orgId]);
+    if (cur.rows.length) {
+      const next = rotation != null ? norm(rotation) : norm((cur.rows[0].rotation || 0) + (Number(delta) || 90));
+      await query(`UPDATE live_photo_books SET rotation=$1 WHERE id=$2`, [next, id]);
+      return res.json({ ok: true, rotation: next });
+    }
+    // route_photos
+    cur = await query(
+      `SELECT rp.rotation FROM route_photos rp JOIN merch_routes r ON r.id=rp.route_id
+       WHERE rp.id=$1 AND r.organization_id=$2`,
+      [id, orgId]
+    );
+    if (cur.rows.length) {
+      const next = rotation != null ? norm(rotation) : norm((cur.rows[0].rotation || 0) + (Number(delta) || 90));
+      await query(`UPDATE route_photos SET rotation=$1 WHERE id=$2`, [next, id]);
+      return res.json({ ok: true, rotation: next });
+    }
+    return res.status(404).json({ error: 'Foto não encontrada' });
+  } catch (err) {
+    logError('photo-rotate', err);
+    res.status(500).json({ error: 'Erro ao girar foto' });
+  }
+});
+
 // ===== PHOTO BOOK SHARE (create token) =====
 router.post('/photo-book/share', authenticate, async (req, res) => {
   try {
