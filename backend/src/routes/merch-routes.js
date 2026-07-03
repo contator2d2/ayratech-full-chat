@@ -1347,11 +1347,15 @@ router.get('/photo-book', authenticate, async (req, res) => {
 
     // Ensure live_photo_books has upload_source column
     try { await query(`ALTER TABLE live_photo_books ADD COLUMN IF NOT EXISTS upload_source VARCHAR(20) DEFAULT 'app'`); } catch(e) {}
+    // Ensure rotation column exists on both photo tables
+    try { await query(`ALTER TABLE live_photo_books ADD COLUMN IF NOT EXISTS rotation INT DEFAULT 0`); } catch(e) {}
+    try { await query(`ALTER TABLE route_photos ADD COLUMN IF NOT EXISTS rotation INT DEFAULT 0`); } catch(e) {}
 
     // Query from both live_photo_books AND route_photos (union for completeness)
     let sql = `SELECT * FROM (
       SELECT lpb.id, lpb.organization_id, lpb.brand_id, lpb.pdv_id, lpb.route_id, lpb.category_id, lpb.product_id,
              lpb.photo_type, lpb.photo_url, lpb.promoter_id, lpb.captured_at, lpb.upload_source,
+             COALESCE(lpb.rotation,0) as rotation,
              e.full_name as promoter_name, pc.name as category_name, pr.name as product_name,
              p.name as pdv_name, b.name as brand_name
       FROM live_photo_books lpb
@@ -1364,6 +1368,7 @@ router.get('/photo-book', authenticate, async (req, res) => {
       UNION ALL
       SELECT rp.id, r.organization_id, r.brand_id, r.pdv_id, rp.route_id, rp.category_id, rp.product_id,
              rp.photo_type, rp.photo_url, r.promoter_id, COALESCE(rp.captured_at, rp.created_at) as captured_at, rp.upload_source,
+             COALESCE(rp.rotation,0) as rotation,
              e2.full_name as promoter_name, pc2.name as category_name, pr2.name as product_name,
              p2.name as pdv_name, b2.name as brand_name
       FROM route_photos rp
@@ -1388,6 +1393,50 @@ router.get('/photo-book', authenticate, async (req, res) => {
     if (err.code === '42P01') return res.json([]);
     logError('photo-book', err);
     res.status(500).json({ error: 'Erro' });
+  }
+});
+
+// ===== PHOTO ROTATION (persistent) =====
+router.patch('/photos/:id/rotate', authenticate, async (req, res) => {
+  try {
+    const orgRes = await query('SELECT organization_id FROM organization_members WHERE user_id=$1 LIMIT 1', [req.userId]);
+    if (!orgRes.rows.length) return res.status(403).json({ error: 'Sem organização' });
+    const orgId = orgRes.rows[0].organization_id;
+    const id = req.params.id;
+    let { rotation, delta } = req.body || {};
+    // Ensure columns exist
+    try { await query(`ALTER TABLE live_photo_books ADD COLUMN IF NOT EXISTS rotation INT DEFAULT 0`); } catch(e) {}
+    try { await query(`ALTER TABLE route_photos ADD COLUMN IF NOT EXISTS rotation INT DEFAULT 0`); } catch(e) {}
+
+    // Try live_photo_books first (scoped by org), then route_photos (scoped via route.org)
+    const norm = (v) => {
+      let n = Math.round(Number(v) || 0) % 360;
+      if (n < 0) n += 360;
+      return n;
+    };
+
+    // live_photo_books
+    let cur = await query(`SELECT rotation FROM live_photo_books WHERE id=$1 AND organization_id=$2`, [id, orgId]);
+    if (cur.rows.length) {
+      const next = rotation != null ? norm(rotation) : norm((cur.rows[0].rotation || 0) + (Number(delta) || 90));
+      await query(`UPDATE live_photo_books SET rotation=$1 WHERE id=$2`, [next, id]);
+      return res.json({ ok: true, rotation: next });
+    }
+    // route_photos
+    cur = await query(
+      `SELECT rp.rotation FROM route_photos rp JOIN merch_routes r ON r.id=rp.route_id
+       WHERE rp.id=$1 AND r.organization_id=$2`,
+      [id, orgId]
+    );
+    if (cur.rows.length) {
+      const next = rotation != null ? norm(rotation) : norm((cur.rows[0].rotation || 0) + (Number(delta) || 90));
+      await query(`UPDATE route_photos SET rotation=$1 WHERE id=$2`, [next, id]);
+      return res.json({ ok: true, rotation: next });
+    }
+    return res.status(404).json({ error: 'Foto não encontrada' });
+  } catch (err) {
+    logError('photo-rotate', err);
+    res.status(500).json({ error: 'Erro ao girar foto' });
   }
 });
 

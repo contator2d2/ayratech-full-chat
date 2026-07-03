@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { usePhotoBook } from "@/hooks/use-merch-routes";
+import { usePhotoBook, useRotatePhoto } from "@/hooks/use-merch-routes";
 import { useBrands } from "@/hooks/use-merchandising";
 import { usePDVs } from "@/hooks/use-promotor";
 import { resolveMediaUrl } from "@/lib/media";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare } from "lucide-react";
+import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare, RotateCw, RotateCcw } from "lucide-react";
 import { BookEditorDialog } from "@/components/merch/BookEditorDialog";
+import { toast } from "sonner";
 
 const PHOTO_TYPES: Record<string, string> = {
   checkin: 'Check-in', checkout: 'Check-out', before: 'Antes', after: 'Depois',
@@ -30,6 +31,7 @@ export default function MerchBookFotos() {
   const [viewPhoto, setViewPhoto] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bookEditorOpen, setBookEditorOpen] = useState(false);
+  const rotateMut = useRotatePhoto();
 
   const { data: brands = [] } = useBrands();
   const { data: pdvs = [] } = usePDVs();
@@ -223,7 +225,8 @@ export default function MerchBookFotos() {
                                 <img 
                                   src={photoUrl} 
                                   alt={photo.product_name || photo.category_name || 'Foto de execução'} 
-                                  className="w-full h-full object-cover" 
+                                  className="w-full h-full object-cover transition-transform" 
+                                  style={photo.rotation ? { transform: `rotate(${photo.rotation}deg)` } : undefined}
                                   loading="lazy" 
                                   onError={(e) => {
                                     // If image fails (session blob), hide it from the book selection
@@ -276,7 +279,48 @@ export default function MerchBookFotos() {
           </DialogHeader>
           <div className="space-y-3">
             {viewPhoto?.photo_url && (
-              <img src={viewPhoto.photo_url} alt="" className="w-full rounded-lg max-h-[60vh] object-contain bg-muted" />
+              <div className="relative">
+                <div className="w-full rounded-lg max-h-[60vh] bg-muted overflow-hidden flex items-center justify-center">
+                  <img
+                    src={viewPhoto.photo_url}
+                    alt=""
+                    className="max-h-[60vh] max-w-full object-contain transition-transform"
+                    style={viewPhoto.rotation ? { transform: `rotate(${viewPhoto.rotation}deg)` } : undefined}
+                  />
+                </div>
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-8 w-8 p-0"
+                    disabled={rotateMut.isPending}
+                    onClick={async () => {
+                      try {
+                        const r = await rotateMut.mutateAsync({ id: viewPhoto.id, delta: -90 });
+                        setViewPhoto({ ...viewPhoto, rotation: r.rotation });
+                      } catch { toast.error('Não foi possível girar a foto'); }
+                    }}
+                    title="Girar 90° à esquerda"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-8 w-8 p-0"
+                    disabled={rotateMut.isPending}
+                    onClick={async () => {
+                      try {
+                        const r = await rotateMut.mutateAsync({ id: viewPhoto.id, delta: 90 });
+                        setViewPhoto({ ...viewPhoto, rotation: r.rotation });
+                      } catch { toast.error('Não foi possível girar a foto'); }
+                    }}
+                    title="Girar 90° à direita"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             )}
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div><span className="text-muted-foreground">Promotor:</span> {viewPhoto?.promoter_name || '—'}</div>

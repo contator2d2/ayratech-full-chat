@@ -292,6 +292,18 @@ export function usePhotoBook(filters?: { brand_id?: string; pdv_id?: string; dat
   });
 }
 
+export function useRotatePhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, delta, rotation }: { id: string; delta?: number; rotation?: number }) =>
+      api<any>(`/api/merch/photos/${id}/rotate`, { method: 'PATCH', body: { delta, rotation } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['photo-book'] });
+      qc.invalidateQueries({ queryKey: ['merch-route'] });
+    },
+  });
+}
+
 // Route Authors
 export function useRouteAuthors(routeId?: string) {
   return useQuery({
