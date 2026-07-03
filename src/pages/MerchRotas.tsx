@@ -169,13 +169,20 @@ export default function MerchRotas() {
 
   const executeScopeAction = (scope: 'single' | 'future') => {
     if (!selectedRoute?.id) return;
-    if (scopeDialog?.action === 'delete') {
-      deleteRoute.mutate({ id: selectedRoute.id, scope }, {
-        onSuccess: () => { toast.success(scope === 'future' ? 'Rotas futuras excluídas' : 'Rota excluída'); setSelectedRoute(null); setScopeDialog(null); }
+    const routeId = selectedRoute.id;
+    const action = scopeDialog?.action;
+    const editData = scopeDialog?.data;
+    // Close dialog immediately so it doesn't stay open regardless of mutation outcome
+    setScopeDialog(null);
+    if (action === 'delete') {
+      deleteRoute.mutate({ id: routeId, scope }, {
+        onSuccess: () => { toast.success(scope === 'future' ? 'Rotas futuras excluídas' : 'Rota excluída'); setSelectedRoute(null); },
+        onError: () => { toast.error('Erro ao excluir rota'); },
       });
-    } else if (scopeDialog?.action === 'edit' && scopeDialog.data) {
-      updateRoute.mutate({ id: selectedRoute.id, ...scopeDialog.data, _scope: scope }, {
-        onSuccess: () => { toast.success(scope === 'future' ? 'Rotas futuras atualizadas' : 'Rota atualizada'); setSelectedRoute(null); setScopeDialog(null); }
+    } else if (action === 'edit' && editData) {
+      updateRoute.mutate({ id: routeId, ...editData, _scope: scope }, {
+        onSuccess: () => { toast.success(scope === 'future' ? 'Rotas futuras atualizadas' : 'Rota atualizada'); setSelectedRoute(null); },
+        onError: () => { toast.error('Erro ao atualizar rota'); },
       });
     }
   };
