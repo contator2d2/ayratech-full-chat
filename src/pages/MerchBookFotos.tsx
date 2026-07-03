@@ -279,7 +279,48 @@ export default function MerchBookFotos() {
           </DialogHeader>
           <div className="space-y-3">
             {viewPhoto?.photo_url && (
-              <img src={viewPhoto.photo_url} alt="" className="w-full rounded-lg max-h-[60vh] object-contain bg-muted" />
+              <div className="relative">
+                <div className="w-full rounded-lg max-h-[60vh] bg-muted overflow-hidden flex items-center justify-center">
+                  <img
+                    src={viewPhoto.photo_url}
+                    alt=""
+                    className="max-h-[60vh] max-w-full object-contain transition-transform"
+                    style={viewPhoto.rotation ? { transform: `rotate(${viewPhoto.rotation}deg)` } : undefined}
+                  />
+                </div>
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-8 w-8 p-0"
+                    disabled={rotateMut.isPending}
+                    onClick={async () => {
+                      try {
+                        const r = await rotateMut.mutateAsync({ id: viewPhoto.id, delta: -90 });
+                        setViewPhoto({ ...viewPhoto, rotation: r.rotation });
+                      } catch { toast.error('Não foi possível girar a foto'); }
+                    }}
+                    title="Girar 90° à esquerda"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-8 w-8 p-0"
+                    disabled={rotateMut.isPending}
+                    onClick={async () => {
+                      try {
+                        const r = await rotateMut.mutateAsync({ id: viewPhoto.id, delta: 90 });
+                        setViewPhoto({ ...viewPhoto, rotation: r.rotation });
+                      } catch { toast.error('Não foi possível girar a foto'); }
+                    }}
+                    title="Girar 90° à direita"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             )}
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div><span className="text-muted-foreground">Promotor:</span> {viewPhoto?.promoter_name || '—'}</div>
