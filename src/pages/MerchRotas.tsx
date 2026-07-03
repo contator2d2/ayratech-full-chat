@@ -458,7 +458,24 @@ export default function MerchRotas() {
                   )}
                 </div>
 
-                {/* Info grid */}
+                {(viewRoute.has_alert || viewRoute.not_done_reason) && (
+                  <Card className="border-red-500/40 bg-red-500/5">
+                    <CardContent className="p-3">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
+                        <div className="text-sm">
+                          <div className="font-semibold text-red-700 dark:text-red-300">Rota fechada com justificativa</div>
+                          <div className="text-muted-foreground mt-1">{viewRoute.not_done_reason || 'Sem detalhes'}</div>
+                          {viewRoute.not_done_at && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {format(parseISO(viewRoute.not_done_at), "dd/MM/yyyy HH:mm")}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-muted-foreground" />
