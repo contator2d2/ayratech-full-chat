@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { usePhotoBook } from "@/hooks/use-merch-routes";
+import { usePhotoBook, useRotatePhoto } from "@/hooks/use-merch-routes";
 import { useBrands } from "@/hooks/use-merchandising";
 import { usePDVs } from "@/hooks/use-promotor";
 import { resolveMediaUrl } from "@/lib/media";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare } from "lucide-react";
+import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare, RotateCw, RotateCcw } from "lucide-react";
 import { BookEditorDialog } from "@/components/merch/BookEditorDialog";
+import { toast } from "sonner";
 
 const PHOTO_TYPES: Record<string, string> = {
   checkin: 'Check-in', checkout: 'Check-out', before: 'Antes', after: 'Depois',
