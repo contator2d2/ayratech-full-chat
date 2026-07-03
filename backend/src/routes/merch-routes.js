@@ -2170,6 +2170,65 @@ router.get('/promotor/routes/:id', promotorAuth, async (req, res) => {
   } catch (err) { logError('promotor.route_detail', err); res.status(500).json({ error: 'Erro ao carregar rota' }); }
 });
 
+// Ensure not-done justification columns exist
+async function ensureNotDoneColumns() {
+  try {
+    await query(`ALTER TABLE merch_routes ADD COLUMN IF NOT EXISTS not_done_reason TEXT`);
+    await query(`ALTER TABLE merch_routes ADD COLUMN IF NOT EXISTS not_done_at TIMESTAMPTZ`);
+    await query(`ALTER TABLE merch_routes ADD COLUMN IF NOT EXISTS not_done_by UUID`);
+    await query(`ALTER TABLE merch_routes ADD COLUMN IF NOT EXISTS has_alert BOOLEAN DEFAULT false`);
+  } catch (e) { /* ignore */ }
+}
+
+// Promotor: pending justifications (past open routes)
+router.get('/promotor/pending-justifications', promotorAuth, async (req, res) => {
+  try {
+    await ensureNotDoneColumns();
+    const nowBR = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const todayStr = `${nowBR.getFullYear()}-${String(nowBR.getMonth()+1).padStart(2,'0')}-${String(nowBR.getDate()).padStart(2,'0')}`;
+    const result = await query(
+      `SELECT r.id, r.visit_date, r.scheduled_time, r.status, r.pdv_id, r.brand_id,
+              p.name as pdv_name, b.name as brand_name
+       FROM merch_routes r
+       LEFT JOIN pdvs p ON p.id = r.pdv_id
+       LEFT JOIN merch_brands b ON b.id = r.brand_id
+       WHERE r.promoter_id=$1
+         AND r.visit_date < $2
+         AND r.status IN ('scheduled','confirmed','in_progress')
+       ORDER BY r.visit_date ASC, r.scheduled_time ASC`,
+      [req.employeeId, todayStr]
+    );
+    res.json(result.rows);
+  } catch (err) { logError('promotor.pending_justifications', err); res.status(500).json({ error: 'Erro ao carregar pendências' }); }
+});
+
+// Promotor: justify a past open route (closes it as not_done with alert)
+router.post('/promotor/routes/:id/justify', promotorAuth, async (req, res) => {
+  try {
+    const { reason } = req.body || {};
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({ error: 'Motivo obrigatório' });
+    }
+    await ensureNotDoneColumns();
+    const check = await query(
+      `SELECT id, status FROM merch_routes WHERE id=$1 AND promoter_id=$2`,
+      [req.params.id, req.employeeId]
+    );
+    if (!check.rows.length) return res.status(404).json({ error: 'Rota não encontrada' });
+    if (!['scheduled','confirmed','in_progress'].includes(check.rows[0].status)) {
+      return res.status(400).json({ error: 'Rota não pode ser justificada neste status' });
+    }
+    const result = await query(
+      `UPDATE merch_routes
+       SET status='not_done', not_done_reason=$2, not_done_at=NOW(), not_done_by=$3,
+           has_alert=true, completed_at=NOW(), updated_at=NOW()
+       WHERE id=$1 RETURNING *`,
+      [req.params.id, String(reason).trim(), req.employeeId]
+    );
+    res.json(result.rows[0]);
+  } catch (err) { logError('promotor.justify_route', err); res.status(500).json({ error: 'Erro ao justificar rota' }); }
+});
+
 // Promotor: Check-in (also handles PDV visit creation)
 router.post('/promotor/routes/:id/checkin', promotorAuth, async (req, res) => {
   try {
