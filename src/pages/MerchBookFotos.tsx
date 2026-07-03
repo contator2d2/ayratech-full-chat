@@ -225,7 +225,8 @@ export default function MerchBookFotos() {
                                 <img 
                                   src={photoUrl} 
                                   alt={photo.product_name || photo.category_name || 'Foto de execução'} 
-                                  className="w-full h-full object-cover" 
+                                  className="w-full h-full object-cover transition-transform" 
+                                  style={photo.rotation ? { transform: `rotate(${photo.rotation}deg)` } : undefined}
                                   loading="lazy" 
                                   onError={(e) => {
                                     // If image fails (session blob), hide it from the book selection
