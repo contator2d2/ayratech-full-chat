@@ -527,6 +527,7 @@ export default function PromotorHome() {
 
   return (
     <PromotorLayout>
+      <PendingJustificationsGate />
       <div className="space-y-4 p-4 max-w-lg mx-auto">
         {/* Status bar */}
         <div className="flex items-center justify-between gap-2">
