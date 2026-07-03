@@ -393,21 +393,35 @@ export function CameraCapture({
     setValidationError(null);
 
     try {
-      // Load image into canvas for validation and watermark
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-      });
-
       if (!canvasRef.current) return;
       const canvas = canvasRef.current;
-      canvas.width = img.width;
-      canvas.height = img.height;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.drawImage(img, 0, 0);
+
+      // Use createImageBitmap with EXIF orientation applied automatically when available
+      let drewFromBitmap = false;
+      try {
+        // @ts-ignore — imageOrientation is supported in modern browsers
+        const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        canvas.width = bmp.width;
+        canvas.height = bmp.height;
+        ctx.drawImage(bmp, 0, 0);
+        bmp.close?.();
+        drewFromBitmap = true;
+      } catch {
+        // Fallback: plain <img> (may not honor EXIF orientation on some browsers)
+      }
+      if (!drewFromBitmap) {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+      }
 
       // Validate quality
       const result = analyzeImageQuality(canvas, config);
