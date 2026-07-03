@@ -217,7 +217,9 @@ router.post('/routes', async (req, res) => {
         } else if (recurrence_type === 'weekly') {
           if (effectiveWeekdays && effectiveWeekdays.length > 0) {
             const weekStart = new Date(current);
-            weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay() + 1);
+            const dow = weekStart.getUTCDay(); // 0=Sun..6=Sat
+            const daysBackToMonday = dow === 0 ? 6 : dow - 1;
+            weekStart.setUTCDate(weekStart.getUTCDate() - daysBackToMonday);
             for (const wd of effectiveWeekdays) {
               const offset = wd === 0 ? 6 : wd - 1; // Mon=0..Sun=6
               const d = new Date(weekStart);
