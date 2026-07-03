@@ -393,6 +393,11 @@ export default function MerchRotas() {
                               </div>
                               <div className="flex items-center gap-2 cursor-pointer" onClick={() => setViewRoute(r)}>
                                 {r.progress_pct > 0 && <span className="text-xs font-mono">{Math.round(r.progress_pct)}%</span>}
+                                {(r.has_alert || r.not_done_reason) && (
+                                  <span title={r.not_done_reason || 'Alerta'}>
+                                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                                  </span>
+                                )}
                                 <Badge className={STATUS_COLORS[r.status] || 'bg-muted'}>{STATUS_LABELS[r.status] || r.status}</Badge>
                               </div>
                             </div>
