@@ -31,6 +31,7 @@ export default function MerchBookFotos() {
   const [viewPhoto, setViewPhoto] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bookEditorOpen, setBookEditorOpen] = useState(false);
+  const rotateMut = useRotatePhoto();
 
   const { data: brands = [] } = useBrands();
   const { data: pdvs = [] } = usePDVs();
