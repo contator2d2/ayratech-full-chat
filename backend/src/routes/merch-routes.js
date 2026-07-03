@@ -171,10 +171,11 @@ router.post('/routes', async (req, res) => {
       } catch (e) { logError('checklist resolve fail', e); }
     }
 
-    // Per-brand weekdays (for multi-brand weekly recurrence)
+    // Per-brand weekdays (for weekly recurrence — applies for single or multi-brand)
     // Encoding: Sun=0, Mon=1..Sat=6 (matches JS getUTCDay)
+    const hasBrandsArray = Array.isArray(multiBrands) && multiBrands.length > 0;
     const brandWeekdays = {}; // brand_id -> Set<number> (empty set = applies to all dates)
-    if (isMultiBrand && recurrence_type === 'weekly') {
+    if (hasBrandsArray && recurrence_type === 'weekly') {
       for (const mb of multiBrands) {
         const wds = (Array.isArray(mb.weekdays) && mb.weekdays.length > 0) ? mb.weekdays : [];
         brandWeekdays[mb.brand_id] = new Set(wds);
@@ -183,7 +184,7 @@ router.post('/routes', async (req, res) => {
 
     // Effective weekdays for date generation = union of brand weekdays (fallback to recurrence_weekdays)
     let effectiveWeekdays = recurrence_weekdays;
-    if (isMultiBrand && recurrence_type === 'weekly') {
+    if (hasBrandsArray && recurrence_type === 'weekly') {
       const union = new Set();
       let anyBrandWithoutWeekdays = false;
       for (const mb of multiBrands) {
