@@ -26,6 +26,28 @@ export function usePromotorAgenda(filters?: { date_from?: string; date_to?: stri
   });
 }
 
+export function usePromotorPendingJustifications() {
+  return useQuery({
+    queryKey: ['promotor-pending-justifications'],
+    queryFn: () => promotorApi<any[]>(`/api/merch/promotor/pending-justifications`),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function usePromotorJustifyRoute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      promotorApi<any>(`/api/merch/promotor/routes/${id}/justify`, { method: 'POST', body: { reason } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['promotor-pending-justifications'] });
+      qc.invalidateQueries({ queryKey: ['promotor-agenda'] });
+      qc.invalidateQueries({ queryKey: ['promotor-home'] });
+    },
+  });
+}
+
 export function usePromotorRouteDetail(id?: string) {
   return useQuery({
     queryKey: ['promotor-route', id],
