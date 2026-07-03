@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { usePromotorHome, usePromotorPunch, usePromotorOvertimeRequest } from "@/hooks/use-promotor";
+import { usePromotorPendingJustifications, usePromotorJustifyRoute } from "@/hooks/use-promotor-routes";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
 import { CameraCapture } from "@/components/promotor/CameraCapture";
 import { FaceVerifyDialog } from "@/components/facial-recognition/FaceVerifyDialog";
