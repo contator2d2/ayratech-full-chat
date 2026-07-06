@@ -481,6 +481,9 @@ router.put('/routes/:id', async (req, res) => {
           const dNew = new Date(newYMD + 'T12:00:00Z');
           const deltaDays = Math.round((dNew - dOld) / 86400000);
           if (deltaDays !== 0) {
+            // Only shift future occurrences that share the SAME weekday as the
+            // edited route. This preserves other weekdays in multi-day recurrences
+            // (e.g. editing the Wednesday of a Wed+Thu series must not drag Thu).
             await query(
               `UPDATE merch_routes
                  SET visit_date = (visit_date::date + ($1 || ' days')::interval)::date,
@@ -488,7 +491,8 @@ router.put('/routes/:id', async (req, res) => {
                WHERE organization_id=$2 AND promoter_id IS NOT DISTINCT FROM $3
                  AND pdv_id IS NOT DISTINCT FROM $4 AND brand_id IS NOT DISTINCT FROM $5
                  AND visit_date > $6 AND status IN ('scheduled','confirmed')
-                 AND id <> $7`,
+                 AND id <> $7
+                 AND EXTRACT(DOW FROM visit_date) = EXTRACT(DOW FROM $6::date)`,
               [String(deltaDays), orgId, old.promoter_id, old.pdv_id, old.brand_id, old.visit_date, req.params.id]
             );
             logInfo('routes.bulk_date_shifted', { base_route: req.params.id, delta_days: deltaDays });
