@@ -464,6 +464,37 @@ router.put('/routes/:id', async (req, res) => {
         await query(bulkSql, bulkParams);
         logInfo('routes.bulk_updated', { base_route: req.params.id, scope: 'future' });
       }
+
+      // Shift future siblings' visit_date by the same delta when the recurring
+      // day of week changes (e.g. Tuesday → Monday shifts every future occurrence).
+      if (req.body.visit_date !== undefined && req.body.visit_date !== old.visit_date) {
+        const toYMD = (v) => {
+          if (!v) return null;
+          if (v instanceof Date) return v.toISOString().slice(0, 10);
+          const s = String(v);
+          return s.length >= 10 ? s.slice(0, 10) : s;
+        };
+        const oldYMD = toYMD(old.visit_date);
+        const newYMD = toYMD(req.body.visit_date);
+        if (oldYMD && newYMD && oldYMD !== newYMD) {
+          const dOld = new Date(oldYMD + 'T12:00:00Z');
+          const dNew = new Date(newYMD + 'T12:00:00Z');
+          const deltaDays = Math.round((dNew - dOld) / 86400000);
+          if (deltaDays !== 0) {
+            await query(
+              `UPDATE merch_routes
+                 SET visit_date = (visit_date::date + ($1 || ' days')::interval)::date,
+                     updated_at = NOW()
+               WHERE organization_id=$2 AND promoter_id IS NOT DISTINCT FROM $3
+                 AND pdv_id IS NOT DISTINCT FROM $4 AND brand_id IS NOT DISTINCT FROM $5
+                 AND visit_date > $6 AND status IN ('scheduled','confirmed')
+                 AND id <> $7`,
+              [String(deltaDays), orgId, old.promoter_id, old.pdv_id, old.brand_id, old.visit_date, req.params.id]
+            );
+            logInfo('routes.bulk_date_shifted', { base_route: req.params.id, delta_days: deltaDays });
+          }
+        }
+      }
     }
 
     // Always update the current route with all changes
