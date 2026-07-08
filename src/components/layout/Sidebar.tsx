@@ -132,6 +132,8 @@ const getNavSections = (hasConnections: boolean): NavSection[] => [
       { name: "Dashboard", href: "/rh/dashboard", icon: LayoutDashboard, pageKey: 'rh_dashboard', moduleKey: 'rh' },
       { name: "Indicadores", href: "/rh/indicadores", icon: TrendingUp, pageKey: 'rh_indicadores', moduleKey: 'rh' },
       { name: "Colaboradores", href: "/rh/colaboradores", icon: UserPlus, pageKey: 'rh_colaboradores', moduleKey: 'rh' },
+      { name: "Admissão", href: "/rh/admissao", icon: UserPlus, pageKey: 'rh_admissao', moduleKey: 'rh' },
+      { name: "eSocial", href: "/rh/esocial", icon: FileCode2, pageKey: 'rh_esocial', moduleKey: 'rh' },
       { name: "Ponto", href: "/rh/ponto", icon: Clock, pageKey: 'rh_ponto', moduleKey: 'rh' },
       { name: "Holerite", href: "/rh/holerite", icon: DollarSign, pageKey: 'rh_holerite', moduleKey: 'rh' },
       { name: "Documentos", href: "/rh/documentos", icon: FileText, pageKey: 'rh_documentos', moduleKey: 'rh' },
