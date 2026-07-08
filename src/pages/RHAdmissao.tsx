@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, UserPlus, Users, FileText, Check, Trash2, Plus, ShieldCheck } from "lucide-react";
-import { useCreateEmployee, useDepartments, useBranches } from "@/hooks/use-rh";
+import { useCreateEmployee, useRhDepartments, useBranches } from "@/hooks/use-rh";
 import { useFinalizeAdmission } from "@/hooks/use-rh-flows";
 
 const STEPS = [
