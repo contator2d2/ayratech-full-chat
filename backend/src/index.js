@@ -445,6 +445,7 @@ app.use('/api/meta', metaTemplatesRoutes);
 app.use('/api/doc-signatures', docSignaturesRoutes);
 app.use('/api/rh', rhRoutes);
 app.use('/api/rh', rhExtendedRoutes);
+app.use('/api/rh', rhFlowsRoutes);
 app.use('/api/promotor', promotorRoutes);
 app.use('/api/merchandising', merchandisingRoutes);
 app.use('/api/merch', merchRoutesRoutes);
