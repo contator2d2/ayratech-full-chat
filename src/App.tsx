@@ -79,6 +79,9 @@ import RHExamesOcupacionais from "./pages/RHExamesOcupacionais";
 import RHEPIs from "./pages/RHEPIs";
 import RHAdvertencias from "./pages/RHAdvertencias";
 import RHTreinamentos from "./pages/RHTreinamentos";
+import RHAdmissao from "./pages/RHAdmissao";
+import RHDemissao from "./pages/RHDemissao";
+import RHESocial from "./pages/RHESocial";
 import LiveMaps from "./pages/LiveMaps";
   import MerchDashboard from "./pages/MerchDashboard";
 import MerchMarcas from "./pages/MerchMarcas";
@@ -294,6 +297,9 @@ const App = () => (
             <Route path="/rh/epis" element={<ProtectedRoute><RHEPIs /></ProtectedRoute>} />
             <Route path="/rh/advertencias" element={<ProtectedRoute><RHAdvertencias /></ProtectedRoute>} />
             <Route path="/rh/treinamentos" element={<ProtectedRoute><RHTreinamentos /></ProtectedRoute>} />
+            <Route path="/rh/admissao" element={<ProtectedRoute><RHAdmissao /></ProtectedRoute>} />
+            <Route path="/rh/demissao/:employeeId" element={<ProtectedRoute><RHDemissao /></ProtectedRoute>} />
+            <Route path="/rh/esocial" element={<ProtectedRoute><RHESocial /></ProtectedRoute>} />
             <Route path="/live-maps" element={<ProtectedRoute><LiveMaps /></ProtectedRoute>} />
             <Route path="/merch/marcas" element={<ProtectedRoute><MerchMarcas /></ProtectedRoute>} />
             <Route path="/merch/categorias" element={<ProtectedRoute><MerchCategorias /></ProtectedRoute>} />

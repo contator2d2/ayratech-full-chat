@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useEmployees, useCreateEmployee, useUpdateEmployee, useDeleteEmployee, useRhDepartments, useBranches, useCreateBranch, useDeleteBranch, useCreateRhDepartment, useDeleteRhDepartment, useRhPositions, useCreateRhPosition, useDeleteRhPosition, useWorkerProfiles, useCreateWorkerProfile, useDeleteWorkerProfile, useRhDocuments, useCreateRhDocument, useDeleteRhDocument } from "@/hooks/use-rh";
 import { useAppAccess, useGrantAppAccess, useBlockAppAccess, useResetAppPassword } from "@/hooks/use-promotor";
@@ -14,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, UserCircle, Building2, FileText, Edit, Trash2, Eye, EyeOff, Users, Loader2, Calendar, Briefcase, X, MapPin, UserCog, DollarSign, Gift, Smartphone, KeyRound, Copy, RefreshCw, FileSpreadsheet } from "lucide-react";
+import { Plus, Search, UserCircle, Building2, FileText, Edit, Trash2, Eye, EyeOff, Users, Loader2, Calendar, Briefcase, X, MapPin, UserCog, DollarSign, Gift, Smartphone, KeyRound, Copy, RefreshCw, FileSpreadsheet, UserPlus, UserMinus } from "lucide-react";
 import { EmployeeImportExportDialog } from "@/components/rh/EmployeeImportExportDialog";
 import { useUpload } from "@/hooks/use-upload";
 import { format, differenceInYears, differenceInMonths, differenceInDays, addYears, addMonths } from "date-fns";
@@ -146,6 +147,7 @@ function calcAge(birthDate: string): string {
 }
 
 export default function RHColaboradores() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [profileFilter, setProfileFilter] = useState("all");
@@ -334,6 +336,7 @@ export default function RHColaboradores() {
               </Button>
             )}
             <Button variant="outline" onClick={() => setImportExportOpen(true)} className="gap-2"><FileSpreadsheet className="h-4 w-4" /> Importar / Exportar</Button>
+            <Button variant="outline" onClick={() => navigate("/rh/admissao")} className="gap-2"><UserPlus className="h-4 w-4" /> Nova Admissão (Wizard)</Button>
             <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> Novo Colaborador</Button>
           </div>
         </div>
@@ -438,6 +441,9 @@ export default function RHColaboradores() {
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); openEdit(emp); }}><Edit className="h-4 w-4" /></Button>
+                        {emp.status !== 'desligado' && (
+                          <Button variant="ghost" size="icon" title="Demitir" onClick={e => { e.stopPropagation(); navigate(`/rh/demissao/${emp.id}`); }}><UserMinus className="h-4 w-4 text-orange-600" /></Button>
+                        )}
                         <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); handleDelete(emp.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div>
                     </TableCell>
