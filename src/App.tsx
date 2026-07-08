@@ -82,6 +82,9 @@ import RHTreinamentos from "./pages/RHTreinamentos";
 import RHAdmissao from "./pages/RHAdmissao";
 import RHDemissao from "./pages/RHDemissao";
 import RHESocial from "./pages/RHESocial";
+import RHEscalas from "./pages/RHEscalas";
+import RHAFD from "./pages/RHAFD";
+import RHTotem from "./pages/RHTotem";
 import LiveMaps from "./pages/LiveMaps";
   import MerchDashboard from "./pages/MerchDashboard";
 import MerchMarcas from "./pages/MerchMarcas";
@@ -300,6 +303,9 @@ const App = () => (
             <Route path="/rh/admissao" element={<ProtectedRoute><RHAdmissao /></ProtectedRoute>} />
             <Route path="/rh/demissao/:employeeId" element={<ProtectedRoute><RHDemissao /></ProtectedRoute>} />
             <Route path="/rh/esocial" element={<ProtectedRoute><RHESocial /></ProtectedRoute>} />
+            <Route path="/rh/escalas" element={<ProtectedRoute><RHEscalas /></ProtectedRoute>} />
+            <Route path="/rh/afd" element={<ProtectedRoute><RHAFD /></ProtectedRoute>} />
+            <Route path="/rh/totem" element={<RHTotem />} />
             <Route path="/live-maps" element={<ProtectedRoute><LiveMaps /></ProtectedRoute>} />
             <Route path="/merch/marcas" element={<ProtectedRoute><MerchMarcas /></ProtectedRoute>} />
             <Route path="/merch/categorias" element={<ProtectedRoute><MerchCategorias /></ProtectedRoute>} />
