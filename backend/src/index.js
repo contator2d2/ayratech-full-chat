@@ -46,6 +46,7 @@ import globalAgentsRoutes from './routes/global-agents.js';
 import metaTemplatesRoutes from './routes/meta-templates.js';
 import docSignaturesRoutes from './routes/doc-signatures.js';
 import rhRoutes from './routes/rh.js';
+import rhExtendedRoutes from './routes/rh-extended.js';
 import promotorRoutes from './routes/promotor.js';
 import merchandisingRoutes from './routes/merchandising.js';
 import merchRoutesRoutes from './routes/merch-routes.js';
