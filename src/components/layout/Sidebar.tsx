@@ -53,6 +53,10 @@ import {
   ShieldCheck,
   ScanFace,
   AlertTriangle,
+  Stethoscope,
+  HardHat,
+  GraduationCap,
+  TrendingUp,
 } from "lucide-react";
 import { API_URL, getAuthToken } from "@/lib/api";
 import ayratechLogo from "@/assets/ayratech_logo.jpg";
