@@ -59,6 +59,7 @@ import {
   TrendingUp,
   UserMinus,
   FileCode2,
+  Monitor,
 } from "lucide-react";
 import { API_URL, getAuthToken } from "@/lib/api";
 import ayratechLogo from "@/assets/ayratech_logo.jpg";
@@ -134,6 +135,8 @@ const getNavSections = (hasConnections: boolean): NavSection[] => [
       { name: "Colaboradores", href: "/rh/colaboradores", icon: UserPlus, pageKey: 'rh_colaboradores', moduleKey: 'rh' },
       { name: "Admissão", href: "/rh/admissao", icon: UserPlus, pageKey: 'rh_admissao', moduleKey: 'rh' },
       { name: "eSocial", href: "/rh/esocial", icon: FileCode2, pageKey: 'rh_esocial', moduleKey: 'rh' },
+      { name: "Escalas", href: "/rh/escalas", icon: CalendarDays, pageKey: 'rh_escalas', moduleKey: 'rh' },
+      { name: "Totem & AFD", href: "/rh/afd", icon: Monitor, pageKey: 'rh_afd', moduleKey: 'rh' },
       { name: "Ponto", href: "/rh/ponto", icon: Clock, pageKey: 'rh_ponto', moduleKey: 'rh' },
       { name: "Holerite", href: "/rh/holerite", icon: DollarSign, pageKey: 'rh_holerite', moduleKey: 'rh' },
       { name: "Documentos", href: "/rh/documentos", icon: FileText, pageKey: 'rh_documentos', moduleKey: 'rh' },
