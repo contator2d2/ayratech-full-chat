@@ -43,7 +43,7 @@ type Dep = { full_name: string; cpf?: string; birth_date?: string; relationship:
 export default function RHAdmissao() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
-  const { data: departments = [] } = useDepartments();
+  const { data: departments = [] } = useRhDepartments();
   const { data: branches = [] } = useBranches();
   const createEmployee = useCreateEmployee();
   const finalize = useFinalizeAdmission();
