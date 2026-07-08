@@ -441,6 +441,9 @@ export default function RHColaboradores() {
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); openEdit(emp); }}><Edit className="h-4 w-4" /></Button>
+                        {emp.status !== 'desligado' && (
+                          <Button variant="ghost" size="icon" title="Demitir" onClick={e => { e.stopPropagation(); navigate(`/rh/demissao/${emp.id}`); }}><UserMinus className="h-4 w-4 text-orange-600" /></Button>
+                        )}
                         <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); handleDelete(emp.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div>
                     </TableCell>
