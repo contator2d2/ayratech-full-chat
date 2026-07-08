@@ -74,6 +74,11 @@ import RHRastreamento from "./pages/RHRastreamento";
 import RHBiometria from "./pages/RHBiometria";
 import RHMapaOperacional from "./pages/RHMapaOperacional";
 import RHLogs from "./pages/RHLogs";
+import RHIndicadores from "./pages/RHIndicadores";
+import RHExamesOcupacionais from "./pages/RHExamesOcupacionais";
+import RHEPIs from "./pages/RHEPIs";
+import RHAdvertencias from "./pages/RHAdvertencias";
+import RHTreinamentos from "./pages/RHTreinamentos";
 import LiveMaps from "./pages/LiveMaps";
   import MerchDashboard from "./pages/MerchDashboard";
 import MerchMarcas from "./pages/MerchMarcas";
@@ -284,6 +289,11 @@ const App = () => (
             <Route path="/rh/rastreamento" element={<ProtectedRoute><RHRastreamento /></ProtectedRoute>} />
             <Route path="/rh/mapa" element={<ProtectedRoute><RHMapaOperacional /></ProtectedRoute>} />
             <Route path="/rh/logs" element={<ProtectedRoute><RHLogs /></ProtectedRoute>} />
+            <Route path="/rh/indicadores" element={<ProtectedRoute><RHIndicadores /></ProtectedRoute>} />
+            <Route path="/rh/exames" element={<ProtectedRoute><RHExamesOcupacionais /></ProtectedRoute>} />
+            <Route path="/rh/epis" element={<ProtectedRoute><RHEPIs /></ProtectedRoute>} />
+            <Route path="/rh/advertencias" element={<ProtectedRoute><RHAdvertencias /></ProtectedRoute>} />
+            <Route path="/rh/treinamentos" element={<ProtectedRoute><RHTreinamentos /></ProtectedRoute>} />
             <Route path="/live-maps" element={<ProtectedRoute><LiveMaps /></ProtectedRoute>} />
             <Route path="/merch/marcas" element={<ProtectedRoute><MerchMarcas /></ProtectedRoute>} />
             <Route path="/merch/categorias" element={<ProtectedRoute><MerchCategorias /></ProtectedRoute>} />

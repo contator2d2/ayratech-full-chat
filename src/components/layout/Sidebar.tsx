@@ -53,6 +53,10 @@ import {
   ShieldCheck,
   ScanFace,
   AlertTriangle,
+  Stethoscope,
+  HardHat,
+  GraduationCap,
+  TrendingUp,
 } from "lucide-react";
 import { API_URL, getAuthToken } from "@/lib/api";
 import ayratechLogo from "@/assets/ayratech_logo.jpg";
@@ -124,6 +128,15 @@ const getNavSections = (hasConnections: boolean): NavSection[] => [
     moduleKey: 'rh',
     items: [
       { name: "Dashboard", href: "/rh/dashboard", icon: LayoutDashboard, pageKey: 'rh_dashboard', moduleKey: 'rh' },
+      { name: "Indicadores", href: "/rh/indicadores", icon: TrendingUp, pageKey: 'rh_indicadores', moduleKey: 'rh' },
+      { name: "Colaboradores", href: "/rh/colaboradores", icon: UserPlus, pageKey: 'rh_colaboradores', moduleKey: 'rh' },
+      { name: "Ponto", href: "/rh/ponto", icon: Clock, pageKey: 'rh_ponto', moduleKey: 'rh' },
+      { name: "Holerite", href: "/rh/holerite", icon: DollarSign, pageKey: 'rh_holerite', moduleKey: 'rh' },
+      { name: "Documentos", href: "/rh/documentos", icon: FileText, pageKey: 'rh_documentos', moduleKey: 'rh' },
+      { name: "Exames Ocupacionais", href: "/rh/exames", icon: Stethoscope, pageKey: 'rh_exames', moduleKey: 'rh' },
+      { name: "EPIs", href: "/rh/epis", icon: HardHat, pageKey: 'rh_epis', moduleKey: 'rh' },
+      { name: "Advertências", href: "/rh/advertencias", icon: AlertTriangle, pageKey: 'rh_advertencias', moduleKey: 'rh' },
+      { name: "Treinamentos", href: "/rh/treinamentos", icon: GraduationCap, pageKey: 'rh_treinamentos', moduleKey: 'rh' },
       { name: "Colaboradores", href: "/rh/colaboradores", icon: UserPlus, pageKey: 'rh_colaboradores', moduleKey: 'rh' },
       { name: "Ponto", href: "/rh/ponto", icon: Clock, pageKey: 'rh_ponto', moduleKey: 'rh' },
       { name: "Holerite", href: "/rh/holerite", icon: DollarSign, pageKey: 'rh_holerite', moduleKey: 'rh' },
