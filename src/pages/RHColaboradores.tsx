@@ -147,6 +147,7 @@ function calcAge(birthDate: string): string {
 }
 
 export default function RHColaboradores() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [profileFilter, setProfileFilter] = useState("all");
