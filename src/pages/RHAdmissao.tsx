@@ -508,10 +508,10 @@ export default function RHAdmissao() {
             <h3 className="font-medium mb-2">Checklist de documentos <span className="text-xs text-muted-foreground">(obrigatórios em vermelho)</span></h3>
             <div className="grid md:grid-cols-2 gap-2">
               {REQUIRED_DOCS.map(d => (
-                <DocUploader key={d.key} docKey={d.key} label={d.label} required value={docs[d.key]} onChange={f => setDocs(prev => ({ ...prev, [d.key]: f }))} />
+                <DocUploader key={d.key} docKey={d.key} label={d.label} twoSided={d.twoSided} required value={docs[d.key]} onChange={f => setDocs(prev => ({ ...prev, [d.key]: f }))} />
               ))}
               {OPTIONAL_DOCS.map(d => (
-                <DocUploader key={d.key} docKey={d.key} label={d.label} value={docs[d.key]} onChange={f => setDocs(prev => ({ ...prev, [d.key]: f }))} />
+                <DocUploader key={d.key} docKey={d.key} label={d.label} twoSided={d.twoSided} value={docs[d.key]} onChange={f => setDocs(prev => ({ ...prev, [d.key]: f }))} />
               ))}
             </div>
             {missingRequired.length > 0 && (
