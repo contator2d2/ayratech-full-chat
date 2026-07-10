@@ -282,8 +282,8 @@ export default function RHAdmissao() {
               </Select>
             </div>
             <div><Label>E-mail</Label><Input type="email" value={form.email} onChange={e => setField("email", e.target.value)} /></div>
-            <div><Label>Telefone *</Label><Input value={form.phone} onChange={e => setField("phone", e.target.value)} /></div>
-            <div><Label>Telefone 2</Label><Input value={form.phone2} onChange={e => setField("phone2", e.target.value)} /></div>
+            <div><Label>Telefone / WhatsApp *</Label><Input inputMode="tel" value={form.phone} onChange={e => setField("phone", formatPhone(e.target.value))} placeholder="(00) 00000-0000" /></div>
+            <div><Label>Telefone 2</Label><Input inputMode="tel" value={form.phone2} onChange={e => setField("phone2", formatPhone(e.target.value))} placeholder="(00) 00000-0000" /></div>
           </div>
           <Separator />
           <h3 className="font-medium">Endereço</h3>
