@@ -233,7 +233,7 @@ export default function RHAdmissao() {
     const file = e.target.files?.[0]; if (!file) return;
     try {
       const url = await uploadPhoto(file);
-      if (url) { setField("photo_url", url); setDocs(d => ({ ...d, foto_3x4: { doc_type: "foto_3x4", title: "Foto 3x4", file_url: url } })); toast.success("Foto enviada"); }
+      if (url) { setField("photo_url", url); setDocs(d => ({ ...d, foto_3x4: { single: { doc_type: "foto_3x4", title: "Foto 3x4", file_url: url } } })); toast.success("Foto enviada"); }
     } catch (err: any) { toast.error(err?.message || "Erro"); }
     finally { if (photoRef.current) photoRef.current.value = ""; }
   }
