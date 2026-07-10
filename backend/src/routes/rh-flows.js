@@ -115,6 +115,32 @@ async function ensureTables() {
 
 router.use(async (_req, _res, next) => { try { await ensureTables(); } catch (e) { logError('rh-flows.ensureTables', e); } next(); });
 
+// ===================== CARGOS (sugestões) =====================
+// Retorna cargos já cadastrados na organização + lista curada
+router.get('/positions', async (req, res) => {
+  try {
+    const orgId = await getUserOrgId(req.userId);
+    const curated = [
+      'Promotor de Vendas','Supervisor','Coordenador','Gerente','Analista de RH',
+      'Assistente Administrativo','Auxiliar Administrativo','Motorista','Repositor',
+      'Vendedor','Operador de Caixa','Estoquista','Analista Financeiro','Contador',
+      'Auxiliar de Limpeza','Assistente de Marketing'
+    ];
+    let existing = [];
+    if (orgId) {
+      const r = await query(
+        `SELECT DISTINCT position FROM employees
+          WHERE organization_id=$1 AND position IS NOT NULL AND position <> ''
+          ORDER BY position`, [orgId]);
+      existing = r.rows.map(x => x.position);
+    }
+    const all = Array.from(new Set([...existing, ...curated])).sort((a,b)=>a.localeCompare(b));
+    res.json(all);
+  } catch (e) { logError('rh-flows.positions', e); res.json([]); }
+});
+
+
+
 // ===================== DEPENDENTES =====================
 router.get('/dependents/:employeeId', async (req, res) => {
   try {
