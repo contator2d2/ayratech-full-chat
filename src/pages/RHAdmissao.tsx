@@ -198,8 +198,16 @@ export default function RHAdmissao() {
   const rmDep = (i: number) => setDeps(deps.filter((_, idx) => idx !== i));
   const setDep = (i: number, k: keyof Dep, v: any) => setDeps(deps.map((d, idx) => idx === i ? { ...d, [k]: v } : d));
 
-  const [docs, setDocs] = useState<Record<string, DocFile | undefined>>({});
-  const missingRequired = REQUIRED_DOCS.filter(d => !docs[d.key]).map(d => d.label);
+  type DocEntry = { front?: DocFile; back?: DocFile; single?: DocFile };
+  const [docs, setDocs] = useState<Record<string, DocEntry | undefined>>({});
+  const isDocFilled = (key: string) => {
+    const cfg = [...REQUIRED_DOCS, ...OPTIONAL_DOCS].find(d => d.key === key);
+    const v = docs[key];
+    if (!v) return false;
+    if (cfg?.twoSided) return !!(v.front && v.back);
+    return !!v.single;
+  };
+  const missingRequired = REQUIRED_DOCS.filter(d => !isDocFilled(d.key)).map(d => d.label);
 
   const stepErrors = useMemo(() => {
     const e: string[] = [];
