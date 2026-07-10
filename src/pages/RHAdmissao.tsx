@@ -120,13 +120,15 @@ export default function RHAdmissao() {
   const { uploadFile: uploadPhoto, isUploading: uploadingPhoto } = useUpload();
   const photoRef = useRef<HTMLInputElement>(null);
 
+  const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState<any>({
     full_name: "", cpf: "", rg: "", birth_date: "", gender: "M", marital_status: "solteiro",
     email: "", phone: "", phone2: "",
     address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", zip_code: "",
     position: "", department_id: "", schedule_id: "",
-    salary: "", admission_date: new Date().toISOString().slice(0, 10),
-    contract_end_date: "", employment_type: "clt", role_level: "junior",
+    salary: "", admission_date: today,
+    contract_end_date: addDaysISO(today, 90), employment_type: "experiencia", role_level: "junior",
+    is_experience_contract: true, experience_days: 90,
     work_schedule: "",
     ctps_number: "", ctps_series: "", pis_pasep: "",
     photo_url: "",
@@ -134,6 +136,40 @@ export default function RHAdmissao() {
     facial_required: false,
   });
   const setField = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+
+  // Auto-recalcular fim do contrato de experiência
+  useEffect(() => {
+    if (form.is_experience_contract && form.admission_date) {
+      setForm((f: any) => ({ ...f, contract_end_date: addDaysISO(f.admission_date, Number(f.experience_days) || 90) }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.admission_date, form.is_experience_contract, form.experience_days]);
+
+  // Buscar endereço por CEP (ViaCEP)
+  const [cepLoading, setCepLoading] = useState(false);
+  async function lookupCep(cepRaw: string) {
+    const cep = onlyDigits(cepRaw);
+    if (cep.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const j = await r.json();
+      if (j && !j.erro) {
+        setForm((f: any) => ({
+          ...f,
+          address: j.logradouro || f.address,
+          neighborhood: j.bairro || f.neighborhood,
+          city: j.localidade || f.city,
+          state: j.uf || f.state,
+          complement: j.complemento || f.complement,
+        }));
+      } else {
+        toast.error("CEP não encontrado");
+      }
+    } catch {
+      toast.error("Falha ao consultar CEP");
+    } finally { setCepLoading(false); }
+  }
 
   const [deps, setDeps] = useState<Dep[]>([]);
   const addDep = () => setDeps([...deps, { full_name: "", relationship: "filho", ir_deduction: true }]);
