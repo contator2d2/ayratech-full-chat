@@ -253,7 +253,18 @@ export default function RHAdmissao() {
         dependents: deps.filter(d => d.full_name && d.relationship),
         enable_app_access: !!form.enable_app_access,
         schedule_id: form.schedule_id || null,
-        documents: Object.values(docs).filter(Boolean),
+        documents: Object.entries(docs).flatMap(([key, v]) => {
+          if (!v) return [];
+          const cfg = [...REQUIRED_DOCS, ...OPTIONAL_DOCS].find(d => d.key === key);
+          const out: DocFile[] = [];
+          if (cfg?.twoSided) {
+            if (v.front) out.push({ doc_type: `${key}_frente`, title: `${cfg.label} (frente)`, file_url: v.front.file_url });
+            if (v.back) out.push({ doc_type: `${key}_verso`, title: `${cfg.label} (verso)`, file_url: v.back.file_url });
+          } else if (v.single) {
+            out.push({ doc_type: key, title: cfg?.label || key, file_url: v.single.file_url });
+          }
+          return out;
+        }),
       });
       toast.success("Admissão concluída! Evento S-2200 enfileirado no eSocial.");
       navigate(`/rh/colaboradores`);
