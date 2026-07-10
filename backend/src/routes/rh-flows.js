@@ -16,28 +16,49 @@ async function getUserOrgId(userId) {
 }
 
 let tablesReady = false;
-async function ensureTables() {
-  if (tablesReady) return;
 
+async function ensureEmployeeDependentsSchema() {
   await query(`
     CREATE TABLE IF NOT EXISTS employee_dependents (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      organization_id UUID NOT NULL,
+      organization_id UUID,
       employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-      full_name VARCHAR(255) NOT NULL,
+      full_name VARCHAR(255),
       cpf VARCHAR(20),
       birth_date DATE,
-      relationship VARCHAR(50) NOT NULL,
+      relationship VARCHAR(50),
       ir_deduction BOOLEAN DEFAULT false,
       family_allowance BOOLEAN DEFAULT false,
       disabled BOOLEAN DEFAULT false,
       notes TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_dependents_emp ON employee_dependents(employee_id);
-    CREATE INDEX IF NOT EXISTS idx_dependents_org ON employee_dependents(organization_id);
+    )
   `);
+
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS organization_id UUID`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS full_name VARCHAR(255)`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS cpf VARCHAR(20)`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS birth_date DATE`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS relationship VARCHAR(50)`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS ir_deduction BOOLEAN DEFAULT false`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS family_allowance BOOLEAN DEFAULT false`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT false`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS notes TEXT`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
+
+  await query(`UPDATE employee_dependents SET full_name = name WHERE full_name IS NULL AND name IS NOT NULL`).catch(() => {});
+  await query(`UPDATE employee_dependents d SET organization_id = e.organization_id
+               FROM employees e WHERE d.employee_id = e.id AND d.organization_id IS NULL`);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_dependents_emp ON employee_dependents(employee_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_dependents_org ON employee_dependents(organization_id)`);
+}
+
+async function ensureTables() {
+  if (tablesReady) return;
+
+  await ensureEmployeeDependentsSchema();
 
   await query(`
     CREATE TABLE IF NOT EXISTS esocial_events (
@@ -99,16 +120,6 @@ async function ensureTables() {
 
   await query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS termination_date DATE`);
   await query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS termination_reason VARCHAR(30)`);
-
-  // Compat: tabela employee_dependents pode ter sido criada por schema antigo (schema-rh.sql) sem organization_id
-  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS organization_id UUID`);
-  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS family_allowance BOOLEAN DEFAULT false`);
-  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT false`);
-  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS notes TEXT`);
-  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
-  // Preenche org faltante a partir do employee
-  await query(`UPDATE employee_dependents d SET organization_id = e.organization_id
-               FROM employees e WHERE d.employee_id = e.id AND d.organization_id IS NULL`);
 
   tablesReady = true;
 }
