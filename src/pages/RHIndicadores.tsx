@@ -178,6 +178,30 @@ export default function RHIndicadores() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Documentos pendentes de admissões recentes */}
+              <Card>
+                <CardHeader><CardTitle className="text-base flex items-center gap-2"><ClipboardCheck className="h-4 w-4" />Documentos pendentes (admissões dos últimos 30 dias)</CardTitle></CardHeader>
+                <CardContent>
+                  {(data?.pending_admission_docs || []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Todos os documentos obrigatórios foram anexados. ✓</p>
+                  ) : (
+                    <div className="space-y-2 max-h-56 overflow-y-auto">
+                      {(data?.pending_admission_docs || []).map((p: any) => (
+                        <div key={p.id} className="flex items-start justify-between border-b pb-2 last:border-0 gap-2">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium truncate">{p.full_name}</div>
+                            <div className="text-xs text-muted-foreground">Admitido em {fmtDate(p.admission_date)}</div>
+                            <div className="text-xs text-destructive mt-1">Faltam: {(p.missing || []).join(', ')}</div>
+                          </div>
+                          <Badge variant="destructive">{(p.missing || []).length}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
