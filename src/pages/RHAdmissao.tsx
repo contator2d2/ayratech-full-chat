@@ -43,20 +43,22 @@ const STEPS = [
   { id: 5, title: "Revisar e Admitir", icon: Check },
 ];
 
-const REQUIRED_DOCS: { key: string; label: string }[] = [
-  { key: "rg", label: "RG (frente e verso)" },
+const REQUIRED_DOCS: { key: string; label: string; twoSided?: boolean }[] = [
+  { key: "rg", label: "RG", twoSided: true },
   { key: "cpf", label: "CPF" },
-  { key: "ctps", label: "CTPS digitalizada" },
+  { key: "ctps", label: "CTPS digitalizada", twoSided: true },
   { key: "comprovante_residencia", label: "Comprovante de residência" },
   { key: "foto_3x4", label: "Foto 3x4" },
   { key: "aso_admissional", label: "ASO admissional" },
 ];
-const OPTIONAL_DOCS: { key: string; label: string }[] = [
+const OPTIONAL_DOCS: { key: string; label: string; twoSided?: boolean }[] = [
   { key: "reservista", label: "Certificado de reservista" },
   { key: "titulo_eleitor", label: "Título de eleitor" },
-  { key: "cnh", label: "CNH" },
+  { key: "cnh", label: "CNH", twoSided: true },
   { key: "diploma", label: "Diploma / certificados" },
 ];
+
+const CNH_CATEGORIES = ["A", "B", "AB", "C", "D", "E", "AC", "AD", "AE"];
 
 function isValidCpf(cpf: string) {
   const s = String(cpf || "").replace(/\D/g, "");
@@ -75,33 +77,53 @@ const fmtCpf = (v: string) => String(v || "").replace(/\D/g, "").slice(0, 11).re
 type Dep = { full_name: string; cpf?: string; birth_date?: string; relationship: string; ir_deduction?: boolean; family_allowance?: boolean; disabled?: boolean };
 type DocFile = { doc_type: string; title: string; file_url: string };
 
-function DocUploader({ docKey, label, value, onChange, required }: { docKey: string; label: string; value?: DocFile; onChange: (d?: DocFile) => void; required?: boolean }) {
+function DocSlot({ label, value, onChange }: { label: string; value?: DocFile; onChange: (d?: DocFile) => void }) {
   const { uploadFile, isUploading } = useUpload();
   const inputRef = useRef<HTMLInputElement>(null);
   async function handle(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file) return;
     try {
       const url = await uploadFile(file);
-      if (url) { onChange({ doc_type: docKey, title: label, file_url: url }); toast.success(`${label} enviado`); }
+      if (url) { onChange({ doc_type: label, title: label, file_url: url }); toast.success(`${label} enviado`); }
     } catch (err: any) { toast.error(err?.message || "Erro no upload"); }
     finally { if (inputRef.current) inputRef.current.value = ""; }
   }
   return (
-    <div className="flex items-center justify-between gap-2 p-2 border rounded-md">
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium flex items-center gap-2">
-          {value ? <Check className="h-4 w-4 text-green-600 flex-shrink-0" /> : <span className={`h-2 w-2 rounded-full flex-shrink-0 ${required ? "bg-destructive" : "bg-muted-foreground/40"}`} />}
-          <span className="truncate">{label}{required && !value && <span className="text-destructive"> *</span>}</span>
-        </div>
-        {value && <a href={value.file_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline truncate block">Ver arquivo</a>}
-      </div>
+    <div className="flex items-center gap-2">
       <input ref={inputRef} type="file" className="hidden" accept="image/*,application/pdf" onChange={handle} />
       {value ? (
-        <Button variant="ghost" size="sm" onClick={() => onChange(undefined)}><X className="h-4 w-4" /></Button>
+        <>
+          <a href={value.file_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1"><Check className="h-3 w-3 text-green-600" />{label}</a>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onChange(undefined)}><X className="h-3 w-3" /></Button>
+        </>
       ) : (
-        <Button variant="outline" size="sm" disabled={isUploading} onClick={() => inputRef.current?.click()}>
-          {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+        <Button variant="outline" size="sm" disabled={isUploading} onClick={() => inputRef.current?.click()} className="h-7 text-xs">
+          {isUploading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Upload className="h-3 w-3 mr-1" />}
+          {label}
         </Button>
+      )}
+    </div>
+  );
+}
+
+function DocUploader({ docKey, label, twoSided, value, onChange, required }: { docKey: string; label: string; twoSided?: boolean; value?: { front?: DocFile; back?: DocFile; single?: DocFile }; onChange: (d?: { front?: DocFile; back?: DocFile; single?: DocFile }) => void; required?: boolean }) {
+  const filled = twoSided ? (value?.front || value?.back) : value?.single;
+  const complete = twoSided ? (value?.front && value?.back) : !!value?.single;
+  return (
+    <div className="p-2 border rounded-md space-y-2">
+      <div className="text-sm font-medium flex items-center gap-2">
+        {complete ? <Check className="h-4 w-4 text-green-600 flex-shrink-0" /> : <span className={`h-2 w-2 rounded-full flex-shrink-0 ${required ? "bg-destructive" : "bg-muted-foreground/40"}`} />}
+        <span className="truncate">{label}{twoSided && <span className="text-xs text-muted-foreground ml-1">(frente e verso)</span>}{required && !filled && <span className="text-destructive"> *</span>}</span>
+      </div>
+      {twoSided ? (
+        <div className="flex flex-wrap gap-2 pl-6">
+          <DocSlot label="Frente" value={value?.front} onChange={f => onChange({ ...(value || {}), front: f })} />
+          <DocSlot label="Verso" value={value?.back} onChange={f => onChange({ ...(value || {}), back: f })} />
+        </div>
+      ) : (
+        <div className="pl-6">
+          <DocSlot label="Arquivo" value={value?.single} onChange={f => onChange({ single: f })} />
+        </div>
       )}
     </div>
   );
@@ -131,6 +153,7 @@ export default function RHAdmissao() {
     is_experience_contract: true, experience_days: 90,
     work_schedule: "",
     ctps_number: "", ctps_series: "", pis_pasep: "",
+    cnh: "", cnh_category: "", cnh_expiry: "",
     photo_url: "",
     enable_app_access: false,
     facial_required: false,
@@ -176,8 +199,16 @@ export default function RHAdmissao() {
   const rmDep = (i: number) => setDeps(deps.filter((_, idx) => idx !== i));
   const setDep = (i: number, k: keyof Dep, v: any) => setDeps(deps.map((d, idx) => idx === i ? { ...d, [k]: v } : d));
 
-  const [docs, setDocs] = useState<Record<string, DocFile | undefined>>({});
-  const missingRequired = REQUIRED_DOCS.filter(d => !docs[d.key]).map(d => d.label);
+  type DocEntry = { front?: DocFile; back?: DocFile; single?: DocFile };
+  const [docs, setDocs] = useState<Record<string, DocEntry | undefined>>({});
+  const isDocFilled = (key: string) => {
+    const cfg = [...REQUIRED_DOCS, ...OPTIONAL_DOCS].find(d => d.key === key);
+    const v = docs[key];
+    if (!v) return false;
+    if (cfg?.twoSided) return !!(v.front && v.back);
+    return !!v.single;
+  };
+  const missingRequired = REQUIRED_DOCS.filter(d => !isDocFilled(d.key)).map(d => d.label);
 
   const stepErrors = useMemo(() => {
     const e: string[] = [];
@@ -203,7 +234,7 @@ export default function RHAdmissao() {
     const file = e.target.files?.[0]; if (!file) return;
     try {
       const url = await uploadPhoto(file);
-      if (url) { setField("photo_url", url); setDocs(d => ({ ...d, foto_3x4: { doc_type: "foto_3x4", title: "Foto 3x4", file_url: url } })); toast.success("Foto enviada"); }
+      if (url) { setField("photo_url", url); setDocs(d => ({ ...d, foto_3x4: { single: { doc_type: "foto_3x4", title: "Foto 3x4", file_url: url } } })); toast.success("Foto enviada"); }
     } catch (err: any) { toast.error(err?.message || "Erro"); }
     finally { if (photoRef.current) photoRef.current.value = ""; }
   }
@@ -223,7 +254,18 @@ export default function RHAdmissao() {
         dependents: deps.filter(d => d.full_name && d.relationship),
         enable_app_access: !!form.enable_app_access,
         schedule_id: form.schedule_id || null,
-        documents: Object.values(docs).filter(Boolean),
+        documents: Object.entries(docs).flatMap(([key, v]) => {
+          if (!v) return [];
+          const cfg = [...REQUIRED_DOCS, ...OPTIONAL_DOCS].find(d => d.key === key);
+          const out: DocFile[] = [];
+          if (cfg?.twoSided) {
+            if (v.front) out.push({ doc_type: `${key}_frente`, title: `${cfg.label} (frente)`, file_url: v.front.file_url });
+            if (v.back) out.push({ doc_type: `${key}_verso`, title: `${cfg.label} (verso)`, file_url: v.back.file_url });
+          } else if (v.single) {
+            out.push({ doc_type: key, title: cfg?.label || key, file_url: v.single.file_url });
+          }
+          return out;
+        }),
       });
       toast.success("Admissão concluída! Evento S-2200 enfileirado no eSocial.");
       navigate(`/rh/colaboradores`);
@@ -266,6 +308,16 @@ export default function RHAdmissao() {
               {form.cpf && !isValidCpf(form.cpf) && <p className="text-xs text-destructive mt-1">CPF inválido</p>}
             </div>
             <div><Label>RG</Label><Input value={form.rg} onChange={e => setField("rg", e.target.value)} /></div>
+            <div><Label>CNH — Número</Label><Input value={form.cnh} onChange={e => setField("cnh", e.target.value)} placeholder="Opcional" /></div>
+            <div><Label>CNH — Categoria</Label>
+              <Select value={form.cnh_category || undefined} onValueChange={v => setField("cnh_category", v)}>
+                <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectContent>
+                  {CNH_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>CNH — Validade</Label><Input type="date" value={form.cnh_expiry} onChange={e => setField("cnh_expiry", e.target.value)} /></div>
             <div><Label>Data de nascimento *</Label><Input type="date" value={form.birth_date} onChange={e => setField("birth_date", e.target.value)} /></div>
             <div><Label>Sexo</Label>
               <Select value={form.gender} onValueChange={v => setField("gender", v)}>
@@ -478,10 +530,10 @@ export default function RHAdmissao() {
             <h3 className="font-medium mb-2">Checklist de documentos <span className="text-xs text-muted-foreground">(obrigatórios em vermelho)</span></h3>
             <div className="grid md:grid-cols-2 gap-2">
               {REQUIRED_DOCS.map(d => (
-                <DocUploader key={d.key} docKey={d.key} label={d.label} required value={docs[d.key]} onChange={f => setDocs(prev => ({ ...prev, [d.key]: f }))} />
+                <DocUploader key={d.key} docKey={d.key} label={d.label} twoSided={d.twoSided} required value={docs[d.key]} onChange={f => setDocs(prev => ({ ...prev, [d.key]: f }))} />
               ))}
               {OPTIONAL_DOCS.map(d => (
-                <DocUploader key={d.key} docKey={d.key} label={d.label} value={docs[d.key]} onChange={f => setDocs(prev => ({ ...prev, [d.key]: f }))} />
+                <DocUploader key={d.key} docKey={d.key} label={d.label} twoSided={d.twoSided} value={docs[d.key]} onChange={f => setDocs(prev => ({ ...prev, [d.key]: f }))} />
               ))}
             </div>
             {missingRequired.length > 0 && (
