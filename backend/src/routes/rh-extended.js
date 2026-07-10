@@ -548,7 +548,22 @@ router.get('/indicators', async (req, res) => {
       `SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE(termination_date, CURRENT_DATE) - admission_date)))/86400/365, 0)::numeric(5,2) AS years
          FROM employees WHERE organization_id=$1 AND admission_date IS NOT NULL`, [orgId]);
 
+    // Documentos pendentes em admissões recentes (últimos 30 dias)
+    const REQUIRED_DOCS = ['rg','cpf','ctps','comprovante_residencia','foto_3x4','aso_admissional'];
+    const pendingDocs = await query(
+      `SELECT e.id, e.full_name, e.admission_date,
+              ARRAY(SELECT unnest($2::text[]) EXCEPT
+                    SELECT doc_type FROM employee_documents WHERE employee_id=e.id) AS missing
+         FROM employees e
+        WHERE e.organization_id=$1
+          AND e.admission_date IS NOT NULL
+          AND e.admission_date >= CURRENT_DATE - INTERVAL '30 days'
+          AND e.status='ativo'
+        ORDER BY e.admission_date DESC`, [orgId, REQUIRED_DOCS]).catch(() => ({ rows: [] }));
+    const pendingDocsList = pendingDocs.rows.filter(r => Array.isArray(r.missing) && r.missing.length);
+
     res.json({
+
       headcount: headcount.rows[0] || {},
       turnover_series: turnover.rows,
       experience_alerts: experience.rows,
