@@ -77,33 +77,53 @@ const fmtCpf = (v: string) => String(v || "").replace(/\D/g, "").slice(0, 11).re
 type Dep = { full_name: string; cpf?: string; birth_date?: string; relationship: string; ir_deduction?: boolean; family_allowance?: boolean; disabled?: boolean };
 type DocFile = { doc_type: string; title: string; file_url: string };
 
-function DocUploader({ docKey, label, value, onChange, required }: { docKey: string; label: string; value?: DocFile; onChange: (d?: DocFile) => void; required?: boolean }) {
+function DocSlot({ label, value, onChange }: { label: string; value?: DocFile; onChange: (d?: DocFile) => void }) {
   const { uploadFile, isUploading } = useUpload();
   const inputRef = useRef<HTMLInputElement>(null);
   async function handle(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file) return;
     try {
       const url = await uploadFile(file);
-      if (url) { onChange({ doc_type: docKey, title: label, file_url: url }); toast.success(`${label} enviado`); }
+      if (url) { onChange({ doc_type: label, title: label, file_url: url }); toast.success(`${label} enviado`); }
     } catch (err: any) { toast.error(err?.message || "Erro no upload"); }
     finally { if (inputRef.current) inputRef.current.value = ""; }
   }
   return (
-    <div className="flex items-center justify-between gap-2 p-2 border rounded-md">
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium flex items-center gap-2">
-          {value ? <Check className="h-4 w-4 text-green-600 flex-shrink-0" /> : <span className={`h-2 w-2 rounded-full flex-shrink-0 ${required ? "bg-destructive" : "bg-muted-foreground/40"}`} />}
-          <span className="truncate">{label}{required && !value && <span className="text-destructive"> *</span>}</span>
-        </div>
-        {value && <a href={value.file_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline truncate block">Ver arquivo</a>}
-      </div>
+    <div className="flex items-center gap-2">
       <input ref={inputRef} type="file" className="hidden" accept="image/*,application/pdf" onChange={handle} />
       {value ? (
-        <Button variant="ghost" size="sm" onClick={() => onChange(undefined)}><X className="h-4 w-4" /></Button>
+        <>
+          <a href={value.file_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1"><Check className="h-3 w-3 text-green-600" />{label}</a>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onChange(undefined)}><X className="h-3 w-3" /></Button>
+        </>
       ) : (
-        <Button variant="outline" size="sm" disabled={isUploading} onClick={() => inputRef.current?.click()}>
-          {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+        <Button variant="outline" size="sm" disabled={isUploading} onClick={() => inputRef.current?.click()} className="h-7 text-xs">
+          {isUploading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Upload className="h-3 w-3 mr-1" />}
+          {label}
         </Button>
+      )}
+    </div>
+  );
+}
+
+function DocUploader({ docKey, label, twoSided, value, onChange, required }: { docKey: string; label: string; twoSided?: boolean; value?: { front?: DocFile; back?: DocFile; single?: DocFile }; onChange: (d?: { front?: DocFile; back?: DocFile; single?: DocFile }) => void; required?: boolean }) {
+  const filled = twoSided ? (value?.front || value?.back) : value?.single;
+  const complete = twoSided ? (value?.front && value?.back) : !!value?.single;
+  return (
+    <div className="p-2 border rounded-md space-y-2">
+      <div className="text-sm font-medium flex items-center gap-2">
+        {complete ? <Check className="h-4 w-4 text-green-600 flex-shrink-0" /> : <span className={`h-2 w-2 rounded-full flex-shrink-0 ${required ? "bg-destructive" : "bg-muted-foreground/40"}`} />}
+        <span className="truncate">{label}{twoSided && <span className="text-xs text-muted-foreground ml-1">(frente e verso)</span>}{required && !filled && <span className="text-destructive"> *</span>}</span>
+      </div>
+      {twoSided ? (
+        <div className="flex flex-wrap gap-2 pl-6">
+          <DocSlot label="Frente" value={value?.front} onChange={f => onChange({ ...(value || {}), front: f })} />
+          <DocSlot label="Verso" value={value?.back} onChange={f => onChange({ ...(value || {}), back: f })} />
+        </div>
+      ) : (
+        <div className="pl-6">
+          <DocSlot label="Arquivo" value={value?.single} onChange={f => onChange({ single: f })} />
+        </div>
       )}
     </div>
   );
