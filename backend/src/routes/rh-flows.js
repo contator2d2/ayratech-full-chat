@@ -47,7 +47,10 @@ async function ensureEmployeeDependentsSchema() {
   await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS notes TEXT`);
   await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
 
+  // Legacy: coluna "name" existia com NOT NULL. Remover NOT NULL e sincronizar valores.
+  await query(`ALTER TABLE employee_dependents ALTER COLUMN name DROP NOT NULL`).catch(() => {});
   await query(`UPDATE employee_dependents SET full_name = name WHERE full_name IS NULL AND name IS NOT NULL`).catch(() => {});
+  await query(`UPDATE employee_dependents SET name = full_name WHERE name IS NULL AND full_name IS NOT NULL`).catch(() => {});
   await query(`UPDATE employee_dependents d SET organization_id = e.organization_id
                FROM employees e WHERE d.employee_id = e.id AND d.organization_id IS NULL`);
 
