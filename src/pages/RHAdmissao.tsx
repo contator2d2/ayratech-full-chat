@@ -350,10 +350,19 @@ export default function RHAdmissao() {
               {!schedules.length && <p className="text-xs text-muted-foreground mt-1">Cadastre em RH → Escalas</p>}
             </div>
             <div><Label>Tipo de contrato *</Label>
-              <Select value={form.employment_type} onValueChange={v => setField("employment_type", v)}>
+              <Select
+                value={form.employment_type}
+                onValueChange={v => setForm((f: any) => ({
+                  ...f,
+                  employment_type: v,
+                  is_experience_contract: v === "experiencia",
+                  contract_end_date: v === "experiencia" ? addDaysISO(f.admission_date, Number(f.experience_days) || 90) : (v === "clt" ? "" : f.contract_end_date),
+                }))}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="clt">CLT</SelectItem>
+                  <SelectItem value="experiencia">Contrato de Experiência (sugerido)</SelectItem>
+                  <SelectItem value="clt">CLT (efetivo)</SelectItem>
                   <SelectItem value="pj">Pessoa Jurídica</SelectItem>
                   <SelectItem value="estagio">Estágio</SelectItem>
                   <SelectItem value="temporario">Temporário</SelectItem>
@@ -362,7 +371,25 @@ export default function RHAdmissao() {
               </Select>
             </div>
             <div><Label>Data de admissão *</Label><Input type="date" value={form.admission_date} onChange={e => setField("admission_date", e.target.value)} /></div>
-            <div><Label>Fim contrato (experiência)</Label><Input type="date" value={form.contract_end_date} onChange={e => setField("contract_end_date", e.target.value)} /></div>
+            {form.is_experience_contract && (
+              <div><Label>Duração da experiência (dias)</Label>
+                <Select value={String(form.experience_days || 90)} onValueChange={v => setField("experience_days", Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">30 dias</SelectItem>
+                    <SelectItem value="45">45 dias (1º período)</SelectItem>
+                    <SelectItem value="60">60 dias</SelectItem>
+                    <SelectItem value="90">90 dias (3 meses)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div><Label>Fim do contrato {form.is_experience_contract && "(experiência)"}</Label>
+              <Input type="date" value={form.contract_end_date} onChange={e => setField("contract_end_date", e.target.value)} />
+              {form.is_experience_contract && form.contract_end_date && (
+                <p className="text-xs text-primary mt-1">Contrato de experiência encerra em <strong>{fmtBrDate(form.contract_end_date)}</strong></p>
+              )}
+            </div>
             <div><Label>Salário base (R$) *</Label><Input type="number" step="0.01" value={form.salary} onChange={e => setField("salary", e.target.value)} /></div>
           </div>
           <Separator />
