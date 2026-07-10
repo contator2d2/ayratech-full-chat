@@ -1,19 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, UserPlus, Users, FileText, Check, Trash2, Plus, ShieldCheck } from "lucide-react";
-import { useCreateEmployee, useRhDepartments, useBranches } from "@/hooks/use-rh";
+import { ChevronLeft, ChevronRight, UserPlus, Users, FileText, Check, Trash2, Plus, ShieldCheck, Upload, X, Loader2 } from "lucide-react";
+import { useCreateEmployee, useRhDepartments } from "@/hooks/use-rh";
 import { useFinalizeAdmission } from "@/hooks/use-rh-flows";
+import { useSchedules } from "@/hooks/use-rh-schedules";
+import { useUpload } from "@/hooks/use-upload";
+import { api } from "@/lib/api";
 
 const STEPS = [
   { id: 1, title: "Dados Pessoais", icon: UserPlus },
@@ -23,7 +25,21 @@ const STEPS = [
   { id: 5, title: "Revisar e Admitir", icon: Check },
 ];
 
-// Valida CPF real (algoritmo módulo 11)
+const REQUIRED_DOCS: { key: string; label: string }[] = [
+  { key: "rg", label: "RG (frente e verso)" },
+  { key: "cpf", label: "CPF" },
+  { key: "ctps", label: "CTPS digitalizada" },
+  { key: "comprovante_residencia", label: "Comprovante de residência" },
+  { key: "foto_3x4", label: "Foto 3x4" },
+  { key: "aso_admissional", label: "ASO admissional" },
+];
+const OPTIONAL_DOCS: { key: string; label: string }[] = [
+  { key: "reservista", label: "Certificado de reservista" },
+  { key: "titulo_eleitor", label: "Título de eleitor" },
+  { key: "cnh", label: "CNH" },
+  { key: "diploma", label: "Diploma / certificados" },
+];
+
 function isValidCpf(cpf: string) {
   const s = String(cpf || "").replace(/\D/g, "");
   if (s.length !== 11 || /^(\d)\1+$/.test(s)) return false;
@@ -36,28 +52,64 @@ function isValidCpf(cpf: string) {
   let d2 = 11 - (sum % 11); if (d2 >= 10) d2 = 0;
   return d2 === Number(s[10]);
 }
-const fmtCpf = (v: string) => String(v||"").replace(/\D/g,"").slice(0,11).replace(/(\d{3})(\d)/,"$1.$2").replace(/(\d{3})(\d)/,"$1.$2").replace(/(\d{3})(\d{1,2})$/,"$1-$2");
+const fmtCpf = (v: string) => String(v || "").replace(/\D/g, "").slice(0, 11).replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
 
 type Dep = { full_name: string; cpf?: string; birth_date?: string; relationship: string; ir_deduction?: boolean; family_allowance?: boolean; disabled?: boolean };
+type DocFile = { doc_type: string; title: string; file_url: string };
+
+function DocUploader({ docKey, label, value, onChange, required }: { docKey: string; label: string; value?: DocFile; onChange: (d?: DocFile) => void; required?: boolean }) {
+  const { uploadFile, isUploading } = useUpload();
+  const inputRef = useRef<HTMLInputElement>(null);
+  async function handle(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return;
+    try {
+      const url = await uploadFile(file);
+      if (url) { onChange({ doc_type: docKey, title: label, file_url: url }); toast.success(`${label} enviado`); }
+    } catch (err: any) { toast.error(err?.message || "Erro no upload"); }
+    finally { if (inputRef.current) inputRef.current.value = ""; }
+  }
+  return (
+    <div className="flex items-center justify-between gap-2 p-2 border rounded-md">
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium flex items-center gap-2">
+          {value ? <Check className="h-4 w-4 text-green-600 flex-shrink-0" /> : <span className={`h-2 w-2 rounded-full flex-shrink-0 ${required ? "bg-destructive" : "bg-muted-foreground/40"}`} />}
+          <span className="truncate">{label}{required && !value && <span className="text-destructive"> *</span>}</span>
+        </div>
+        {value && <a href={value.file_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline truncate block">Ver arquivo</a>}
+      </div>
+      <input ref={inputRef} type="file" className="hidden" accept="image/*,application/pdf" onChange={handle} />
+      {value ? (
+        <Button variant="ghost" size="sm" onClick={() => onChange(undefined)}><X className="h-4 w-4" /></Button>
+      ) : (
+        <Button variant="outline" size="sm" disabled={isUploading} onClick={() => inputRef.current?.click()}>
+          {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export default function RHAdmissao() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const { data: departments = [] } = useRhDepartments();
-  const { data: branches = [] } = useBranches();
+  const { data: schedules = [] } = useSchedules();
+  const [positions, setPositions] = useState<string[]>([]);
+  useEffect(() => { api<string[]>("/api/rh/positions").then(setPositions).catch(() => setPositions([])); }, []);
+
   const createEmployee = useCreateEmployee();
   const finalize = useFinalizeAdmission();
+  const { uploadFile: uploadPhoto, isUploading: uploadingPhoto } = useUpload();
+  const photoRef = useRef<HTMLInputElement>(null);
 
-  // Formulário
   const [form, setForm] = useState<any>({
     full_name: "", cpf: "", rg: "", birth_date: "", gender: "M", marital_status: "solteiro",
     email: "", phone: "", phone2: "",
     address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", zip_code: "",
-    // contratuais
-    position: "", branch_id: "", department_id: "", direct_manager_id: "",
-    salary: "", admission_date: new Date().toISOString().slice(0,10),
+    position: "", department_id: "", schedule_id: "",
+    salary: "", admission_date: new Date().toISOString().slice(0, 10),
     contract_end_date: "", employment_type: "clt", role_level: "junior",
-    work_schedule: "08:00-17:00",
+    work_schedule: "",
     ctps_number: "", ctps_series: "", pis_pasep: "",
     photo_url: "",
     enable_app_access: false,
@@ -65,13 +117,14 @@ export default function RHAdmissao() {
   });
   const setField = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
-  // Dependentes
   const [deps, setDeps] = useState<Dep[]>([]);
   const addDep = () => setDeps([...deps, { full_name: "", relationship: "filho", ir_deduction: true }]);
   const rmDep = (i: number) => setDeps(deps.filter((_, idx) => idx !== i));
   const setDep = (i: number, k: keyof Dep, v: any) => setDeps(deps.map((d, idx) => idx === i ? { ...d, [k]: v } : d));
 
-  // Validação por passo
+  const [docs, setDocs] = useState<Record<string, DocFile | undefined>>({});
+  const missingRequired = REQUIRED_DOCS.filter(d => !docs[d.key]).map(d => d.label);
+
   const stepErrors = useMemo(() => {
     const e: string[] = [];
     if (step === 1) {
@@ -89,29 +142,34 @@ export default function RHAdmissao() {
     return e;
   }, [step, form]);
 
-  const goNext = () => {
-    if (stepErrors.length) { stepErrors.forEach(m => toast.error(m)); return; }
-    setStep(s => Math.min(5, s + 1));
-  };
+  const goNext = () => { if (stepErrors.length) { stepErrors.forEach(m => toast.error(m)); return; } setStep(s => Math.min(5, s + 1)); };
   const goPrev = () => setStep(s => Math.max(1, s - 1));
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return;
+    try {
+      const url = await uploadPhoto(file);
+      if (url) { setField("photo_url", url); setDocs(d => ({ ...d, foto_3x4: { doc_type: "foto_3x4", title: "Foto 3x4", file_url: url } })); toast.success("Foto enviada"); }
+    } catch (err: any) { toast.error(err?.message || "Erro"); }
+    finally { if (photoRef.current) photoRef.current.value = ""; }
+  }
 
   async function finish() {
     try {
-      // 1) cria colaborador
       const payload = { ...form, salary: Number(form.salary || 0) };
       delete payload.enable_app_access;
+      delete payload.schedule_id;
       const emp = await createEmployee.mutateAsync(payload);
-      // 2) finaliza (dependentes, acesso app, S-2200)
       await finalize.mutateAsync({
         employee_id: emp.id,
         dependents: deps.filter(d => d.full_name && d.relationship),
         enable_app_access: !!form.enable_app_access,
+        schedule_id: form.schedule_id || null,
+        documents: Object.values(docs).filter(Boolean),
       });
       toast.success("Admissão concluída! Evento S-2200 enfileirado no eSocial.");
       navigate(`/rh/colaboradores`);
-    } catch (err: any) {
-      toast.error(err?.message || "Erro ao concluir admissão");
-    }
+    } catch (err: any) { toast.error(err?.message || "Erro ao concluir admissão"); }
   }
 
   const progress = (step / STEPS.length) * 100;
@@ -123,7 +181,6 @@ export default function RHAdmissao() {
         <p className="text-muted-foreground">Fluxo guiado em 5 etapas com integração eSocial (S-2200)</p>
       </div>
 
-      {/* Stepper */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-3">
           {STEPS.map(s => {
@@ -142,7 +199,6 @@ export default function RHAdmissao() {
         <Progress value={progress} className="h-2" />
       </Card>
 
-      {/* Steps */}
       {step === 1 && (
         <Card className="p-6 space-y-4">
           <h2 className="text-xl font-semibold">Etapa 1 — Dados pessoais</h2>
@@ -193,7 +249,14 @@ export default function RHAdmissao() {
         <Card className="p-6 space-y-4">
           <h2 className="text-xl font-semibold">Etapa 2 — Dados contratuais</h2>
           <div className="grid md:grid-cols-2 gap-4">
-            <div><Label>Cargo *</Label><Input value={form.position} onChange={e => setField("position", e.target.value)} /></div>
+            <div>
+              <Label>Cargo *</Label>
+              <Input list="positions-list" value={form.position} onChange={e => setField("position", e.target.value)} placeholder="Digite ou selecione" />
+              <datalist id="positions-list">
+                {positions.map(p => <option key={p} value={p} />)}
+              </datalist>
+              <p className="text-xs text-muted-foreground mt-1">Selecione um cargo já cadastrado ou digite um novo.</p>
+            </div>
             <div><Label>Nível</Label>
               <Select value={form.role_level} onValueChange={v => setField("role_level", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -206,17 +269,22 @@ export default function RHAdmissao() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Filial / PDV</Label>
-              <Select value={form.branch_id || undefined} onValueChange={v => setField("branch_id", v)}>
-                <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                <SelectContent>{branches.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
             <div><Label>Departamento</Label>
               <Select value={form.department_id || undefined} onValueChange={v => setField("department_id", v)}>
                 <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                 <SelectContent>{departments.map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
               </Select>
+            </div>
+            <div><Label>Jornada de trabalho</Label>
+              <Select value={form.schedule_id || undefined} onValueChange={v => setField("schedule_id", v)}>
+                <SelectTrigger><SelectValue placeholder={schedules.length ? "Selecionar escala" : "Nenhuma escala cadastrada"} /></SelectTrigger>
+                <SelectContent>
+                  {schedules.map((s: any) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name} · {s.schedule_type} · {s.weekly_hours}h/sem</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!schedules.length && <p className="text-xs text-muted-foreground mt-1">Cadastre em RH → Escalas</p>}
             </div>
             <div><Label>Tipo de contrato *</Label>
               <Select value={form.employment_type} onValueChange={v => setField("employment_type", v)}>
@@ -233,7 +301,6 @@ export default function RHAdmissao() {
             <div><Label>Data de admissão *</Label><Input type="date" value={form.admission_date} onChange={e => setField("admission_date", e.target.value)} /></div>
             <div><Label>Fim contrato (experiência)</Label><Input type="date" value={form.contract_end_date} onChange={e => setField("contract_end_date", e.target.value)} /></div>
             <div><Label>Salário base (R$) *</Label><Input type="number" step="0.01" value={form.salary} onChange={e => setField("salary", e.target.value)} /></div>
-            <div><Label>Jornada</Label><Input value={form.work_schedule} onChange={e => setField("work_schedule", e.target.value)} placeholder="08:00-17:00" /></div>
           </div>
           <Separator />
           <div className="flex items-center space-x-2">
@@ -288,25 +355,46 @@ export default function RHAdmissao() {
 
       {step === 4 && (
         <Card className="p-6 space-y-4">
-          <h2 className="text-xl font-semibold">Etapa 4 — Documentos</h2>
-          <p className="text-sm text-muted-foreground">Informe os dados oficiais aqui. Anexos (RG digitalizado, comprovante, foto 3x4, ASO admissional) você pode subir depois no perfil do colaborador em <b>RH → Documentos</b>.</p>
+          <h2 className="text-xl font-semibold">Etapa 4 — Documentos e foto</h2>
+
+          <div className="grid md:grid-cols-[auto_1fr] gap-4 items-center p-4 border rounded-lg bg-muted/30">
+            <div className="w-28 h-36 rounded-md border-2 border-dashed flex items-center justify-center overflow-hidden bg-background">
+              {form.photo_url
+                ? <img src={form.photo_url} alt="Foto 3x4" className="w-full h-full object-cover" />
+                : <span className="text-xs text-muted-foreground text-center px-2">Foto 3x4</span>}
+            </div>
+            <div className="space-y-2">
+              <div className="font-medium">Foto 3x4 do colaborador</div>
+              <p className="text-xs text-muted-foreground">JPG ou PNG. Envie do seu computador.</p>
+              <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+              <Button variant="outline" size="sm" disabled={uploadingPhoto} onClick={() => photoRef.current?.click()}>
+                {uploadingPhoto ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enviando...</> : <><Upload className="h-4 w-4 mr-2" /> {form.photo_url ? "Trocar foto" : "Enviar foto"}</>}
+              </Button>
+            </div>
+          </div>
+
           <div className="grid md:grid-cols-2 gap-4">
             <div><Label>CTPS — Número</Label><Input value={form.ctps_number} onChange={e => setField("ctps_number", e.target.value)} /></div>
             <div><Label>CTPS — Série</Label><Input value={form.ctps_series} onChange={e => setField("ctps_series", e.target.value)} /></div>
             <div><Label>PIS/PASEP</Label><Input value={form.pis_pasep} onChange={e => setField("pis_pasep", e.target.value)} /></div>
-            <div><Label>Foto 3x4 (URL)</Label><Input value={form.photo_url} onChange={e => setField("photo_url", e.target.value)} placeholder="https://..." /></div>
           </div>
-          <div className="rounded-lg bg-muted/50 p-4 text-sm">
-            <b>Checklist recomendado:</b>
-            <ul className="list-disc ml-5 mt-2 space-y-1 text-muted-foreground">
-              <li>RG / CNH (frente e verso)</li>
-              <li>CTPS digitalizada</li>
-              <li>Comprovante de residência (últimos 90 dias)</li>
-              <li>Foto 3x4 recente</li>
-              <li>ASO admissional (exame médico)</li>
-              <li>Certificado de reservista (homens)</li>
-              <li>Título de eleitor</li>
-            </ul>
+
+          <Separator />
+          <div>
+            <h3 className="font-medium mb-2">Checklist de documentos <span className="text-xs text-muted-foreground">(obrigatórios em vermelho)</span></h3>
+            <div className="grid md:grid-cols-2 gap-2">
+              {REQUIRED_DOCS.map(d => (
+                <DocUploader key={d.key} docKey={d.key} label={d.label} required value={docs[d.key]} onChange={f => setDocs(prev => ({ ...prev, [d.key]: f }))} />
+              ))}
+              {OPTIONAL_DOCS.map(d => (
+                <DocUploader key={d.key} docKey={d.key} label={d.label} value={docs[d.key]} onChange={f => setDocs(prev => ({ ...prev, [d.key]: f }))} />
+              ))}
+            </div>
+            {missingRequired.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Você pode admitir mesmo faltando documentos — os pendentes ficarão sinalizados no dashboard de RH ({missingRequired.length} pendente{missingRequired.length > 1 ? "s" : ""}).
+              </p>
+            )}
           </div>
         </Card>
       )}
@@ -325,17 +413,24 @@ export default function RHAdmissao() {
             <div><b>Contrato:</b> {String(form.employment_type).toUpperCase()}</div>
             <div><b>Admissão:</b> {form.admission_date}</div>
             <div><b>Salário:</b> R$ {Number(form.salary || 0).toFixed(2)}</div>
-            <div><b>Jornada:</b> {form.work_schedule}</div>
+            <div><b>Jornada:</b> {schedules.find((s: any) => s.id === form.schedule_id)?.name || "—"}</div>
             <div><b>Fim contrato:</b> {form.contract_end_date || "—"}</div>
             <Separator className="md:col-span-2" />
             <div><b>Dependentes:</b> {deps.length}</div>
+            <div><b>Documentos anexados:</b> {Object.values(docs).filter(Boolean).length}</div>
             <div><b>Acesso ao app:</b> {form.enable_app_access ? "Sim" : "Não"}</div>
           </div>
+          {missingRequired.length > 0 && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+              <b>Pendências:</b> {missingRequired.join(", ")}. Ficarão sinalizadas no dashboard.
+            </div>
+          )}
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm space-y-1">
             <div className="flex items-center gap-2 font-semibold text-primary"><ShieldCheck className="h-4 w-4" /> O que acontece ao clicar em "Admitir"</div>
             <ul className="ml-6 list-disc text-muted-foreground">
               <li>Criação do colaborador na base</li>
-              <li>Cadastro dos dependentes</li>
+              <li>Cadastro dos dependentes e documentos anexados</li>
+              {form.schedule_id && <li>Atribuição da jornada selecionada</li>}
               {form.enable_app_access && <li>Ativação do acesso ao app do colaborador</li>}
               <li>Enfileiramento do evento <Badge variant="secondary">S-2200</Badge> no eSocial (ambiente homologação)</li>
             </ul>
@@ -343,7 +438,6 @@ export default function RHAdmissao() {
         </Card>
       )}
 
-      {/* Nav */}
       <div className="flex justify-between">
         <Button variant="outline" onClick={goPrev} disabled={step === 1}><ChevronLeft className="h-4 w-4 mr-1" /> Voltar</Button>
         {step < 5 ? (
