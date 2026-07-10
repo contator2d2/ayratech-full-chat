@@ -43,20 +43,22 @@ const STEPS = [
   { id: 5, title: "Revisar e Admitir", icon: Check },
 ];
 
-const REQUIRED_DOCS: { key: string; label: string }[] = [
-  { key: "rg", label: "RG (frente e verso)" },
+const REQUIRED_DOCS: { key: string; label: string; twoSided?: boolean }[] = [
+  { key: "rg", label: "RG", twoSided: true },
   { key: "cpf", label: "CPF" },
-  { key: "ctps", label: "CTPS digitalizada" },
+  { key: "ctps", label: "CTPS digitalizada", twoSided: true },
   { key: "comprovante_residencia", label: "Comprovante de residência" },
   { key: "foto_3x4", label: "Foto 3x4" },
   { key: "aso_admissional", label: "ASO admissional" },
 ];
-const OPTIONAL_DOCS: { key: string; label: string }[] = [
+const OPTIONAL_DOCS: { key: string; label: string; twoSided?: boolean }[] = [
   { key: "reservista", label: "Certificado de reservista" },
   { key: "titulo_eleitor", label: "Título de eleitor" },
-  { key: "cnh", label: "CNH" },
+  { key: "cnh", label: "CNH", twoSided: true },
   { key: "diploma", label: "Diploma / certificados" },
 ];
+
+const CNH_CATEGORIES = ["A", "B", "AB", "C", "D", "E", "AC", "AD", "AE"];
 
 function isValidCpf(cpf: string) {
   const s = String(cpf || "").replace(/\D/g, "");
