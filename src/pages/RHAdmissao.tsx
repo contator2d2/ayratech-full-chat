@@ -16,6 +16,24 @@ import { useFinalizeAdmission } from "@/hooks/use-rh-flows";
 import { useSchedules } from "@/hooks/use-rh-schedules";
 import { useUpload } from "@/hooks/use-upload";
 import { api } from "@/lib/api";
+import { formatPhone, onlyDigits } from "@/lib/br-utils";
+
+function addDaysISO(dateISO: string, days: number) {
+  if (!dateISO) return "";
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+function fmtBrDate(iso: string) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+function fmtCep(v: string) {
+  const s = onlyDigits(v).slice(0, 8);
+  return s.length > 5 ? `${s.slice(0, 5)}-${s.slice(5)}` : s;
+}
 
 const STEPS = [
   { id: 1, title: "Dados Pessoais", icon: UserPlus },
