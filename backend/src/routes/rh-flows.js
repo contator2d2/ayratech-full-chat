@@ -47,7 +47,10 @@ async function ensureEmployeeDependentsSchema() {
   await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS notes TEXT`);
   await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
 
+  // Legacy: coluna "name" existia com NOT NULL. Remover NOT NULL e sincronizar valores.
+  await query(`ALTER TABLE employee_dependents ALTER COLUMN name DROP NOT NULL`).catch(() => {});
   await query(`UPDATE employee_dependents SET full_name = name WHERE full_name IS NULL AND name IS NOT NULL`).catch(() => {});
+  await query(`UPDATE employee_dependents SET name = full_name WHERE name IS NULL AND full_name IS NOT NULL`).catch(() => {});
   await query(`UPDATE employee_dependents d SET organization_id = e.organization_id
                FROM employees e WHERE d.employee_id = e.id AND d.organization_id IS NULL`);
 
@@ -169,8 +172,8 @@ router.post('/dependents', async (req, res) => {
     const b = req.body || {};
     if (!b.employee_id || !b.full_name || !b.relationship) return res.status(400).json({ error: 'Campos obrigatórios: employee_id, full_name, relationship' });
     const r = await query(
-      `INSERT INTO employee_dependents (organization_id, employee_id, full_name, cpf, birth_date, relationship, ir_deduction, family_allowance, disabled, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      `INSERT INTO employee_dependents (organization_id, employee_id, full_name, name, cpf, birth_date, relationship, ir_deduction, family_allowance, disabled, notes)
+       VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [orgId, b.employee_id, b.full_name, b.cpf || null, b.birth_date || null, b.relationship,
        !!b.ir_deduction, !!b.family_allowance, !!b.disabled, b.notes || null]
     );
@@ -309,8 +312,8 @@ router.post('/admission', async (req, res) => {
       for (const d of b.dependents) {
         if (!d.full_name || !d.relationship) continue;
         await query(
-          `INSERT INTO employee_dependents (organization_id, employee_id, full_name, cpf, birth_date, relationship, ir_deduction, family_allowance, disabled)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          `INSERT INTO employee_dependents (organization_id, employee_id, full_name, name, cpf, birth_date, relationship, ir_deduction, family_allowance, disabled)
+           VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9)`,
           [orgId, b.employee_id, d.full_name, d.cpf || null, d.birth_date || null, d.relationship,
            !!d.ir_deduction, !!d.family_allowance, !!d.disabled]
         );
