@@ -213,6 +213,10 @@ export default function RHAdmissao() {
       const payload = { ...form, salary: Number(form.salary || 0) };
       delete payload.enable_app_access;
       delete payload.schedule_id;
+      delete payload.is_experience_contract;
+      delete payload.experience_days;
+      // Normaliza tipo de contrato: no banco, "experiencia" fica como CLT com contract_end_date preenchido
+      if (payload.employment_type === "experiencia") payload.employment_type = "clt";
       const emp = await createEmployee.mutateAsync(payload);
       await finalize.mutateAsync({
         employee_id: emp.id,
