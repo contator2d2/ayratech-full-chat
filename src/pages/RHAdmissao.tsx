@@ -16,6 +16,24 @@ import { useFinalizeAdmission } from "@/hooks/use-rh-flows";
 import { useSchedules } from "@/hooks/use-rh-schedules";
 import { useUpload } from "@/hooks/use-upload";
 import { api } from "@/lib/api";
+import { formatPhone, onlyDigits } from "@/lib/br-utils";
+
+function addDaysISO(dateISO: string, days: number) {
+  if (!dateISO) return "";
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+function fmtBrDate(iso: string) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+function fmtCep(v: string) {
+  const s = onlyDigits(v).slice(0, 8);
+  return s.length > 5 ? `${s.slice(0, 5)}-${s.slice(5)}` : s;
+}
 
 const STEPS = [
   { id: 1, title: "Dados Pessoais", icon: UserPlus },
@@ -102,13 +120,15 @@ export default function RHAdmissao() {
   const { uploadFile: uploadPhoto, isUploading: uploadingPhoto } = useUpload();
   const photoRef = useRef<HTMLInputElement>(null);
 
+  const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState<any>({
     full_name: "", cpf: "", rg: "", birth_date: "", gender: "M", marital_status: "solteiro",
     email: "", phone: "", phone2: "",
     address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", zip_code: "",
     position: "", department_id: "", schedule_id: "",
-    salary: "", admission_date: new Date().toISOString().slice(0, 10),
-    contract_end_date: "", employment_type: "clt", role_level: "junior",
+    salary: "", admission_date: today,
+    contract_end_date: addDaysISO(today, 90), employment_type: "experiencia", role_level: "junior",
+    is_experience_contract: true, experience_days: 90,
     work_schedule: "",
     ctps_number: "", ctps_series: "", pis_pasep: "",
     photo_url: "",
@@ -116,6 +136,40 @@ export default function RHAdmissao() {
     facial_required: false,
   });
   const setField = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+
+  // Auto-recalcular fim do contrato de experiência
+  useEffect(() => {
+    if (form.is_experience_contract && form.admission_date) {
+      setForm((f: any) => ({ ...f, contract_end_date: addDaysISO(f.admission_date, Number(f.experience_days) || 90) }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.admission_date, form.is_experience_contract, form.experience_days]);
+
+  // Buscar endereço por CEP (ViaCEP)
+  const [cepLoading, setCepLoading] = useState(false);
+  async function lookupCep(cepRaw: string) {
+    const cep = onlyDigits(cepRaw);
+    if (cep.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const j = await r.json();
+      if (j && !j.erro) {
+        setForm((f: any) => ({
+          ...f,
+          address: j.logradouro || f.address,
+          neighborhood: j.bairro || f.neighborhood,
+          city: j.localidade || f.city,
+          state: j.uf || f.state,
+          complement: j.complemento || f.complement,
+        }));
+      } else {
+        toast.error("CEP não encontrado");
+      }
+    } catch {
+      toast.error("Falha ao consultar CEP");
+    } finally { setCepLoading(false); }
+  }
 
   const [deps, setDeps] = useState<Dep[]>([]);
   const addDep = () => setDeps([...deps, { full_name: "", relationship: "filho", ir_deduction: true }]);
@@ -159,6 +213,10 @@ export default function RHAdmissao() {
       const payload = { ...form, salary: Number(form.salary || 0) };
       delete payload.enable_app_access;
       delete payload.schedule_id;
+      delete payload.is_experience_contract;
+      delete payload.experience_days;
+      // Normaliza tipo de contrato: no banco, "experiencia" fica como CLT com contract_end_date preenchido
+      if (payload.employment_type === "experiencia") payload.employment_type = "clt";
       const emp = await createEmployee.mutateAsync(payload);
       await finalize.mutateAsync({
         employee_id: emp.id,
@@ -228,13 +286,22 @@ export default function RHAdmissao() {
               </Select>
             </div>
             <div><Label>E-mail</Label><Input type="email" value={form.email} onChange={e => setField("email", e.target.value)} /></div>
-            <div><Label>Telefone *</Label><Input value={form.phone} onChange={e => setField("phone", e.target.value)} /></div>
-            <div><Label>Telefone 2</Label><Input value={form.phone2} onChange={e => setField("phone2", e.target.value)} /></div>
+            <div><Label>Telefone / WhatsApp *</Label><Input inputMode="tel" value={form.phone} onChange={e => setField("phone", formatPhone(e.target.value))} placeholder="(00) 00000-0000" /></div>
+            <div><Label>Telefone 2</Label><Input inputMode="tel" value={form.phone2} onChange={e => setField("phone2", formatPhone(e.target.value))} placeholder="(00) 00000-0000" /></div>
           </div>
           <Separator />
           <h3 className="font-medium">Endereço</h3>
           <div className="grid md:grid-cols-3 gap-4">
-            <div><Label>CEP</Label><Input value={form.zip_code} onChange={e => setField("zip_code", e.target.value)} /></div>
+            <div><Label>CEP</Label>
+              <Input
+                value={form.zip_code}
+                onChange={e => setField("zip_code", fmtCep(e.target.value))}
+                onBlur={e => lookupCep(e.target.value)}
+                placeholder="00000-000"
+                inputMode="numeric"
+              />
+              {cepLoading && <p className="text-xs text-muted-foreground mt-1">Buscando endereço…</p>}
+            </div>
             <div className="md:col-span-2"><Label>Endereço</Label><Input value={form.address} onChange={e => setField("address", e.target.value)} /></div>
             <div><Label>Número</Label><Input value={form.address_number} onChange={e => setField("address_number", e.target.value)} /></div>
             <div><Label>Complemento</Label><Input value={form.complement} onChange={e => setField("complement", e.target.value)} /></div>
@@ -287,10 +354,19 @@ export default function RHAdmissao() {
               {!schedules.length && <p className="text-xs text-muted-foreground mt-1">Cadastre em RH → Escalas</p>}
             </div>
             <div><Label>Tipo de contrato *</Label>
-              <Select value={form.employment_type} onValueChange={v => setField("employment_type", v)}>
+              <Select
+                value={form.employment_type}
+                onValueChange={v => setForm((f: any) => ({
+                  ...f,
+                  employment_type: v,
+                  is_experience_contract: v === "experiencia",
+                  contract_end_date: v === "experiencia" ? addDaysISO(f.admission_date, Number(f.experience_days) || 90) : (v === "clt" ? "" : f.contract_end_date),
+                }))}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="clt">CLT</SelectItem>
+                  <SelectItem value="experiencia">Contrato de Experiência (sugerido)</SelectItem>
+                  <SelectItem value="clt">CLT (efetivo)</SelectItem>
                   <SelectItem value="pj">Pessoa Jurídica</SelectItem>
                   <SelectItem value="estagio">Estágio</SelectItem>
                   <SelectItem value="temporario">Temporário</SelectItem>
@@ -299,7 +375,25 @@ export default function RHAdmissao() {
               </Select>
             </div>
             <div><Label>Data de admissão *</Label><Input type="date" value={form.admission_date} onChange={e => setField("admission_date", e.target.value)} /></div>
-            <div><Label>Fim contrato (experiência)</Label><Input type="date" value={form.contract_end_date} onChange={e => setField("contract_end_date", e.target.value)} /></div>
+            {form.is_experience_contract && (
+              <div><Label>Duração da experiência (dias)</Label>
+                <Select value={String(form.experience_days || 90)} onValueChange={v => setField("experience_days", Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">30 dias</SelectItem>
+                    <SelectItem value="45">45 dias (1º período)</SelectItem>
+                    <SelectItem value="60">60 dias</SelectItem>
+                    <SelectItem value="90">90 dias (3 meses)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div><Label>Fim do contrato {form.is_experience_contract && "(experiência)"}</Label>
+              <Input type="date" value={form.contract_end_date} onChange={e => setField("contract_end_date", e.target.value)} />
+              {form.is_experience_contract && form.contract_end_date && (
+                <p className="text-xs text-primary mt-1">Contrato de experiência encerra em <strong>{fmtBrDate(form.contract_end_date)}</strong></p>
+              )}
+            </div>
             <div><Label>Salário base (R$) *</Label><Input type="number" step="0.01" value={form.salary} onChange={e => setField("salary", e.target.value)} /></div>
           </div>
           <Separator />
