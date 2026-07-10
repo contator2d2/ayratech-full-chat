@@ -308,6 +308,16 @@ export default function RHAdmissao() {
               {form.cpf && !isValidCpf(form.cpf) && <p className="text-xs text-destructive mt-1">CPF inválido</p>}
             </div>
             <div><Label>RG</Label><Input value={form.rg} onChange={e => setField("rg", e.target.value)} /></div>
+            <div><Label>CNH — Número</Label><Input value={form.cnh} onChange={e => setField("cnh", e.target.value)} placeholder="Opcional" /></div>
+            <div><Label>CNH — Categoria</Label>
+              <Select value={form.cnh_category || undefined} onValueChange={v => setField("cnh_category", v)}>
+                <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectContent>
+                  {CNH_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>CNH — Validade</Label><Input type="date" value={form.cnh_expiry} onChange={e => setField("cnh_expiry", e.target.value)} /></div>
             <div><Label>Data de nascimento *</Label><Input type="date" value={form.birth_date} onChange={e => setField("birth_date", e.target.value)} /></div>
             <div><Label>Sexo</Label>
               <Select value={form.gender} onValueChange={v => setField("gender", v)}>
