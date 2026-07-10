@@ -165,15 +165,22 @@ ALTER TABLE rh_departments ADD CONSTRAINT fk_rh_dept_manager FOREIGN KEY (manage
 -- ================================================
 CREATE TABLE IF NOT EXISTS employee_dependents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
   employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  name VARCHAR(255) NOT NULL,
+  full_name VARCHAR(255),
+  name VARCHAR(255),
   relationship VARCHAR(50),
   birth_date DATE,
   cpf VARCHAR(14),
   ir_deduction BOOLEAN DEFAULT false,
+  family_allowance BOOLEAN DEFAULT false,
+  disabled BOOLEAN DEFAULT false,
+  notes TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_dependents_emp ON employee_dependents(employee_id);
+CREATE INDEX IF NOT EXISTS idx_dependents_org ON employee_dependents(organization_id);
 
 -- ================================================
 -- Documentos do Colaborador
