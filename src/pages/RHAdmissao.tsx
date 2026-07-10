@@ -153,6 +153,7 @@ export default function RHAdmissao() {
     is_experience_contract: true, experience_days: 90,
     work_schedule: "",
     ctps_number: "", ctps_series: "", pis_pasep: "",
+    cnh: "", cnh_category: "", cnh_expiry: "",
     photo_url: "",
     enable_app_access: false,
     facial_required: false,
