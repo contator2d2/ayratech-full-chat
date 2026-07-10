@@ -304,6 +304,35 @@ router.post('/admission', async (req, res) => {
       );
     }
 
+    // Atribuir jornada (opcional)
+    if (b.schedule_id) {
+      try {
+        await query(
+          `UPDATE employee_schedules SET active=false, end_date=CURRENT_DATE
+             WHERE employee_id=$1 AND active=true`, [b.employee_id]);
+        await query(
+          `INSERT INTO employee_schedules (organization_id, employee_id, schedule_id, start_date, active)
+           VALUES ($1,$2,$3,COALESCE($4::date, CURRENT_DATE), true)`,
+          [orgId, b.employee_id, b.schedule_id, empRow.admission_date || null]
+        );
+      } catch (e) { logError('rh-flows.admission.schedule', e); }
+    }
+
+    // Documentos de admissão em lote
+    if (Array.isArray(b.documents)) {
+      for (const d of b.documents) {
+        if (!d?.doc_type || !d?.file_url) continue;
+        try {
+          await query(
+            `INSERT INTO employee_documents (employee_id, doc_type, title, file_url, expiry_date, notes)
+             VALUES ($1,$2,$3,$4,$5,$6)`,
+            [b.employee_id, d.doc_type, d.title || d.doc_type, d.file_url, d.expiry_date || null, d.notes || null]
+          );
+        } catch (e) { logError('rh-flows.admission.doc', e); }
+      }
+    }
+
+
     // Enfileira S-2200
     const event = await enqueueEsocialEvent({
       orgId, employeeId: b.employee_id, eventType: 'S-2200',
