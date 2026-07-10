@@ -172,8 +172,8 @@ router.post('/dependents', async (req, res) => {
     const b = req.body || {};
     if (!b.employee_id || !b.full_name || !b.relationship) return res.status(400).json({ error: 'Campos obrigatórios: employee_id, full_name, relationship' });
     const r = await query(
-      `INSERT INTO employee_dependents (organization_id, employee_id, full_name, cpf, birth_date, relationship, ir_deduction, family_allowance, disabled, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      `INSERT INTO employee_dependents (organization_id, employee_id, full_name, name, cpf, birth_date, relationship, ir_deduction, family_allowance, disabled, notes)
+       VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [orgId, b.employee_id, b.full_name, b.cpf || null, b.birth_date || null, b.relationship,
        !!b.ir_deduction, !!b.family_allowance, !!b.disabled, b.notes || null]
     );
