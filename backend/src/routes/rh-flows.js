@@ -100,6 +100,16 @@ async function ensureTables() {
   await query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS termination_date DATE`);
   await query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS termination_reason VARCHAR(30)`);
 
+  // Compat: tabela employee_dependents pode ter sido criada por schema antigo (schema-rh.sql) sem organization_id
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS organization_id UUID`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS family_allowance BOOLEAN DEFAULT false`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT false`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS notes TEXT`);
+  await query(`ALTER TABLE employee_dependents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
+  // Preenche org faltante a partir do employee
+  await query(`UPDATE employee_dependents d SET organization_id = e.organization_id
+               FROM employees e WHERE d.employee_id = e.id AND d.organization_id IS NULL`);
+
   tablesReady = true;
 }
 
