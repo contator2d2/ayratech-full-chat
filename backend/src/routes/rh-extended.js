@@ -576,6 +576,8 @@ router.get('/indicators', async (req, res) => {
       payroll: payroll.rows,
       birthdays: birthdays.rows,
       avg_tenure_years: Number(tenure.rows[0]?.years || 0),
+      pending_admission_docs: pendingDocsList,
+
     });
   } catch (e) { logError('rh-ext.indicators', e); res.status(500).json({ error: 'Erro' }); }
 });
