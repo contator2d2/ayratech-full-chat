@@ -312,8 +312,8 @@ router.post('/admission', async (req, res) => {
       for (const d of b.dependents) {
         if (!d.full_name || !d.relationship) continue;
         await query(
-          `INSERT INTO employee_dependents (organization_id, employee_id, full_name, cpf, birth_date, relationship, ir_deduction, family_allowance, disabled)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          `INSERT INTO employee_dependents (organization_id, employee_id, full_name, name, cpf, birth_date, relationship, ir_deduction, family_allowance, disabled)
+           VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9)`,
           [orgId, b.employee_id, d.full_name, d.cpf || null, d.birth_date || null, d.relationship,
            !!d.ir_deduction, !!d.family_allowance, !!d.disabled]
         );
