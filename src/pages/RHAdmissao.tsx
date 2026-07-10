@@ -288,7 +288,16 @@ export default function RHAdmissao() {
           <Separator />
           <h3 className="font-medium">Endereço</h3>
           <div className="grid md:grid-cols-3 gap-4">
-            <div><Label>CEP</Label><Input value={form.zip_code} onChange={e => setField("zip_code", e.target.value)} /></div>
+            <div><Label>CEP</Label>
+              <Input
+                value={form.zip_code}
+                onChange={e => setField("zip_code", fmtCep(e.target.value))}
+                onBlur={e => lookupCep(e.target.value)}
+                placeholder="00000-000"
+                inputMode="numeric"
+              />
+              {cepLoading && <p className="text-xs text-muted-foreground mt-1">Buscando endereço…</p>}
+            </div>
             <div className="md:col-span-2"><Label>Endereço</Label><Input value={form.address} onChange={e => setField("address", e.target.value)} /></div>
             <div><Label>Número</Label><Input value={form.address_number} onChange={e => setField("address_number", e.target.value)} /></div>
             <div><Label>Complemento</Label><Input value={form.complement} onChange={e => setField("complement", e.target.value)} /></div>
