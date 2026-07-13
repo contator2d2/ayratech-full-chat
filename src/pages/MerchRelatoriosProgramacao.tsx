@@ -170,16 +170,52 @@ export default function MerchRelatoriosProgramacao() {
     }
   };
 
+  const [brandingOpen, setBrandingOpen] = useState(false);
+  const [brandingForm, setBrandingForm] = useState<Partial<Schedule>>({ ...emptyForm, brand_id: ALL_BRANDS });
+
+  const previewBranding = async () => {
+    try {
+      setPreviewLoading(true);
+      const token = localStorage.getItem("token") || localStorage.getItem("auth_token") || "";
+      const body = { ...brandingForm, brand_id: brandingForm.brand_id === ALL_BRANDS ? null : brandingForm.brand_id };
+      const res = await fetch(`${API_URL}/api/merch-report-schedules/preview-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(url);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao gerar preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   return (
     <MainLayout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h1 className="text-2xl font-bold">Programação de Relatórios</h1>
             <p className="text-sm text-muted-foreground">Envio automático por e-mail e WhatsApp — por marca</p>
           </div>
-          <Button onClick={startNew}><Plus className="mr-2 h-4 w-4" /> Nova programação</Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="secondary" onClick={() => setBrandingOpen(true)}>
+              <Eye className="mr-2 h-4 w-4" /> Personalizar & Visualizar PDF
+            </Button>
+            <Button onClick={startNew}><Plus className="mr-2 h-4 w-4" /> Nova programação</Button>
+          </div>
         </div>
+
+        <Card className="bg-primary/5 border-primary/10">
+          <CardContent className="pt-4 text-sm text-muted-foreground">
+            💡 Para adicionar <b>logos</b>, <b>cores</b>, <b>título</b> e <b>rodapé</b> do PDF, clique em <b>"Personalizar & Visualizar PDF"</b> acima (funciona sem criar programação) — ou abra uma programação existente para editar.
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader><CardTitle>Programações ativas</CardTitle></CardHeader>
@@ -452,6 +488,71 @@ export default function MerchRelatoriosProgramacao() {
                   <Button variant="outline">Baixar PDF</Button>
                 </a>
               )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Diálogo standalone: Personalizar & Preview PDF (sem precisar criar programação) */}
+        <Dialog open={brandingOpen} onOpenChange={setBrandingOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Personalizar PDF & Visualizar</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">Marca (para preview com dados reais)</Label>
+                <Select
+                  value={(brandingForm.brand_id as string) || ALL_BRANDS}
+                  onValueChange={(v) => setBrandingForm({ ...brandingForm, brand_id: v })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_BRANDS}>Todas as marcas</SelectItem>
+                    {brands.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Logo da empresa (URL)</Label>
+                  <Input value={brandingForm.company_logo_url || ""} onChange={(e) => setBrandingForm({ ...brandingForm, company_logo_url: e.target.value })} placeholder="https://.../logo-empresa.png" />
+                  <label className="flex items-center gap-2 text-xs mt-1">
+                    <Checkbox checked={brandingForm.include_org_logo !== false} onCheckedChange={(v) => setBrandingForm({ ...brandingForm, include_org_logo: !!v })} />
+                    Exibir logo da empresa
+                  </label>
+                </div>
+                <div>
+                  <Label className="text-xs">Logo do cliente/marca (URL)</Label>
+                  <Input value={brandingForm.client_logo_url || ""} onChange={(e) => setBrandingForm({ ...brandingForm, client_logo_url: e.target.value })} placeholder="https://.../logo-cliente.png" />
+                  <label className="flex items-center gap-2 text-xs mt-1">
+                    <Checkbox checked={brandingForm.include_brand_logo !== false} onCheckedChange={(v) => setBrandingForm({ ...brandingForm, include_brand_logo: !!v })} />
+                    Exibir logo da marca
+                  </label>
+                </div>
+              </div>
+              <div className="grid grid-cols-[1fr_1fr_120px] gap-3">
+                <div>
+                  <Label className="text-xs">Título do cabeçalho</Label>
+                  <Input value={brandingForm.header_title || ""} onChange={(e) => setBrandingForm({ ...brandingForm, header_title: e.target.value })} placeholder="Nome da empresa" />
+                </div>
+                <div>
+                  <Label className="text-xs">Rodapé</Label>
+                  <Input value={brandingForm.footer_text || ""} onChange={(e) => setBrandingForm({ ...brandingForm, footer_text: e.target.value })} placeholder="Contato / Site / CNPJ" />
+                </div>
+                <div>
+                  <Label className="text-xs">Cor primária</Label>
+                  <Input type="color" value={brandingForm.primary_color || "#1e293b"} onChange={(e) => setBrandingForm({ ...brandingForm, primary_color: e.target.value })} className="h-10 p-1" />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Este preview usa dados reais do período atual. Para salvar as personalizações, crie uma programação em "Nova programação".
+              </p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBrandingOpen(false)}>Fechar</Button>
+              <Button onClick={previewBranding} disabled={previewLoading}>
+                <Eye className="h-4 w-4 mr-2" /> {previewLoading ? "Gerando..." : "Ver preview do PDF"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
