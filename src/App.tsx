@@ -93,6 +93,7 @@ import MerchProdutos from "./pages/MerchProdutos";
 import MerchMixPDV from "./pages/MerchMixPDV";
 import MerchRedes from "./pages/MerchRedes";
 import MerchRelatorios from "./pages/MerchRelatorios";
+import MerchRelatoriosProgramacao from "./pages/MerchRelatoriosProgramacao";
 import MerchRotas from "./pages/MerchRotas";
 import MerchExecucao from "./pages/MerchExecucao";
 import MerchChecklists from "./pages/MerchChecklists";
