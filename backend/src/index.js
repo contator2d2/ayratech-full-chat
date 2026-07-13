@@ -64,6 +64,8 @@ import agencyNetworkRequestsRoutes from './routes/agency-network-requests.js';
 import promoterAccessRoutes from './routes/promoter-access.js';
 import promoterLeavesRoutes from './routes/promoter-leaves.js';
 import accessControlDashboardRoutes from './routes/access-control-dashboard.js';
+import merchReportSchedulesRoutes from './routes/merch-report-schedules.js';
+import { executeMerchReportSchedules } from './merch-report-scheduler.js';
 import { initDatabase } from './init-db.js';
 import { executeNotifications } from './scheduler.js';
 import { executeCampaignMessages } from './campaign-scheduler.js';
