@@ -64,6 +64,8 @@ import agencyNetworkRequestsRoutes from './routes/agency-network-requests.js';
 import promoterAccessRoutes from './routes/promoter-access.js';
 import promoterLeavesRoutes from './routes/promoter-leaves.js';
 import accessControlDashboardRoutes from './routes/access-control-dashboard.js';
+import merchReportSchedulesRoutes from './routes/merch-report-schedules.js';
+import { executeMerchReportSchedules } from './merch-report-scheduler.js';
 import { initDatabase } from './init-db.js';
 import { executeNotifications } from './scheduler.js';
 import { executeCampaignMessages } from './campaign-scheduler.js';
@@ -464,6 +466,7 @@ app.use('/api', agencyNetworkRequestsRoutes);
 
 app.use('/api/promoter-leaves', promoterLeavesRoutes);
 app.use('/api/access-control-dashboard', accessControlDashboardRoutes);
+app.use('/api/merch-report-schedules', merchReportSchedulesRoutes);
 
 app.get('/health', (req, res) => {
   res.json({
@@ -695,6 +698,16 @@ app.listen(PORT, () => {
       timezone: 'America/Sao_Paulo'
     });
     console.log('⭐ Promoter score calculator started - runs every 6 hours');
+
+    // Merch report schedules - every 15 minutes
+    cron.schedule('*/15 * * * *', async () => {
+      try {
+        await executeMerchReportSchedules();
+      } catch (error) {
+        console.error('📊 [CRON] Error running merch report schedules:', error);
+      }
+    }, { timezone: 'America/Sao_Paulo' });
+    console.log('📊 Merch report scheduler started - checks every 15 minutes');
   }).catch((error) => {
     databaseInitError = error?.message || 'Database initialization failed';
     console.error('🛑 Database initialization crashed. API remains online in degraded mode:', error);

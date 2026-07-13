@@ -85,6 +85,9 @@ export default function MerchRelatorios() {
             Relatórios Inteligentes
           </h1>
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => window.location.href = '/merch/relatorios/programacao'}>
+              <Calendar className="h-4 w-4 mr-1" />Programar envios
+            </Button>
             <Button variant="outline" size="sm"><Download className="h-4 w-4 mr-1" />Exportar</Button>
             <Button size="sm" className="bg-gradient-to-r from-primary to-primary/80">
               <Sparkles className="h-4 w-4 mr-1" />Análise IA
