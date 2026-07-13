@@ -1,0 +1,332 @@
+import { useState } from "react";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { useBrands } from "@/hooks/use-merchandising";
+import { toast } from "sonner";
+import { Plus, Trash2, Send, Calendar, Mail, MessageCircle, Edit, Play } from "lucide-react";
+
+const ALL_BRANDS = "__all__";
+
+const FREQUENCIES = [
+  { value: "weekly", label: "Semanal" },
+  { value: "biweekly", label: "Quinzenal" },
+  { value: "monthly", label: "Mensal" },
+  { value: "ondemand", label: "Sob demanda" },
+];
+
+const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+interface Recipient { name: string; email: string; phone: string }
+
+interface Schedule {
+  id: string;
+  brand_id: string | null;
+  brand_name?: string;
+  name: string;
+  metrics: { scheduled?: boolean; completed?: boolean; not_done?: boolean };
+  frequency: string;
+  day_of_week: number;
+  day_of_month: number;
+  send_hour: number;
+  channels: { email?: boolean; whatsapp?: boolean };
+  format: "pdf" | "link";
+  recipients: Recipient[];
+  active: boolean;
+  next_run_at?: string | null;
+  last_run_at?: string | null;
+}
+
+const emptyForm: Partial<Schedule> = {
+  brand_id: null,
+  name: "",
+  metrics: { scheduled: true, completed: true, not_done: true },
+  frequency: "weekly",
+  day_of_week: 1,
+  day_of_month: 1,
+  send_hour: 8,
+  channels: { email: true, whatsapp: false },
+  format: "pdf",
+  recipients: [],
+  active: true,
+};
+
+export default function MerchRelatoriosProgramacao() {
+  const qc = useQueryClient();
+  const { data: brands = [] } = useBrands();
+  const { data: schedules = [], isLoading } = useQuery<Schedule[]>({
+    queryKey: ["merch-report-schedules"],
+    queryFn: () => api<Schedule[]>("/api/merch-report-schedules"),
+  });
+
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<Partial<Schedule>>(emptyForm);
+  const [editId, setEditId] = useState<string | null>(null);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const body = { ...form, brand_id: form.brand_id === ALL_BRANDS ? null : form.brand_id };
+      if (editId) return api(`/api/merch-report-schedules/${editId}`, { method: "PUT", body });
+      return api("/api/merch-report-schedules", { method: "POST", body });
+    },
+    onSuccess: () => {
+      toast.success("Programação salva");
+      setOpen(false); setForm(emptyForm); setEditId(null);
+      qc.invalidateQueries({ queryKey: ["merch-report-schedules"] });
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao salvar"),
+  });
+
+  const del = useMutation({
+    mutationFn: (id: string) => api(`/api/merch-report-schedules/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("Programação removida");
+      qc.invalidateQueries({ queryKey: ["merch-report-schedules"] });
+    },
+  });
+
+  const sendNow = useMutation({
+    mutationFn: (id: string) => api(`/api/merch-report-schedules/${id}/send-now`, { method: "POST", body: {} }),
+    onSuccess: (data: any) => {
+      const sent = data?.results?.filter((r: any) => r.status === "sent" || r.status === "queued").length || 0;
+      const failed = data?.results?.filter((r: any) => r.status === "failed").length || 0;
+      toast.success(`Enviado: ${sent} · Falhas: ${failed}`);
+      qc.invalidateQueries({ queryKey: ["merch-report-schedules"] });
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro no envio"),
+  });
+
+  const startEdit = (s: Schedule) => {
+    setForm({ ...s, brand_id: s.brand_id || ALL_BRANDS });
+    setEditId(s.id);
+    setOpen(true);
+  };
+
+  const startNew = () => {
+    setForm({ ...emptyForm, brand_id: ALL_BRANDS });
+    setEditId(null);
+    setOpen(true);
+  };
+
+  const updateRecipient = (i: number, field: keyof Recipient, v: string) => {
+    const list = [...(form.recipients || [])];
+    list[i] = { ...list[i], [field]: v } as Recipient;
+    setForm({ ...form, recipients: list });
+  };
+  const addRecipient = () => setForm({ ...form, recipients: [...(form.recipients || []), { name: "", email: "", phone: "" }] });
+  const removeRecipient = (i: number) => {
+    const list = [...(form.recipients || [])];
+    list.splice(i, 1);
+    setForm({ ...form, recipients: list });
+  };
+
+  return (
+    <MainLayout>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Programação de Relatórios</h1>
+            <p className="text-sm text-muted-foreground">Envio automático por e-mail e WhatsApp — por marca</p>
+          </div>
+          <Button onClick={startNew}><Plus className="mr-2 h-4 w-4" /> Nova programação</Button>
+        </div>
+
+        <Card>
+          <CardHeader><CardTitle>Programações ativas</CardTitle></CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">Carregando…</p>
+            ) : schedules.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma programação. Crie a primeira para enviar relatórios automáticos.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Marca</TableHead>
+                    <TableHead>Frequência</TableHead>
+                    <TableHead>Canais</TableHead>
+                    <TableHead>Destinatários</TableHead>
+                    <TableHead>Próximo envio</TableHead>
+                    <TableHead>Ativo</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {schedules.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-medium">{s.name}</TableCell>
+                      <TableCell>{s.brand_name || "Todas"}</TableCell>
+                      <TableCell>{FREQUENCIES.find(f => f.value === s.frequency)?.label || s.frequency}</TableCell>
+                      <TableCell className="space-x-1">
+                        {s.channels?.email && <Badge variant="secondary"><Mail className="h-3 w-3 mr-1" />E-mail</Badge>}
+                        {s.channels?.whatsapp && <Badge variant="secondary"><MessageCircle className="h-3 w-3 mr-1" />WhatsApp</Badge>}
+                      </TableCell>
+                      <TableCell>{(s.recipients || []).length}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {s.next_run_at ? new Date(s.next_run_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}
+                      </TableCell>
+                      <TableCell>{s.active ? <Badge>Ativo</Badge> : <Badge variant="outline">Pausado</Badge>}</TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Button size="sm" variant="outline" onClick={() => sendNow.mutate(s.id)} disabled={sendNow.isPending}>
+                          <Play className="h-3 w-3 mr-1" /> Enviar agora
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => startEdit(s)}><Edit className="h-3 w-3" /></Button>
+                        <Button size="sm" variant="ghost" onClick={() => confirm("Remover?") && del.mutate(s.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{editId ? "Editar programação" : "Nova programação"}</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Nome</Label>
+                  <Input value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Relatório semanal Marca X" />
+                </div>
+                <div>
+                  <Label>Marca</Label>
+                  <Select value={form.brand_id || ALL_BRANDS} onValueChange={(v) => setForm({ ...form, brand_id: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_BRANDS}>Todas as marcas</SelectItem>
+                      {brands.map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Métricas do relatório</Label>
+                <div className="flex flex-wrap gap-3">
+                  {[
+                    { key: "scheduled", label: "Rotas agendadas" },
+                    { key: "completed", label: "Rotas concluídas" },
+                    { key: "not_done", label: "Não realizadas" },
+                  ].map((m) => (
+                    <label key={m.key} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={!!(form.metrics as any)?.[m.key]}
+                        onCheckedChange={(v) => setForm({ ...form, metrics: { ...(form.metrics || {}), [m.key]: !!v } })}
+                      />
+                      {m.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Frequência</Label>
+                  <Select value={form.frequency} onValueChange={(v) => setForm({ ...form, frequency: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{FREQUENCIES.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                {(form.frequency === "weekly" || form.frequency === "biweekly") && (
+                  <div>
+                    <Label>Dia da semana</Label>
+                    <Select value={String(form.day_of_week ?? 1)} onValueChange={(v) => setForm({ ...form, day_of_week: Number(v) })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>{WEEKDAYS.map((d, i) => <SelectItem key={i} value={String(i)}>{d}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {form.frequency === "monthly" && (
+                  <div>
+                    <Label>Dia do mês</Label>
+                    <Input type="number" min={1} max={28} value={form.day_of_month || 1}
+                      onChange={(e) => setForm({ ...form, day_of_month: Number(e.target.value) })} />
+                  </div>
+                )}
+                {form.frequency !== "ondemand" && (
+                  <div>
+                    <Label>Hora do envio</Label>
+                    <Input type="number" min={0} max={23} value={form.send_hour ?? 8}
+                      onChange={(e) => setForm({ ...form, send_hour: Number(e.target.value) })} />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Canais</Label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={!!form.channels?.email}
+                      onCheckedChange={(v) => setForm({ ...form, channels: { ...(form.channels || {}), email: !!v } })}
+                    />
+                    E-mail (PDF anexo)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={!!form.channels?.whatsapp}
+                      onCheckedChange={(v) => setForm({ ...form, channels: { ...(form.channels || {}), whatsapp: !!v } })}
+                    />
+                    WhatsApp (resumo)
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Destinatários</Label>
+                  <Button type="button" size="sm" variant="outline" onClick={addRecipient}><Plus className="h-3 w-3 mr-1" /> Adicionar</Button>
+                </div>
+                <div className="space-y-2">
+                  {(form.recipients || []).map((r, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2">
+                      <Input placeholder="Nome" value={r.name} onChange={(e) => updateRecipient(i, "name", e.target.value)} />
+                      <Input placeholder="E-mail" type="email" value={r.email} onChange={(e) => updateRecipient(i, "email", e.target.value)} />
+                      <Input placeholder="WhatsApp (5511...)" value={r.phone} onChange={(e) => updateRecipient(i, "phone", e.target.value)} />
+                      <Button type="button" size="icon" variant="ghost" onClick={() => removeRecipient(i)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  {(form.recipients || []).length === 0 && (
+                    <p className="text-xs text-muted-foreground">Nenhum destinatário — clique em "Adicionar".</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch checked={form.active !== false} onCheckedChange={(v) => setForm({ ...form, active: v })} />
+                <Label className="cursor-pointer">Programação ativa</Label>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+              <Button onClick={() => save.mutate()} disabled={save.isPending}>
+                <Send className="h-4 w-4 mr-2" /> Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </MainLayout>
+  );
+}
