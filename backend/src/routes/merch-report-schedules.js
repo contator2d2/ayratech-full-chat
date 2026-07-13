@@ -37,6 +37,18 @@ async function ensureTables() {
   )`);
   await query(`CREATE INDEX IF NOT EXISTS idx_mrs_org ON merch_report_schedules(organization_id)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_mrs_next ON merch_report_schedules(next_run_at) WHERE active`);
+  // Branding columns (added incrementally)
+  for (const col of [
+    ['company_logo_url', 'TEXT'],
+    ['client_logo_url', 'TEXT'],
+    ['header_title', 'TEXT'],
+    ['footer_text', 'TEXT'],
+    ['primary_color', 'VARCHAR(20)'],
+    ['include_org_logo', 'BOOLEAN DEFAULT true'],
+    ['include_brand_logo', 'BOOLEAN DEFAULT true'],
+  ]) {
+    await query(`ALTER TABLE merch_report_schedules ADD COLUMN IF NOT EXISTS ${col[0]} ${col[1]}`).catch(() => {});
+  }
   await query(`CREATE TABLE IF NOT EXISTS merch_report_deliveries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     schedule_id UUID REFERENCES merch_report_schedules(id) ON DELETE CASCADE,
