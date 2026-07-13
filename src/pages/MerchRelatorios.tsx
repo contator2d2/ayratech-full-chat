@@ -50,6 +50,41 @@ function getDateRange(preset: string): { from: string; to: string } {
   }
 }
 
+// Exporta CSV do relatório da aba atual usando os mesmos filtros
+async function exportCurrentTab(tab: string, filters: any) {
+  const qs = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => { if (v) qs.append(k, String(v)); });
+  const endpointMap: Record<string, string> = {
+    dashboard: `/api/merch-analytics/dashboard?${qs}`,
+    pdv: `/api/merch-analytics/report/pdv?${qs}`,
+    marca: `/api/merch-analytics/report/brand?${qs}`,
+    promotor: `/api/merch-analytics/report/promoter?${qs}`,
+    produto: `/api/merch-analytics/report/product?${qs}`,
+    categoria: `/api/merch-analytics/report/category?${qs}`,
+    avarias: `/api/merch-analytics/report/stockouts?${qs}`,
+  };
+  const url = endpointMap[tab] || endpointMap.pdv;
+  try {
+    const raw = await api<any>(url);
+    const rows: any[] = Array.isArray(raw) ? raw : (raw?.rows || raw?.data || []);
+    if (!rows.length) { alert("Sem dados para exportar neste período/aba."); return; }
+    const headers = Object.keys(rows[0]);
+    const escape = (v: any) => {
+      if (v === null || v === undefined) return "";
+      const s = String(typeof v === "object" ? JSON.stringify(v) : v);
+      return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [headers.join(","), ...rows.map(r => headers.map(h => escape(r[h])).join(","))].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `relatorio_${tab}_${filters.date_from || ''}_${filters.date_to || ''}.csv`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  } catch (e: any) {
+    alert("Erro ao exportar: " + (e?.message || e));
+  }
+}
+
 export default function MerchRelatorios() {
   const [tab, setTab] = useState('dashboard');
   const [period, setPeriod] = useState('month');
