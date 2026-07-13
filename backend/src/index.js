@@ -466,6 +466,7 @@ app.use('/api', agencyNetworkRequestsRoutes);
 
 app.use('/api/promoter-leaves', promoterLeavesRoutes);
 app.use('/api/access-control-dashboard', accessControlDashboardRoutes);
+app.use('/api/merch-report-schedules', merchReportSchedulesRoutes);
 
 app.get('/health', (req, res) => {
   res.json({
