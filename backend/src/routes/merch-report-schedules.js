@@ -37,6 +37,18 @@ async function ensureTables() {
   )`);
   await query(`CREATE INDEX IF NOT EXISTS idx_mrs_org ON merch_report_schedules(organization_id)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_mrs_next ON merch_report_schedules(next_run_at) WHERE active`);
+  // Branding columns (added incrementally)
+  for (const col of [
+    ['company_logo_url', 'TEXT'],
+    ['client_logo_url', 'TEXT'],
+    ['header_title', 'TEXT'],
+    ['footer_text', 'TEXT'],
+    ['primary_color', 'VARCHAR(20)'],
+    ['include_org_logo', 'BOOLEAN DEFAULT true'],
+    ['include_brand_logo', 'BOOLEAN DEFAULT true'],
+  ]) {
+    await query(`ALTER TABLE merch_report_schedules ADD COLUMN IF NOT EXISTS ${col[0]} ${col[1]}`).catch(() => {});
+  }
   await query(`CREATE TABLE IF NOT EXISTS merch_report_deliveries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     schedule_id UUID REFERENCES merch_report_schedules(id) ON DELETE CASCADE,
@@ -146,29 +158,93 @@ export async function computeMetrics(orgId, brandId, startISO, endISO) {
 }
 
 async function resolveBrand(orgId, brandId) {
-  if (!brandId) return { id: null, name: 'Todas as marcas' };
-  const r = await query('SELECT id, name FROM brands WHERE id=$1 AND organization_id=$2', [brandId, orgId]);
-  return r.rows[0] || { id: brandId, name: 'Marca' };
+  if (!brandId) return { id: null, name: 'Todas as marcas', logo_url: null };
+  const r = await query('SELECT id, name, logo_url FROM brands WHERE id=$1 AND organization_id=$2', [brandId, orgId]);
+  return r.rows[0] || { id: brandId, name: 'Marca', logo_url: null };
 }
 
 async function resolveOrg(orgId) {
   const r = await query('SELECT id, name FROM organizations WHERE id=$1', [orgId]);
-  return r.rows[0] || { name: '' };
+  const org = r.rows[0] || { name: '' };
+  try {
+    const l = await query('SELECT logo_url, primary_color, header_text, footer_text FROM merch_org_letterhead WHERE organization_id=$1', [orgId]);
+    if (l.rows[0]) org.letterhead = l.rows[0];
+  } catch { /* table may not exist */ }
+  return org;
+}
+
+// Hex #RRGGBB -> rgb(0-1)
+function hexToRgb(hex, fallback = [0.12, 0.16, 0.24]) {
+  if (!hex || typeof hex !== 'string') return rgb(...fallback);
+  const m = hex.replace('#', '').match(/^([0-9a-f]{6})$/i);
+  if (!m) return rgb(...fallback);
+  const n = parseInt(m[1], 16);
+  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+}
+
+async function fetchImageBytes(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    const isPng = ct.includes('png') || url.toLowerCase().endsWith('.png');
+    return { buf, isPng };
+  } catch { return null; }
+}
+
+async function embedLogo(pdf, url) {
+  const data = await fetchImageBytes(url);
+  if (!data) return null;
+  try {
+    return data.isPng ? await pdf.embedPng(data.buf) : await pdf.embedJpg(data.buf);
+  } catch {
+    // try the other format
+    try { return data.isPng ? await pdf.embedJpg(data.buf) : await pdf.embedPng(data.buf); }
+    catch { return null; }
+  }
 }
 
 // ==== PDF ====
-export async function buildReportPDF({ org, brand, period, metrics, extraNote }) {
+export async function buildReportPDF({ org, brand, period, metrics, extraNote, branding = {} }) {
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]); // A4
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const primary = hexToRgb(branding.primary_color || org.letterhead?.primary_color);
   const draw = (t, x, y, opts = {}) => page.drawText(String(t ?? ''), {
     x, y, size: opts.size || 11, font: opts.bold ? bold : font,
     color: opts.color || rgb(0.1, 0.1, 0.1)
   });
-  let y = 800;
-  draw(org.name || 'Relatório', 40, y, { size: 16, bold: true }); y -= 24;
-  draw(`Relatório de rotas — ${brand.name}`, 40, y, { size: 13, bold: true }); y -= 18;
+
+  // Header band
+  page.drawRectangle({ x: 0, y: 782, width: 595, height: 60, color: primary });
+
+  const orgLogoUrl = branding.include_org_logo !== false
+    ? (branding.company_logo_url || org.letterhead?.logo_url || null) : null;
+  const clientLogoUrl = branding.include_brand_logo !== false
+    ? (branding.client_logo_url || brand.logo_url || null) : null;
+
+  const orgLogo = await embedLogo(pdf, orgLogoUrl);
+  const clientLogo = await embedLogo(pdf, clientLogoUrl);
+
+  if (orgLogo) {
+    const scale = Math.min(40 / orgLogo.height, 120 / orgLogo.width);
+    const w = orgLogo.width * scale, h = orgLogo.height * scale;
+    page.drawImage(orgLogo, { x: 20, y: 792, width: w, height: h });
+  }
+  if (clientLogo) {
+    const scale = Math.min(40 / clientLogo.height, 120 / clientLogo.width);
+    const w = clientLogo.width * scale, h = clientLogo.height * scale;
+    page.drawImage(clientLogo, { x: 595 - 20 - w, y: 792, width: w, height: h });
+  }
+
+  const headerTitle = branding.header_title || org.name || 'Relatório';
+  draw(headerTitle, orgLogo ? 150 : 40, 810, { size: 14, bold: true, color: rgb(1, 1, 1) });
+  draw(`Relatório de rotas • ${brand.name}`, orgLogo ? 150 : 40, 792, { size: 10, color: rgb(0.95, 0.95, 0.95) });
+
+  let y = 760;
   draw(`Período: ${period.start} a ${period.end}`, 40, y, { size: 10, color: rgb(0.35, 0.35, 0.35) }); y -= 24;
 
   // KPI cards
@@ -183,12 +259,12 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote })
   cards.forEach((c) => {
     page.drawRectangle({ x: cx, y: y - cardH, width: cardW, height: cardH, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 1 });
     draw(c.label, cx + 10, y - 20, { size: 10, color: rgb(0.4, 0.4, 0.4) });
-    draw(c.value, cx + 10, y - 50, { size: 20, bold: true });
+    draw(c.value, cx + 10, y - 50, { size: 20, bold: true, color: primary });
     cx += cardW + 10;
   });
   y -= (cardH + 30);
 
-  draw('Resumo', 40, y, { size: 12, bold: true }); y -= 18;
+  draw('Resumo', 40, y, { size: 12, bold: true, color: primary }); y -= 18;
   const lines = [
     `• Total de rotas agendadas no período: ${metrics.scheduled}`,
     `• Rotas concluídas: ${metrics.completed}`,
@@ -200,12 +276,17 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote })
 
   if (extraNote) { y -= 10; draw(extraNote, 40, y, { size: 9, color: rgb(0.45, 0.45, 0.45) }); }
 
+  const footerText = branding.footer_text || org.letterhead?.footer_text;
+  if (footerText) {
+    draw(footerText, 40, 55, { size: 9, color: rgb(0.4, 0.4, 0.4) });
+  }
   draw(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, 40, 40, {
     size: 8, color: rgb(0.5, 0.5, 0.5)
   });
   const bytes = await pdf.save();
   return Buffer.from(bytes);
 }
+
 
 function buildTextSummary({ brand, period, metrics }) {
   return `📊 Relatório — ${brand.name}\nPeríodo: ${period.start} a ${period.end}\n\n` +
@@ -240,10 +321,19 @@ export async function executeSchedule(sched, { periodOverride } = {}) {
   const recipients = Array.isArray(sched.recipients) ? sched.recipients : [];
   const results = [];
 
+  const branding = {
+    company_logo_url: sched.company_logo_url,
+    client_logo_url: sched.client_logo_url,
+    header_title: sched.header_title,
+    footer_text: sched.footer_text,
+    primary_color: sched.primary_color,
+    include_org_logo: sched.include_org_logo,
+    include_brand_logo: sched.include_brand_logo,
+  };
   // Build PDF once if needed
   let pdfBuffer = null;
   if (channels.email && sched.format === 'pdf') {
-    pdfBuffer = await buildReportPDF({ org, brand, period, metrics });
+    pdfBuffer = await buildReportPDF({ org, brand, period, metrics, branding });
   }
   const textSummary = buildTextSummary({ brand, period, metrics });
 
@@ -364,8 +454,9 @@ router.post('/', async (req, res) => {
     const next = computeNextRun(sched);
     const r = await query(
       `INSERT INTO merch_report_schedules
-       (organization_id, brand_id, name, metrics, frequency, day_of_week, day_of_month, send_hour, channels, format, recipients, connection_id, active, next_run_at, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+       (organization_id, brand_id, name, metrics, frequency, day_of_week, day_of_month, send_hour, channels, format, recipients, connection_id, active, next_run_at, created_by,
+        company_logo_url, client_logo_url, header_title, footer_text, primary_color, include_org_logo, include_brand_logo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
       [orgId, b.brand_id || null, b.name || 'Relatório',
         JSON.stringify(b.metrics || { scheduled: true, completed: true, not_done: true }),
         sched.frequency, sched.day_of_week, sched.day_of_month, sched.send_hour,
@@ -375,7 +466,10 @@ router.post('/', async (req, res) => {
         b.connection_id || null,
         b.active !== false,
         next,
-        req.userId]
+        req.userId,
+        b.company_logo_url || null, b.client_logo_url || null,
+        b.header_title || null, b.footer_text || null, b.primary_color || null,
+        b.include_org_logo !== false, b.include_brand_logo !== false]
     );
     res.json(r.rows[0]);
   } catch (e) { logError('merch-report-schedules.create', e); res.status(500).json({ error: e.message }); }
@@ -394,17 +488,54 @@ router.put('/:id', async (req, res) => {
       `UPDATE merch_report_schedules SET
         brand_id=$1, name=$2, metrics=$3, frequency=$4, day_of_week=$5, day_of_month=$6,
         send_hour=$7, channels=$8, format=$9, recipients=$10, connection_id=$11, active=$12,
-        next_run_at=$13, updated_at=NOW()
-       WHERE id=$14 AND organization_id=$15 RETURNING *`,
+        next_run_at=$13,
+        company_logo_url=$14, client_logo_url=$15, header_title=$16, footer_text=$17,
+        primary_color=$18, include_org_logo=$19, include_brand_logo=$20,
+        updated_at=NOW()
+       WHERE id=$21 AND organization_id=$22 RETURNING *`,
       [b.brand_id || null, b.name, JSON.stringify(b.metrics || {}), b.frequency,
         b.day_of_week ?? 1, b.day_of_month ?? 1, b.send_hour ?? 8,
         JSON.stringify(b.channels || {}), b.format || 'pdf',
         JSON.stringify(b.recipients || []), b.connection_id || null,
-        b.active !== false, next, req.params.id, orgId]
+        b.active !== false, next,
+        b.company_logo_url || null, b.client_logo_url || null,
+        b.header_title || null, b.footer_text || null, b.primary_color || null,
+        b.include_org_logo !== false, b.include_brand_logo !== false,
+        req.params.id, orgId]
     );
     res.json(r.rows[0]);
   } catch (e) { logError('merch-report-schedules.update', e); res.status(500).json({ error: e.message }); }
 });
+
+// Preview PDF — returns the PDF binary using the provided config (no persistence)
+router.post('/preview-pdf', async (req, res) => {
+  try {
+    await ensureTables();
+    const orgId = await getOrgId(req.userId);
+    if (!orgId) return res.status(400).json({ error: 'org_not_found' });
+    const b = req.body || {};
+    const org = await resolveOrg(orgId);
+    const brand = await resolveBrand(orgId, b.brand_id || null);
+    const period = (b.date_from && b.date_to)
+      ? { start: b.date_from, end: b.date_to }
+      : computePeriod(b.frequency || 'weekly');
+    const metrics = await computeMetrics(orgId, b.brand_id || null, period.start, period.end);
+    const branding = {
+      company_logo_url: b.company_logo_url,
+      client_logo_url: b.client_logo_url,
+      header_title: b.header_title,
+      footer_text: b.footer_text,
+      primary_color: b.primary_color,
+      include_org_logo: b.include_org_logo,
+      include_brand_logo: b.include_brand_logo,
+    };
+    const pdf = await buildReportPDF({ org, brand, period, metrics, branding, extraNote: 'PREVIEW — dados reais do período' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="preview.pdf"');
+    res.send(pdf);
+  } catch (e) { logError('merch-report-schedules.preview_pdf', e); res.status(500).json({ error: e.message }); }
+});
+
 
 router.delete('/:id', async (req, res) => {
   try {

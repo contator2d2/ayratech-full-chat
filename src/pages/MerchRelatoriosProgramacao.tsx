@@ -14,7 +14,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useBrands } from "@/hooks/use-merchandising";
 import { toast } from "sonner";
-import { Plus, Trash2, Send, Calendar, Mail, MessageCircle, Edit, Play } from "lucide-react";
+import { Plus, Trash2, Send, Calendar, Mail, MessageCircle, Edit, Play, Eye, Image as ImageIcon } from "lucide-react";
+import { API_URL } from "@/lib/api";
 
 const ALL_BRANDS = "__all__";
 
@@ -45,6 +46,13 @@ interface Schedule {
   active: boolean;
   next_run_at?: string | null;
   last_run_at?: string | null;
+  company_logo_url?: string | null;
+  client_logo_url?: string | null;
+  header_title?: string | null;
+  footer_text?: string | null;
+  primary_color?: string | null;
+  include_org_logo?: boolean;
+  include_brand_logo?: boolean;
 }
 
 const emptyForm: Partial<Schedule> = {
@@ -59,6 +67,13 @@ const emptyForm: Partial<Schedule> = {
   format: "pdf",
   recipients: [],
   active: true,
+  company_logo_url: "",
+  client_logo_url: "",
+  header_title: "",
+  footer_text: "",
+  primary_color: "#1e293b",
+  include_org_logo: true,
+  include_brand_logo: true,
 };
 
 export default function MerchRelatoriosProgramacao() {
@@ -128,6 +143,31 @@ export default function MerchRelatoriosProgramacao() {
     const list = [...(form.recipients || [])];
     list.splice(i, 1);
     setForm({ ...form, recipients: list });
+  };
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const handlePreview = async () => {
+    try {
+      setPreviewLoading(true);
+      const token = localStorage.getItem("token") || localStorage.getItem("auth_token") || "";
+      const body = { ...form, brand_id: form.brand_id === ALL_BRANDS ? null : form.brand_id };
+      const res = await fetch(`${API_URL}/api/merch-report-schedules/preview-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(url);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao gerar preview");
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   return (
@@ -312,6 +352,74 @@ export default function MerchRelatoriosProgramacao() {
                 </div>
               </div>
 
+              <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  <Label className="font-semibold">Personalização do PDF</Label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Logo da empresa (URL)</Label>
+                    <Input
+                      value={form.company_logo_url || ""}
+                      onChange={(e) => setForm({ ...form, company_logo_url: e.target.value })}
+                      placeholder="https://.../logo-empresa.png"
+                    />
+                    <label className="flex items-center gap-2 text-xs mt-1">
+                      <Checkbox
+                        checked={form.include_org_logo !== false}
+                        onCheckedChange={(v) => setForm({ ...form, include_org_logo: !!v })}
+                      />
+                      Exibir logo da empresa
+                    </label>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Logo do cliente/marca (URL)</Label>
+                    <Input
+                      value={form.client_logo_url || ""}
+                      onChange={(e) => setForm({ ...form, client_logo_url: e.target.value })}
+                      placeholder="https://.../logo-cliente.png"
+                    />
+                    <label className="flex items-center gap-2 text-xs mt-1">
+                      <Checkbox
+                        checked={form.include_brand_logo !== false}
+                        onCheckedChange={(v) => setForm({ ...form, include_brand_logo: !!v })}
+                      />
+                      Exibir logo da marca (se vazio, usa logo cadastrada)
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[1fr_1fr_120px] gap-3">
+                  <div>
+                    <Label className="text-xs">Título do cabeçalho</Label>
+                    <Input
+                      value={form.header_title || ""}
+                      onChange={(e) => setForm({ ...form, header_title: e.target.value })}
+                      placeholder="Nome da empresa"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Rodapé</Label>
+                    <Input
+                      value={form.footer_text || ""}
+                      onChange={(e) => setForm({ ...form, footer_text: e.target.value })}
+                      placeholder="Contato / Site / CNPJ"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Cor primária</Label>
+                    <Input
+                      type="color"
+                      value={form.primary_color || "#1e293b"}
+                      onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
+                      className="h-10 p-1"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex items-center gap-2">
                 <Switch checked={form.active !== false} onCheckedChange={(v) => setForm({ ...form, active: v })} />
                 <Label className="cursor-pointer">Programação ativa</Label>
@@ -320,9 +428,30 @@ export default function MerchRelatoriosProgramacao() {
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+              <Button variant="secondary" onClick={handlePreview} disabled={previewLoading}>
+                <Eye className="h-4 w-4 mr-2" /> {previewLoading ? "Gerando..." : "Ver preview"}
+              </Button>
               <Button onClick={() => save.mutate()} disabled={save.isPending}>
                 <Send className="h-4 w-4 mr-2" /> Salvar
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!previewUrl} onOpenChange={(v) => { if (!v) { if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(null); } }}>
+          <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Preview do relatório</DialogTitle>
+            </DialogHeader>
+            {previewUrl && (
+              <iframe src={previewUrl} className="flex-1 w-full rounded border" title="Preview PDF" />
+            )}
+            <DialogFooter>
+              {previewUrl && (
+                <a href={previewUrl} download="preview-relatorio.pdf">
+                  <Button variant="outline">Baixar PDF</Button>
+                </a>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
