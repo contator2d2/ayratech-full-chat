@@ -158,29 +158,93 @@ export async function computeMetrics(orgId, brandId, startISO, endISO) {
 }
 
 async function resolveBrand(orgId, brandId) {
-  if (!brandId) return { id: null, name: 'Todas as marcas' };
-  const r = await query('SELECT id, name FROM brands WHERE id=$1 AND organization_id=$2', [brandId, orgId]);
-  return r.rows[0] || { id: brandId, name: 'Marca' };
+  if (!brandId) return { id: null, name: 'Todas as marcas', logo_url: null };
+  const r = await query('SELECT id, name, logo_url FROM brands WHERE id=$1 AND organization_id=$2', [brandId, orgId]);
+  return r.rows[0] || { id: brandId, name: 'Marca', logo_url: null };
 }
 
 async function resolveOrg(orgId) {
   const r = await query('SELECT id, name FROM organizations WHERE id=$1', [orgId]);
-  return r.rows[0] || { name: '' };
+  const org = r.rows[0] || { name: '' };
+  try {
+    const l = await query('SELECT logo_url, primary_color, header_text, footer_text FROM merch_org_letterhead WHERE organization_id=$1', [orgId]);
+    if (l.rows[0]) org.letterhead = l.rows[0];
+  } catch { /* table may not exist */ }
+  return org;
+}
+
+// Hex #RRGGBB -> rgb(0-1)
+function hexToRgb(hex, fallback = [0.12, 0.16, 0.24]) {
+  if (!hex || typeof hex !== 'string') return rgb(...fallback);
+  const m = hex.replace('#', '').match(/^([0-9a-f]{6})$/i);
+  if (!m) return rgb(...fallback);
+  const n = parseInt(m[1], 16);
+  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+}
+
+async function fetchImageBytes(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    const isPng = ct.includes('png') || url.toLowerCase().endsWith('.png');
+    return { buf, isPng };
+  } catch { return null; }
+}
+
+async function embedLogo(pdf, url) {
+  const data = await fetchImageBytes(url);
+  if (!data) return null;
+  try {
+    return data.isPng ? await pdf.embedPng(data.buf) : await pdf.embedJpg(data.buf);
+  } catch {
+    // try the other format
+    try { return data.isPng ? await pdf.embedJpg(data.buf) : await pdf.embedPng(data.buf); }
+    catch { return null; }
+  }
 }
 
 // ==== PDF ====
-export async function buildReportPDF({ org, brand, period, metrics, extraNote }) {
+export async function buildReportPDF({ org, brand, period, metrics, extraNote, branding = {} }) {
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]); // A4
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const primary = hexToRgb(branding.primary_color || org.letterhead?.primary_color);
   const draw = (t, x, y, opts = {}) => page.drawText(String(t ?? ''), {
     x, y, size: opts.size || 11, font: opts.bold ? bold : font,
     color: opts.color || rgb(0.1, 0.1, 0.1)
   });
-  let y = 800;
-  draw(org.name || 'Relatório', 40, y, { size: 16, bold: true }); y -= 24;
-  draw(`Relatório de rotas — ${brand.name}`, 40, y, { size: 13, bold: true }); y -= 18;
+
+  // Header band
+  page.drawRectangle({ x: 0, y: 782, width: 595, height: 60, color: primary });
+
+  const orgLogoUrl = branding.include_org_logo !== false
+    ? (branding.company_logo_url || org.letterhead?.logo_url || null) : null;
+  const clientLogoUrl = branding.include_brand_logo !== false
+    ? (branding.client_logo_url || brand.logo_url || null) : null;
+
+  const orgLogo = await embedLogo(pdf, orgLogoUrl);
+  const clientLogo = await embedLogo(pdf, clientLogoUrl);
+
+  if (orgLogo) {
+    const scale = Math.min(40 / orgLogo.height, 120 / orgLogo.width);
+    const w = orgLogo.width * scale, h = orgLogo.height * scale;
+    page.drawImage(orgLogo, { x: 20, y: 792, width: w, height: h });
+  }
+  if (clientLogo) {
+    const scale = Math.min(40 / clientLogo.height, 120 / clientLogo.width);
+    const w = clientLogo.width * scale, h = clientLogo.height * scale;
+    page.drawImage(clientLogo, { x: 595 - 20 - w, y: 792, width: w, height: h });
+  }
+
+  const headerTitle = branding.header_title || org.name || 'Relatório';
+  draw(headerTitle, orgLogo ? 150 : 40, 810, { size: 14, bold: true, color: rgb(1, 1, 1) });
+  draw(`Relatório de rotas • ${brand.name}`, orgLogo ? 150 : 40, 792, { size: 10, color: rgb(0.95, 0.95, 0.95) });
+
+  let y = 760;
   draw(`Período: ${period.start} a ${period.end}`, 40, y, { size: 10, color: rgb(0.35, 0.35, 0.35) }); y -= 24;
 
   // KPI cards
@@ -195,12 +259,12 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote })
   cards.forEach((c) => {
     page.drawRectangle({ x: cx, y: y - cardH, width: cardW, height: cardH, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 1 });
     draw(c.label, cx + 10, y - 20, { size: 10, color: rgb(0.4, 0.4, 0.4) });
-    draw(c.value, cx + 10, y - 50, { size: 20, bold: true });
+    draw(c.value, cx + 10, y - 50, { size: 20, bold: true, color: primary });
     cx += cardW + 10;
   });
   y -= (cardH + 30);
 
-  draw('Resumo', 40, y, { size: 12, bold: true }); y -= 18;
+  draw('Resumo', 40, y, { size: 12, bold: true, color: primary }); y -= 18;
   const lines = [
     `• Total de rotas agendadas no período: ${metrics.scheduled}`,
     `• Rotas concluídas: ${metrics.completed}`,
@@ -212,12 +276,17 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote })
 
   if (extraNote) { y -= 10; draw(extraNote, 40, y, { size: 9, color: rgb(0.45, 0.45, 0.45) }); }
 
+  const footerText = branding.footer_text || org.letterhead?.footer_text;
+  if (footerText) {
+    draw(footerText, 40, 55, { size: 9, color: rgb(0.4, 0.4, 0.4) });
+  }
   draw(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, 40, 40, {
     size: 8, color: rgb(0.5, 0.5, 0.5)
   });
   const bytes = await pdf.save();
   return Buffer.from(bytes);
 }
+
 
 function buildTextSummary({ brand, period, metrics }) {
   return `📊 Relatório — ${brand.name}\nPeríodo: ${period.start} a ${period.end}\n\n` +
