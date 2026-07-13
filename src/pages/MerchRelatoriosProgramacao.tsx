@@ -145,6 +145,31 @@ export default function MerchRelatoriosProgramacao() {
     setForm({ ...form, recipients: list });
   };
 
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const handlePreview = async () => {
+    try {
+      setPreviewLoading(true);
+      const token = localStorage.getItem("token") || localStorage.getItem("auth_token") || "";
+      const body = { ...form, brand_id: form.brand_id === ALL_BRANDS ? null : form.brand_id };
+      const res = await fetch(`${API_URL}/api/merch-report-schedules/preview-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(url);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao gerar preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   return (
     <MainLayout>
       <div className="p-6 space-y-6">
