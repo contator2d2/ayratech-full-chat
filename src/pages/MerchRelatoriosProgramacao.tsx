@@ -14,7 +14,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useBrands } from "@/hooks/use-merchandising";
 import { toast } from "sonner";
-import { Plus, Trash2, Send, Calendar, Mail, MessageCircle, Edit, Play } from "lucide-react";
+import { Plus, Trash2, Send, Calendar, Mail, MessageCircle, Edit, Play, Eye, Image as ImageIcon } from "lucide-react";
+import { API_URL } from "@/lib/api";
 
 const ALL_BRANDS = "__all__";
 
