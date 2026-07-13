@@ -314,6 +314,7 @@ const App = () => (
             <Route path="/merch/mix" element={<ProtectedRoute><MerchMixPDV /></ProtectedRoute>} />
             <Route path="/merch/redes" element={<ProtectedRoute><MerchRedes /></ProtectedRoute>} />
             <Route path="/merch/relatorios" element={<ProtectedRoute><MerchRelatorios /></ProtectedRoute>} />
+            <Route path="/merch/relatorios/programacao" element={<ProtectedRoute><MerchRelatoriosProgramacao /></ProtectedRoute>} />
             <Route path="/merch/contratos" element={<ProtectedRoute><MerchContratos /></ProtectedRoute>} />
             <Route path="/merch/equipe" element={<ProtectedRoute><MerchEquipe /></ProtectedRoute>} />
             <Route path="/merch/rotas" element={<ProtectedRoute><MerchRotas /></ProtectedRoute>} />
