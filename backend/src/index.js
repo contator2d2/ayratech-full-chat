@@ -698,6 +698,16 @@ app.listen(PORT, () => {
       timezone: 'America/Sao_Paulo'
     });
     console.log('⭐ Promoter score calculator started - runs every 6 hours');
+
+    // Merch report schedules - every 15 minutes
+    cron.schedule('*/15 * * * *', async () => {
+      try {
+        await executeMerchReportSchedules();
+      } catch (error) {
+        console.error('📊 [CRON] Error running merch report schedules:', error);
+      }
+    }, { timezone: 'America/Sao_Paulo' });
+    console.log('📊 Merch report scheduler started - checks every 15 minutes');
   }).catch((error) => {
     databaseInitError = error?.message || 'Database initialization failed';
     console.error('🛑 Database initialization crashed. API remains online in degraded mode:', error);
