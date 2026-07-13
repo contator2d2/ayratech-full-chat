@@ -170,16 +170,52 @@ export default function MerchRelatoriosProgramacao() {
     }
   };
 
+  const [brandingOpen, setBrandingOpen] = useState(false);
+  const [brandingForm, setBrandingForm] = useState<Partial<Schedule>>({ ...emptyForm, brand_id: ALL_BRANDS });
+
+  const previewBranding = async () => {
+    try {
+      setPreviewLoading(true);
+      const token = localStorage.getItem("token") || localStorage.getItem("auth_token") || "";
+      const body = { ...brandingForm, brand_id: brandingForm.brand_id === ALL_BRANDS ? null : brandingForm.brand_id };
+      const res = await fetch(`${API_URL}/api/merch-report-schedules/preview-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(url);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao gerar preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   return (
     <MainLayout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h1 className="text-2xl font-bold">Programação de Relatórios</h1>
             <p className="text-sm text-muted-foreground">Envio automático por e-mail e WhatsApp — por marca</p>
           </div>
-          <Button onClick={startNew}><Plus className="mr-2 h-4 w-4" /> Nova programação</Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="secondary" onClick={() => setBrandingOpen(true)}>
+              <Eye className="mr-2 h-4 w-4" /> Personalizar & Visualizar PDF
+            </Button>
+            <Button onClick={startNew}><Plus className="mr-2 h-4 w-4" /> Nova programação</Button>
+          </div>
         </div>
+
+        <Card className="bg-primary/5 border-primary/10">
+          <CardContent className="pt-4 text-sm text-muted-foreground">
+            💡 Para adicionar <b>logos</b>, <b>cores</b>, <b>título</b> e <b>rodapé</b> do PDF, clique em <b>"Personalizar & Visualizar PDF"</b> acima (funciona sem criar programação) — ou abra uma programação existente para editar.
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader><CardTitle>Programações ativas</CardTitle></CardHeader>
