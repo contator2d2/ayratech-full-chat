@@ -454,8 +454,9 @@ router.post('/', async (req, res) => {
     const next = computeNextRun(sched);
     const r = await query(
       `INSERT INTO merch_report_schedules
-       (organization_id, brand_id, name, metrics, frequency, day_of_week, day_of_month, send_hour, channels, format, recipients, connection_id, active, next_run_at, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+       (organization_id, brand_id, name, metrics, frequency, day_of_week, day_of_month, send_hour, channels, format, recipients, connection_id, active, next_run_at, created_by,
+        company_logo_url, client_logo_url, header_title, footer_text, primary_color, include_org_logo, include_brand_logo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
       [orgId, b.brand_id || null, b.name || 'Relatório',
         JSON.stringify(b.metrics || { scheduled: true, completed: true, not_done: true }),
         sched.frequency, sched.day_of_week, sched.day_of_month, sched.send_hour,
@@ -465,7 +466,10 @@ router.post('/', async (req, res) => {
         b.connection_id || null,
         b.active !== false,
         next,
-        req.userId]
+        req.userId,
+        b.company_logo_url || null, b.client_logo_url || null,
+        b.header_title || null, b.footer_text || null, b.primary_color || null,
+        b.include_org_logo !== false, b.include_brand_logo !== false]
     );
     res.json(r.rows[0]);
   } catch (e) { logError('merch-report-schedules.create', e); res.status(500).json({ error: e.message }); }
@@ -484,17 +488,54 @@ router.put('/:id', async (req, res) => {
       `UPDATE merch_report_schedules SET
         brand_id=$1, name=$2, metrics=$3, frequency=$4, day_of_week=$5, day_of_month=$6,
         send_hour=$7, channels=$8, format=$9, recipients=$10, connection_id=$11, active=$12,
-        next_run_at=$13, updated_at=NOW()
-       WHERE id=$14 AND organization_id=$15 RETURNING *`,
+        next_run_at=$13,
+        company_logo_url=$14, client_logo_url=$15, header_title=$16, footer_text=$17,
+        primary_color=$18, include_org_logo=$19, include_brand_logo=$20,
+        updated_at=NOW()
+       WHERE id=$21 AND organization_id=$22 RETURNING *`,
       [b.brand_id || null, b.name, JSON.stringify(b.metrics || {}), b.frequency,
         b.day_of_week ?? 1, b.day_of_month ?? 1, b.send_hour ?? 8,
         JSON.stringify(b.channels || {}), b.format || 'pdf',
         JSON.stringify(b.recipients || []), b.connection_id || null,
-        b.active !== false, next, req.params.id, orgId]
+        b.active !== false, next,
+        b.company_logo_url || null, b.client_logo_url || null,
+        b.header_title || null, b.footer_text || null, b.primary_color || null,
+        b.include_org_logo !== false, b.include_brand_logo !== false,
+        req.params.id, orgId]
     );
     res.json(r.rows[0]);
   } catch (e) { logError('merch-report-schedules.update', e); res.status(500).json({ error: e.message }); }
 });
+
+// Preview PDF — returns the PDF binary using the provided config (no persistence)
+router.post('/preview-pdf', async (req, res) => {
+  try {
+    await ensureTables();
+    const orgId = await getOrgId(req.userId);
+    if (!orgId) return res.status(400).json({ error: 'org_not_found' });
+    const b = req.body || {};
+    const org = await resolveOrg(orgId);
+    const brand = await resolveBrand(orgId, b.brand_id || null);
+    const period = (b.date_from && b.date_to)
+      ? { start: b.date_from, end: b.date_to }
+      : computePeriod(b.frequency || 'weekly');
+    const metrics = await computeMetrics(orgId, b.brand_id || null, period.start, period.end);
+    const branding = {
+      company_logo_url: b.company_logo_url,
+      client_logo_url: b.client_logo_url,
+      header_title: b.header_title,
+      footer_text: b.footer_text,
+      primary_color: b.primary_color,
+      include_org_logo: b.include_org_logo,
+      include_brand_logo: b.include_brand_logo,
+    };
+    const pdf = await buildReportPDF({ org, brand, period, metrics, branding, extraNote: 'PREVIEW — dados reais do período' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="preview.pdf"');
+    res.send(pdf);
+  } catch (e) { logError('merch-report-schedules.preview_pdf', e); res.status(500).json({ error: e.message }); }
+});
+
 
 router.delete('/:id', async (req, res) => {
   try {
