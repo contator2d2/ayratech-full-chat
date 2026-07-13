@@ -46,6 +46,13 @@ interface Schedule {
   active: boolean;
   next_run_at?: string | null;
   last_run_at?: string | null;
+  company_logo_url?: string | null;
+  client_logo_url?: string | null;
+  header_title?: string | null;
+  footer_text?: string | null;
+  primary_color?: string | null;
+  include_org_logo?: boolean;
+  include_brand_logo?: boolean;
 }
 
 const emptyForm: Partial<Schedule> = {
@@ -60,6 +67,13 @@ const emptyForm: Partial<Schedule> = {
   format: "pdf",
   recipients: [],
   active: true,
+  company_logo_url: "",
+  client_logo_url: "",
+  header_title: "",
+  footer_text: "",
+  primary_color: "#1e293b",
+  include_org_logo: true,
+  include_brand_logo: true,
 };
 
 export default function MerchRelatoriosProgramacao() {
