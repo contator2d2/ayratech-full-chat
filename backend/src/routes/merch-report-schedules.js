@@ -321,10 +321,19 @@ export async function executeSchedule(sched, { periodOverride } = {}) {
   const recipients = Array.isArray(sched.recipients) ? sched.recipients : [];
   const results = [];
 
+  const branding = {
+    company_logo_url: sched.company_logo_url,
+    client_logo_url: sched.client_logo_url,
+    header_title: sched.header_title,
+    footer_text: sched.footer_text,
+    primary_color: sched.primary_color,
+    include_org_logo: sched.include_org_logo,
+    include_brand_logo: sched.include_brand_logo,
+  };
   // Build PDF once if needed
   let pdfBuffer = null;
   if (channels.email && sched.format === 'pdf') {
-    pdfBuffer = await buildReportPDF({ org, brand, period, metrics });
+    pdfBuffer = await buildReportPDF({ org, brand, period, metrics, branding });
   }
   const textSummary = buildTextSummary({ brand, period, metrics });
 
