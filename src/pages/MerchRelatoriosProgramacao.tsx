@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,84 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useBrands } from "@/hooks/use-merchandising";
+import { useUpload } from "@/hooks/use-upload";
 import { toast } from "sonner";
-import { Plus, Trash2, Send, Calendar, Mail, MessageCircle, Edit, Play, Eye, Image as ImageIcon } from "lucide-react";
+import { Plus, Trash2, Send, Calendar, Mail, MessageCircle, Edit, Play, Eye, Image as ImageIcon, Upload, Loader2, X } from "lucide-react";
 import { API_URL } from "@/lib/api";
+
+// Uploader de logo: preview + botão "Carregar do computador"
+function LogoField({ label, value, onChange, hint }: { label: string; value: string; onChange: (v: string) => void; hint?: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { uploadFile, isUploading } = useUpload();
+  const handleFile = async (f: File | undefined) => {
+    if (!f) return;
+    try {
+      const url = await uploadFile(f);
+      if (url) { onChange(url); toast.success(`${label} carregada`); }
+    } catch (e: any) { toast.error(e.message || "Erro ao enviar imagem"); }
+    finally { if (inputRef.current) inputRef.current.value = ""; }
+  };
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
+      <div className="flex items-center gap-2">
+        {value ? (
+          <div className="h-12 w-20 rounded border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
+            <img src={value} alt={label} className="max-h-full max-w-full object-contain" />
+          </div>
+        ) : (
+          <div className="h-12 w-20 rounded border border-dashed bg-muted/20 flex items-center justify-center text-muted-foreground shrink-0">
+            <ImageIcon className="h-4 w-4" />
+          </div>
+        )}
+        <div className="flex flex-col gap-1 flex-1 min-w-0">
+          <div className="flex gap-1">
+            <Button type="button" size="sm" variant="outline" onClick={() => inputRef.current?.click()} disabled={isUploading}>
+              {isUploading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Upload className="h-3 w-3 mr-1" />}
+              {value ? "Trocar" : "Carregar do computador"}
+            </Button>
+            {value && (
+              <Button type="button" size="sm" variant="ghost" onClick={() => onChange("")} title="Remover">
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+          <Input value={value || ""} onChange={(e) => onChange(e.target.value)} placeholder="ou cole uma URL" className="h-7 text-xs" />
+        </div>
+      </div>
+      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+// Botão para carregar múltiplas logos (empresa + cliente) de uma só vez
+function MultiLogoUploader({ onLogos }: { onLogos: (urls: string[]) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { uploadFile, isUploading } = useUpload();
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files).slice(0, 2);
+    try {
+      const urls: string[] = [];
+      for (const f of arr) {
+        const u = await uploadFile(f);
+        if (u) urls.push(u);
+      }
+      if (urls.length) { onLogos(urls); toast.success(`${urls.length} logo(s) carregada(s)`); }
+    } catch (e: any) { toast.error(e.message || "Erro ao enviar imagens"); }
+    finally { if (inputRef.current) inputRef.current.value = ""; }
+  };
+  return (
+    <>
+      <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+      <Button type="button" variant="secondary" size="sm" onClick={() => inputRef.current?.click()} disabled={isUploading}>
+        {isUploading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Upload className="h-3 w-3 mr-1" />}
+        Carregar logos do computador
+      </Button>
+    </>
+  );
+}
 
 const ALL_BRANDS = "__all__";
 
