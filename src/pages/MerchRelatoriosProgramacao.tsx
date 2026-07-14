@@ -464,19 +464,17 @@ export default function MerchRelatoriosProgramacao() {
               </div>
 
               <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
-                <div className="flex items-center gap-2">
-                  <ImageIcon className="h-4 w-4" />
-                  <Label className="font-semibold">Personalização do PDF</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4" />
+                    <Label className="font-semibold">Personalização do PDF</Label>
+                  </div>
+                  <MultiLogoUploader onLogos={(urls) => setForm({ ...form, company_logo_url: urls[0] ?? form.company_logo_url, client_logo_url: urls[1] ?? form.client_logo_url })} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs">Logo da empresa (URL)</Label>
-                    <Input
-                      value={form.company_logo_url || ""}
-                      onChange={(e) => setForm({ ...form, company_logo_url: e.target.value })}
-                      placeholder="https://.../logo-empresa.png"
-                    />
+                    <LogoField label="Logo da empresa" value={form.company_logo_url || ""} onChange={(v) => setForm({ ...form, company_logo_url: v })} />
                     <label className="flex items-center gap-2 text-xs mt-1">
                       <Checkbox
                         checked={form.include_org_logo !== false}
@@ -486,12 +484,7 @@ export default function MerchRelatoriosProgramacao() {
                     </label>
                   </div>
                   <div>
-                    <Label className="text-xs">Logo do cliente/marca (URL)</Label>
-                    <Input
-                      value={form.client_logo_url || ""}
-                      onChange={(e) => setForm({ ...form, client_logo_url: e.target.value })}
-                      placeholder="https://.../logo-cliente.png"
-                    />
+                    <LogoField label="Logo do cliente/marca" value={form.client_logo_url || ""} onChange={(v) => setForm({ ...form, client_logo_url: v })} />
                     <label className="flex items-center gap-2 text-xs mt-1">
                       <Checkbox
                         checked={form.include_brand_logo !== false}
@@ -501,6 +494,7 @@ export default function MerchRelatoriosProgramacao() {
                     </label>
                   </div>
                 </div>
+
 
                 <div className="grid grid-cols-[1fr_1fr_120px] gap-3">
                   <div>
