@@ -581,24 +581,26 @@ export default function MerchRelatoriosProgramacao() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex justify-end">
+                <MultiLogoUploader onLogos={(urls) => setBrandingForm({ ...brandingForm, company_logo_url: urls[0] ?? brandingForm.company_logo_url, client_logo_url: urls[1] ?? brandingForm.client_logo_url })} />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Logo da empresa (URL)</Label>
-                  <Input value={brandingForm.company_logo_url || ""} onChange={(e) => setBrandingForm({ ...brandingForm, company_logo_url: e.target.value })} placeholder="https://.../logo-empresa.png" />
+                  <LogoField label="Logo da empresa" value={brandingForm.company_logo_url || ""} onChange={(v) => setBrandingForm({ ...brandingForm, company_logo_url: v })} />
                   <label className="flex items-center gap-2 text-xs mt-1">
                     <Checkbox checked={brandingForm.include_org_logo !== false} onCheckedChange={(v) => setBrandingForm({ ...brandingForm, include_org_logo: !!v })} />
                     Exibir logo da empresa
                   </label>
                 </div>
                 <div>
-                  <Label className="text-xs">Logo do cliente/marca (URL)</Label>
-                  <Input value={brandingForm.client_logo_url || ""} onChange={(e) => setBrandingForm({ ...brandingForm, client_logo_url: e.target.value })} placeholder="https://.../logo-cliente.png" />
+                  <LogoField label="Logo do cliente/marca" value={brandingForm.client_logo_url || ""} onChange={(v) => setBrandingForm({ ...brandingForm, client_logo_url: v })} />
                   <label className="flex items-center gap-2 text-xs mt-1">
                     <Checkbox checked={brandingForm.include_brand_logo !== false} onCheckedChange={(v) => setBrandingForm({ ...brandingForm, include_brand_logo: !!v })} />
                     Exibir logo da marca
                   </label>
                 </div>
               </div>
+
               <div className="grid grid-cols-[1fr_1fr_120px] gap-3">
                 <div>
                   <Label className="text-xs">Título do cabeçalho</Label>
