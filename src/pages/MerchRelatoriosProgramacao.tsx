@@ -96,6 +96,8 @@ function MultiLogoUploader({ onLogos }: { onLogos: (urls: string[]) => void }) {
 const ALL_BRANDS = "__all__";
 
 const FREQUENCIES = [
+  { value: "hourly", label: "De hora em hora" },
+  { value: "daily", label: "Diária" },
   { value: "weekly", label: "Semanal" },
   { value: "biweekly", label: "Quinzenal" },
   { value: "monthly", label: "Mensal" },
