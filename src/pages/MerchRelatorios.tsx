@@ -126,7 +126,7 @@ export default function MerchRelatorios() {
             <Button variant="outline" size="sm" onClick={() => exportCurrentTab(tab, filters)}>
               <Download className="h-4 w-4 mr-1" />Exportar CSV
             </Button>
-            <Button size="sm" className="bg-gradient-to-r from-primary to-primary/80">
+            <Button size="sm" className="bg-gradient-to-r from-primary to-primary/80" onClick={() => setAiOpen(true)}>
               <Sparkles className="h-4 w-4 mr-1" />Análise IA
             </Button>
           </div>
