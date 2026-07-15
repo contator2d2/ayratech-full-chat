@@ -82,6 +82,14 @@ export function useMerchAlerts() {
   });
 }
 
+export function useMerchAnalytical(filters?: DashboardFilters) {
+  const qs = buildQS(filters);
+  return useQuery({
+    queryKey: ['merch-analytics-analytical', qs],
+    queryFn: () => api<{ summary: any; rows: any[] }>(`/api/merch-analytics/analytical${qs}`),
+  });
+}
+
 export function useMerchRankingIssues(filters?: DashboardFilters) {
   const qs = buildQS(filters);
   return useQuery({
