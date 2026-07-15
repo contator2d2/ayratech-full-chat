@@ -734,6 +734,74 @@ export default function MerchRelatoriosProgramacao() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Diálogo de Logs de Envio */}
+        <Dialog open={!!logsFor} onOpenChange={(v) => { if (!v) setLogsFor(null); }}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Logs de envio — {logsFor?.name}</DialogTitle>
+            </DialogHeader>
+            {deliveries.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">
+                Nenhum envio registrado ainda. Use <b>Enviar agora</b> para gerar o primeiro envio.
+                <br /><br />
+                <span className="text-xs">
+                  💡 Se os e-mails não chegam, verifique se o SMTP está configurado em <b>Configurações → E-mail</b>.
+                  Sem SMTP ativo, os envios ficam na fila com status "failed".
+                </span>
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Canal</TableHead>
+                    <TableHead>Destinatário</TableHead>
+                    <TableHead>Período</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Detalhes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deliveries.map((d) => {
+                    const finalStatus = d.email_status || d.status;
+                    const isSent = finalStatus === "sent";
+                    const isFailed = finalStatus === "failed";
+                    return (
+                      <TableRow key={d.id}>
+                        <TableCell className="text-xs">
+                          {new Date(d.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                        </TableCell>
+                        <TableCell>
+                          {d.channel === "email"
+                            ? <Badge variant="secondary"><Mail className="h-3 w-3 mr-1" />E-mail</Badge>
+                            : <Badge variant="secondary"><MessageCircle className="h-3 w-3 mr-1" />WhatsApp</Badge>}
+                        </TableCell>
+                        <TableCell className="text-xs">{d.recipient}</TableCell>
+                        <TableCell className="text-xs">{d.period_start} → {d.period_end}</TableCell>
+                        <TableCell>
+                          {isSent ? (
+                            <Badge className="bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Enviado</Badge>
+                          ) : isFailed ? (
+                            <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Falha</Badge>
+                          ) : (
+                            <Badge variant="outline"><Clock className="h-3 w-3 mr-1" />{finalStatus}</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-[240px] truncate" title={d.email_error || d.error || ""}>
+                          {d.email_error || d.error || (isSent && d.email_sent_at ? `Enviado às ${new Date(d.email_sent_at).toLocaleTimeString("pt-BR")}` : "—")}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setLogsFor(null)}>Fechar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   );
