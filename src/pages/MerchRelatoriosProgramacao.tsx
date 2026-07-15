@@ -517,6 +517,32 @@ export default function MerchRelatoriosProgramacao() {
                 </div>
               </div>
 
+              {!!form.channels?.email && (
+                <div>
+                  <Label className="text-xs">Texto de introdução do e-mail</Label>
+                  <Textarea
+                    rows={3}
+                    value={form.email_intro || ""}
+                    onChange={(e) => setForm({ ...form, email_intro: e.target.value })}
+                    placeholder="Ex.: Olá! Segue o relatório de execução das rotas do período. O PDF completo está em anexo."
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">Aparece no topo do e-mail, antes do resumo. O PDF é anexado automaticamente.</p>
+                </div>
+              )}
+
+              {!!form.channels?.whatsapp && (
+                <div>
+                  <Label className="text-xs">Texto de introdução do WhatsApp</Label>
+                  <Textarea
+                    rows={3}
+                    value={form.whatsapp_intro || ""}
+                    onChange={(e) => setForm({ ...form, whatsapp_intro: e.target.value })}
+                    placeholder="Ex.: Boa tarde! Segue abaixo o resumo e o PDF do relatório."
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">Enviado antes do resumo. Se houver conexão ativa, o PDF é enviado como documento.</p>
+                </div>
+              )}
+
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <Label>Destinatários</Label>
