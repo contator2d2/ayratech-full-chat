@@ -255,7 +255,17 @@ export default function MerchRelatoriosProgramacao() {
   };
 
   const [brandingOpen, setBrandingOpen] = useState(false);
-  const [brandingForm, setBrandingForm] = useState<Partial<Schedule>>({ ...emptyForm, brand_id: ALL_BRANDS });
+  const [brandingForm, setBrandingForm] = useState<Partial<Schedule>>(() => {
+    try {
+      const saved = localStorage.getItem(BRANDING_STORAGE_KEY);
+      if (saved) return { ...emptyForm, brand_id: ALL_BRANDS, ...JSON.parse(saved) };
+    } catch { /* ignore */ }
+    return { ...emptyForm, brand_id: ALL_BRANDS };
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(BRANDING_STORAGE_KEY, JSON.stringify(brandingForm)); } catch { /* ignore */ }
+  }, [brandingForm]);
 
   const previewBranding = async () => {
     try {
