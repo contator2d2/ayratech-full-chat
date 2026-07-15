@@ -688,9 +688,15 @@ function AvariasTab({ filters }: { filters: any }) {
 }
 
 // ===== Analítico Tab (versão analítica – mesmo conteúdo do PDF) =====
+function parseVisitDate(v: any): Date | null {
+  if (!v) return null;
+  const s = String(v).slice(0, 10);
+  const d = new Date(s + 'T00:00:00');
+  return isNaN(d.getTime()) ? null : d;
+}
 function statusMeta(status: string, visit_date: string) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const vd = visit_date ? new Date(visit_date + 'T00:00:00') : null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const vd = parseVisitDate(visit_date);
   const isFuture = vd && vd.getTime() > today.getTime();
   const isToday = vd && vd.getTime() === today.getTime();
   const wkEnd = new Date(today); wkEnd.setDate(wkEnd.getDate() + 7);
