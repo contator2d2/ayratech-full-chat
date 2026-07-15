@@ -51,8 +51,8 @@ function getDateRange(preset: string): { from: string; to: string } {
   }
 }
 
-// Exporta CSV do relatório da aba atual usando os mesmos filtros
-async function exportCurrentTab(tab: string, filters: any) {
+// Busca os dados da aba atual usando os filtros
+async function fetchTabData(tab: string, filters: any): Promise<any[]> {
   const qs = new URLSearchParams();
   Object.entries(filters).forEach(([k, v]) => { if (v) qs.append(k, String(v)); });
   const endpointMap: Record<string, string> = {
@@ -63,11 +63,25 @@ async function exportCurrentTab(tab: string, filters: any) {
     produto: `/api/merch-analytics/report/product?${qs}`,
     categoria: `/api/merch-analytics/report/category?${qs}`,
     avarias: `/api/merch-analytics/report/stockouts?${qs}`,
+    analitico: `/api/merch-analytics/analytical?${qs}`,
   };
   const url = endpointMap[tab] || endpointMap.pdv;
+  const raw = await api<any>(url);
+  return Array.isArray(raw) ? raw : (raw?.rows || raw?.data || []);
+}
+
+function tabLabel(tab: string): string {
+  const map: Record<string, string> = {
+    dashboard: 'Dashboard', pdv: 'PDVs', marca: 'Marcas', promotor: 'Promotores',
+    produto: 'Produtos', categoria: 'Categorias', avarias: 'Rupturas/Avarias', analitico: 'Analítico',
+  };
+  return map[tab] || tab;
+}
+
+// Exporta CSV da aba atual
+async function exportCurrentTabCSV(tab: string, filters: any) {
   try {
-    const raw = await api<any>(url);
-    const rows: any[] = Array.isArray(raw) ? raw : (raw?.rows || raw?.data || []);
+    const rows = await fetchTabData(tab, filters);
     if (!rows.length) { alert("Sem dados para exportar neste período/aba."); return; }
     const headers = Object.keys(rows[0]);
     const escape = (v: any) => {
@@ -82,7 +96,66 @@ async function exportCurrentTab(tab: string, filters: any) {
     link.download = `relatorio_${tab}_${filters.date_from || ''}_${filters.date_to || ''}.csv`;
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   } catch (e: any) {
-    alert("Erro ao exportar: " + (e?.message || e));
+    alert("Erro ao exportar CSV: " + (e?.message || e));
+  }
+}
+
+// Exporta PDF da aba atual
+async function exportCurrentTabPDF(tab: string, filters: any) {
+  try {
+    const rows = await fetchTabData(tab, filters);
+    if (!rows.length) { alert("Sem dados para exportar neste período/aba."); return; }
+    const [{ default: jsPDF }, autoTableMod] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
+    const autoTable = (autoTableMod as any).default || (autoTableMod as any);
+    const doc = new jsPDF('l', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Header
+    doc.setFillColor(30, 30, 46);
+    doc.rect(0, 0, pageWidth, 24, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Relatório - ${tabLabel(tab)}`, 12, 12);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    const periodStr = `Período: ${filters.date_from || '-'} a ${filters.date_to || '-'} • Gerado em ${new Date().toLocaleString('pt-BR')}`;
+    doc.text(periodStr, 12, 19);
+
+    // Table
+    const headers = Object.keys(rows[0]);
+    const body = rows.map(r => headers.map(h => {
+      const v = (r as any)[h];
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'object') return JSON.stringify(v);
+      if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2);
+      return String(v);
+    }));
+    autoTable(doc, {
+      startY: 30,
+      head: [headers],
+      body,
+      styles: { fontSize: 7, cellPadding: 1.5, overflow: 'linebreak' },
+      headStyles: { fillColor: [30, 30, 46], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+      alternateRowStyles: { fillColor: [245, 245, 250] },
+      margin: { left: 8, right: 8 },
+    });
+
+    // Footer
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Ayratech • Sistema de Gestão v1.0.0 • Página ${i}/${pageCount}`,
+        pageWidth / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' });
+    }
+    doc.save(`relatorio_${tab}_${filters.date_from || ''}_${filters.date_to || ''}.pdf`);
+  } catch (e: any) {
+    alert("Erro ao exportar PDF: " + (e?.message || e));
   }
 }
 
