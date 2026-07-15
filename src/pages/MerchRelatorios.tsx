@@ -26,6 +26,7 @@ import {
   TrendingUp, TrendingDown, Camera, DollarSign, ShoppingCart, Clock, Target,
   Download, Sparkles, Filter, Calendar,
 } from "lucide-react";
+import { AiAnalysisChat } from "@/components/merch/AiAnalysisChat";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 
 const PERIOD_PRESETS = [
