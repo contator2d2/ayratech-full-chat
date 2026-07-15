@@ -52,9 +52,13 @@ async function ensureTables() {
     ['report_type', "VARCHAR(20) DEFAULT 'both'"],
     ['include_cover', 'BOOLEAN DEFAULT true'],
     ['include_chart', 'BOOLEAN DEFAULT true'],
+    ['email_intro', 'TEXT'],
+    ['whatsapp_intro', 'TEXT'],
   ]) {
     await query(`ALTER TABLE merch_report_schedules ADD COLUMN IF NOT EXISTS ${col[0]} ${col[1]}`).catch(() => {});
   }
+  // Ensure email_queue has attachments column
+  await query(`ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS attachments JSONB`).catch(() => {});
   await query(`CREATE TABLE IF NOT EXISTS merch_report_deliveries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     schedule_id UUID REFERENCES merch_report_schedules(id) ON DELETE CASCADE,
