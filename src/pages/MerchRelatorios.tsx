@@ -24,7 +24,7 @@ import {
 import {
   BarChart3, Store, Building2, Package, User, Layers, Route, AlertTriangle,
   TrendingUp, TrendingDown, Camera, DollarSign, ShoppingCart, Clock, Target,
-  Download, Sparkles, Filter, Calendar,
+  Download, Sparkles, Filter, Calendar, FileText, CheckCircle2, XCircle, CalendarClock,
 } from "lucide-react";
 import { AiAnalysisChat } from "@/components/merch/AiAnalysisChat";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
