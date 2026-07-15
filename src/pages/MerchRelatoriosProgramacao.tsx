@@ -129,6 +129,9 @@ interface Schedule {
   primary_color?: string | null;
   include_org_logo?: boolean;
   include_brand_logo?: boolean;
+  report_type?: "summary" | "analytical" | "both";
+  include_cover?: boolean;
+  include_chart?: boolean;
 }
 
 const emptyForm: Partial<Schedule> = {
@@ -150,7 +153,12 @@ const emptyForm: Partial<Schedule> = {
   primary_color: "#1e293b",
   include_org_logo: true,
   include_brand_logo: true,
+  report_type: "both",
+  include_cover: true,
+  include_chart: true,
 };
+
+const BRANDING_STORAGE_KEY = "merch-report-branding-defaults";
 
 export default function MerchRelatoriosProgramacao() {
   const qc = useQueryClient();
