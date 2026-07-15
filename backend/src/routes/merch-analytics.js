@@ -613,6 +613,83 @@ router.get('/alerts', authenticate, async (req, res) => {
   } catch (err) { logError('merch-analytics.alerts', err); res.status(500).json({ error: 'Erro' }); }
 });
 
+// ===== Analytical Report (same content as PDF) =====
+router.get('/analytical', async (req, res) => {
+  try {
+    const orgId = await getOrgId(req.userId);
+    if (!orgId) return res.status(403).json({ error: 'Sem organização' });
+
+    const params = [orgId];
+    const { filters } = buildRouteFiltersFromQuery(req.query, params, 2);
+
+    // Summary
+    const summaryQ = `
+      SELECT
+        COUNT(*)::int AS scheduled,
+        COUNT(*) FILTER (WHERE r.status='completed')::int AS completed,
+        COUNT(*) FILTER (
+          WHERE r.status IN ('cancelled','justified','no_show','skipped')
+             OR (r.status NOT IN ('completed','in_progress') AND r.visit_date < CURRENT_DATE)
+        )::int AS not_done,
+        COUNT(*) FILTER (WHERE r.status='in_progress')::int AS in_progress,
+        COUNT(*) FILTER (
+          WHERE r.status NOT IN ('completed','cancelled','justified','no_show','skipped')
+            AND r.visit_date >= CURRENT_DATE
+        )::int AS upcoming
+      FROM merch_routes r
+      WHERE r.organization_id=$1 ${filters}
+    `;
+    const summaryRow = (await query(summaryQ, params)).rows[0] || {};
+    const scheduled = summaryRow.scheduled || 0;
+    const completed = summaryRow.completed || 0;
+    const summary = {
+      scheduled,
+      completed,
+      not_done: summaryRow.not_done || 0,
+      in_progress: summaryRow.in_progress || 0,
+      upcoming: summaryRow.upcoming || 0,
+      completion_pct: scheduled > 0 ? Math.round((completed / scheduled) * 100) : 0,
+    };
+
+    // Detail rows — one per route, grouped by PDV
+    const baseSelect = (itemsExpr) => `
+      SELECT
+        r.id, r.visit_date, r.status, COALESCE(r.progress_pct,0) AS progress_pct,
+        COALESCE(p.id::text, '') AS pdv_id,
+        COALESCE(p.name, '') AS pdv_name,
+        COALESCE(p.city, '') AS pdv_city,
+        COALESCE(p.state, '') AS pdv_state,
+        COALESCE(e.full_name, '') AS promoter_name,
+        COALESCE(b.name, '') AS brand_name,
+        ${itemsExpr.scheduled} AS items_scheduled,
+        ${itemsExpr.executed} AS items_executed
+      FROM merch_routes r
+      LEFT JOIN pdvs p ON p.id = r.pdv_id
+      LEFT JOIN employees e ON e.id = r.promoter_id
+      LEFT JOIN brands b ON b.id = r.brand_id
+      WHERE r.organization_id=$1 ${filters}
+      ORDER BY p.name NULLS LAST, r.visit_date
+    `;
+    const withExec = {
+      scheduled: `(SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id)`,
+      executed: `(SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id AND rpe.checked=true)`,
+    };
+    const noExec = { scheduled: '0', executed: '0' };
+    const fallbacks = [baseSelect(withExec), baseSelect(noExec)];
+
+    let rows = [];
+    for (const q of fallbacks) {
+      try { rows = (await query(q, params)).rows; break; }
+      catch (e) { /* fallback */ }
+    }
+
+    res.json({ summary, rows });
+  } catch (err) {
+    logError('merch-analytics.analytical', err);
+    res.status(500).json({ error: 'Erro ao gerar relatório analítico' });
+  }
+});
+
 // ===== Ranking: Top PDVs by issues =====
 router.get('/ranking/issues', authenticate, async (req, res) => {
   try {

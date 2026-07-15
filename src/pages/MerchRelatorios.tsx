@@ -16,7 +16,7 @@ import { api } from "@/lib/api";
 import {
   useMerchDashboard, useMerchReportPDV, useMerchReportBrand,
   useMerchReportPromoter, useMerchReportProduct, useMerchReportCategory,
-  useMerchRoutesTimeline, useMerchRankingIssues,
+  useMerchRoutesTimeline, useMerchRankingIssues, useMerchAnalytical,
 } from "@/hooks/use-merch-analytics";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell,
@@ -24,7 +24,7 @@ import {
 import {
   BarChart3, Store, Building2, Package, User, Layers, Route, AlertTriangle,
   TrendingUp, TrendingDown, Camera, DollarSign, ShoppingCart, Clock, Target,
-  Download, Sparkles, Filter, Calendar,
+  Download, Sparkles, Filter, Calendar, FileText, CheckCircle2, XCircle, CalendarClock,
 } from "lucide-react";
 import { AiAnalysisChat } from "@/components/merch/AiAnalysisChat";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
@@ -193,6 +193,7 @@ export default function MerchRelatorios() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="dashboard"><Target className="h-4 w-4 mr-1" />Dashboard</TabsTrigger>
+            <TabsTrigger value="analitico"><FileText className="h-4 w-4 mr-1" />Analítico</TabsTrigger>
             <TabsTrigger value="pdv"><Store className="h-4 w-4 mr-1" />PDV</TabsTrigger>
             <TabsTrigger value="marca"><Building2 className="h-4 w-4 mr-1" />Marca</TabsTrigger>
             <TabsTrigger value="promotor"><User className="h-4 w-4 mr-1" />Promotor</TabsTrigger>
@@ -202,6 +203,7 @@ export default function MerchRelatorios() {
           </TabsList>
 
           <TabsContent value="dashboard"><DashboardTab filters={filters} /></TabsContent>
+          <TabsContent value="analitico"><AnaliticoTab filters={filters} /></TabsContent>
           <TabsContent value="pdv"><PDVTab filters={filters} /></TabsContent>
           <TabsContent value="marca"><MarcaTab filters={filters} /></TabsContent>
           <TabsContent value="promotor"><PromotorTab filters={filters} /></TabsContent>
@@ -680,6 +682,132 @@ function AvariasTab({ filters }: { filters: any }) {
             </div>
           </CardContent>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+// ===== Analítico Tab (versão analítica – mesmo conteúdo do PDF) =====
+function statusMeta(status: string, visit_date: string) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const vd = visit_date ? new Date(visit_date + 'T00:00:00') : null;
+  const isFuture = vd && vd.getTime() > today.getTime();
+  const isToday = vd && vd.getTime() === today.getTime();
+  const wkEnd = new Date(today); wkEnd.setDate(wkEnd.getDate() + 7);
+  const inWeek = vd && vd.getTime() >= today.getTime() && vd.getTime() <= wkEnd.getTime();
+  if (status === 'completed') return { label: 'Realizado', className: 'bg-green-100 text-green-800 border-green-300', variant: 'default' as const };
+  if (status === 'in_progress') return { label: 'Em andamento', className: 'bg-yellow-100 text-yellow-800 border-yellow-300', variant: 'secondary' as const };
+  if (['cancelled', 'justified', 'no_show', 'skipped'].includes(status)) return { label: 'Não realizado', className: 'bg-red-100 text-red-800 border-red-300', variant: 'destructive' as const };
+  if (isFuture || isToday || inWeek) return { label: 'Agendado', className: 'bg-blue-50 text-blue-800 border-blue-300', variant: 'outline' as const };
+  return { label: 'Pendente', className: 'bg-muted text-muted-foreground border', variant: 'outline' as const };
+}
+
+function AnaliticoTab({ filters }: { filters: any }) {
+  const { data, isLoading } = useMerchAnalytical(filters);
+  const summary = data?.summary || {};
+  const rows = data?.rows || [];
+
+  // Group by PDV
+  const groups = useMemo(() => {
+    const map = new Map<string, { pdv_name: string; pdv_city: string; pdv_state: string; items: any[] }>();
+    for (const r of rows) {
+      const key = r.pdv_id || r.pdv_name || '—';
+      if (!map.has(key)) map.set(key, { pdv_name: r.pdv_name || 'Sem PDV', pdv_city: r.pdv_city, pdv_state: r.pdv_state, items: [] });
+      map.get(key)!.items.push(r);
+    }
+    return Array.from(map.entries()).map(([k, v]) => ({ key: k, ...v }));
+  }, [rows]);
+
+  return (
+    <div className="space-y-4">
+      {/* Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <KPICard title="Agendadas" value={summary.scheduled || 0} icon={Route} />
+        <KPICard title="Concluídas" value={summary.completed || 0} icon={CheckCircle2} />
+        <KPICard title="Em andamento" value={summary.in_progress || 0} icon={Clock} />
+        <KPICard title="Não realizadas" value={summary.not_done || 0} icon={XCircle} />
+        <KPICard title="% Conclusão" value={`${summary.completion_pct || 0}%`} icon={Target} subtitle={`Agendadas p/ semana: ${summary.upcoming || 0}`} />
+      </div>
+
+      {/* Legend */}
+      <Card className="p-3">
+        <div className="flex flex-wrap gap-3 text-xs">
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-green-500" /> Realizado</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-yellow-400" /> Parcial / Em andamento</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-blue-400" /> Agendado</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-red-500" /> Não realizado</span>
+        </div>
+      </Card>
+
+      {isLoading && <Card><CardContent className="py-10 text-center text-muted-foreground">Carregando…</CardContent></Card>}
+      {!isLoading && groups.length === 0 && (
+        <Card><CardContent className="py-10 text-center text-muted-foreground">Sem rotas para o período/filtros selecionados</CardContent></Card>
+      )}
+
+      {/* Grouped by PDV */}
+      <div className="space-y-3">
+        {groups.map((g) => {
+          const total = g.items.length;
+          const done = g.items.filter((i) => i.status === 'completed').length;
+          const upcoming = g.items.filter((i) => {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const vd = i.visit_date ? new Date(i.visit_date + 'T00:00:00') : null;
+            return vd && vd.getTime() >= today.getTime() && !['completed', 'cancelled', 'justified', 'no_show', 'skipped'].includes(i.status);
+          }).length;
+          return (
+            <Card key={g.key} className="overflow-hidden">
+              <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Store className="h-4 w-4 text-blue-700" />
+                  <span className="font-semibold">{g.pdv_name}</span>
+                  {(g.pdv_city || g.pdv_state) && (
+                    <span className="text-xs text-muted-foreground">{[g.pdv_city, g.pdv_state].filter(Boolean).join('/')}</span>
+                  )}
+                </div>
+                <div className="flex gap-2 text-xs">
+                  <Badge variant="outline">{total} rotas</Badge>
+                  <Badge className="bg-green-100 text-green-800 border-green-300">{done} realizadas</Badge>
+                  {upcoming > 0 && <Badge className="bg-blue-100 text-blue-800 border-blue-300"><CalendarClock className="h-3 w-3 mr-1" />{upcoming} agendadas</Badge>}
+                </div>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Marca</TableHead>
+                    <TableHead>Promotor</TableHead>
+                    <TableHead className="text-center">Itens</TableHead>
+                    <TableHead className="text-center">Progresso</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {g.items.map((i: any) => {
+                    const meta = statusMeta(i.status, i.visit_date);
+                    const dateStr = i.visit_date ? new Date(i.visit_date + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+                    return (
+                      <TableRow key={i.id}>
+                        <TableCell className="text-sm">{dateStr}</TableCell>
+                        <TableCell className="text-sm">{i.brand_name || '-'}</TableCell>
+                        <TableCell className="text-sm">{i.promoter_name || '-'}</TableCell>
+                        <TableCell className="text-center text-sm">{i.items_executed}/{i.items_scheduled}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center gap-2">
+                            <Progress value={Number(i.progress_pct) || 0} className="h-2 flex-1" />
+                            <span className="text-xs w-8 text-right">{Math.round(Number(i.progress_pct) || 0)}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs border ${meta.className}`}>{meta.label}</span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
