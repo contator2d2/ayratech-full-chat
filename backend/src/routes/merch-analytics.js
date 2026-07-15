@@ -678,6 +678,7 @@ router.get('/analytical', async (req, res) => {
       scheduled: `(SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id)`,
       executed: `(SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id AND rpe.checked=true)`,
     };
+    const noExec = { scheduled: '0', executed: '0' };
     const fallbacks = [
       baseSelect(withExec, brandWithMulti),
       baseSelect(withExec, brandSimple),
