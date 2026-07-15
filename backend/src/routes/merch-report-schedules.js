@@ -413,8 +413,17 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote, b
   }
 
   // ===== Analytical (per-PDV table, color-coded) =====
-  if ((reportType === 'analytical' || reportType === 'both') && analyticalRows.length) {
-    // Table columns
+  if (reportType === 'analytical' || reportType === 'both') {
+    if (!analyticalRows.length) {
+      const page = pdf.addPage(A4);
+      drawHeader(page, `Analítico • ${brand.name}`);
+      page.drawText('Sem registros de rotas no período selecionado.', {
+        x: 40, y: 720, size: 12, font, color: rgb(0.35, 0.35, 0.35),
+      });
+      page.drawText('Verifique se existem rotas agendadas para a marca e o intervalo escolhidos.', {
+        x: 40, y: 700, size: 10, font, color: rgb(0.5, 0.5, 0.5),
+      });
+    } else {
     const cols = [
       { key: 'pdv_name', label: 'PDV', w: 150 },
       { key: 'pdv_city', label: 'Cidade/UF', w: 90 },
