@@ -161,6 +161,8 @@ const emptyForm: Partial<Schedule> = {
   report_type: "both",
   include_cover: true,
   include_chart: true,
+  email_intro: "",
+  whatsapp_intro: "",
 };
 
 const BRANDING_STORAGE_KEY = "merch-report-branding-defaults";
