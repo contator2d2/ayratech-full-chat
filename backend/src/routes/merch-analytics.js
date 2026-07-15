@@ -815,4 +815,125 @@ router.get('/brand-record/:brandId', async (req, res) => {
   }
 });
 
+// ============================================================
+// AI Chat — perguntas em linguagem natural sobre os relatórios
+// ============================================================
+async function gatherAiContext(orgId, filters = {}) {
+  const { date_from, date_to, brand_id, pdv_id, promoter_id } = filters;
+  const params = [orgId];
+  let idx = 2;
+  let extra = '';
+  if (date_from) { extra += ` AND r.visit_date >= $${idx++}`; params.push(date_from); }
+  if (date_to) { extra += ` AND r.visit_date <= $${idx++}`; params.push(date_to); }
+  if (brand_id) { extra += ` AND r.brand_id = $${idx++}`; params.push(brand_id); }
+  if (pdv_id) { extra += ` AND r.pdv_id = $${idx++}`; params.push(pdv_id); }
+  if (promoter_id) { extra += ` AND r.promoter_id = $${idx++}`; params.push(promoter_id); }
+
+  const kpi = (await query(`
+    SELECT
+      COUNT(*)::int AS total_routes,
+      COUNT(*) FILTER (WHERE r.status='completed')::int AS completed,
+      COUNT(*) FILTER (WHERE r.status='in_progress')::int AS partial,
+      COUNT(*) FILTER (WHERE r.status IN ('scheduled','confirmed','pending'))::int AS pending,
+      COUNT(DISTINCT r.brand_id)::int AS brands_served,
+      COUNT(DISTINCT r.pdv_id)::int AS pdvs_served,
+      COUNT(DISTINCT r.promoter_id)::int AS active_promoters
+    FROM merch_routes r WHERE r.organization_id=$1 ${extra}
+  `, params)).rows[0] || {};
+
+  const topBrands = (await query(`
+    SELECT COALESCE(b.name,'—') AS brand,
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE r.status='completed')::int AS completed
+    FROM merch_routes r
+    LEFT JOIN merch_brands b ON b.id=r.brand_id
+    WHERE r.organization_id=$1 ${extra}
+    GROUP BY b.name ORDER BY total DESC LIMIT 10
+  `, params)).rows;
+
+  const topPdvs = (await query(`
+    SELECT COALESCE(p.name,'—') AS pdv, COALESCE(p.city,'') AS city,
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE r.status='completed')::int AS completed
+    FROM merch_routes r
+    LEFT JOIN pdvs p ON p.id=r.pdv_id
+    WHERE r.organization_id=$1 ${extra}
+    GROUP BY p.name, p.city ORDER BY total DESC LIMIT 15
+  `, params)).rows;
+
+  const topPromoters = (await query(`
+    SELECT COALESCE(e.full_name,'—') AS promoter,
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE r.status='completed')::int AS completed
+    FROM merch_routes r
+    LEFT JOIN employees e ON e.id=r.promoter_id
+    WHERE r.organization_id=$1 ${extra}
+    GROUP BY e.full_name ORDER BY completed DESC LIMIT 10
+  `, params)).rows;
+
+  let issues = { damages: 0, stockouts: 0 };
+  try {
+    const r = (await query(`
+      SELECT
+        (SELECT COALESCE(SUM(qty_store+qty_stock),0)::int FROM product_damages pd JOIN merch_routes r2 ON r2.id=pd.route_id WHERE r2.organization_id=$1 ${extra.replace(/r\./g,'r2.')}) AS damages,
+        (SELECT COALESCE(SUM(qty_store+qty_stock),0)::int FROM product_ruptures pr JOIN merch_routes r2 ON r2.id=pr.route_id WHERE r2.organization_id=$1 ${extra.replace(/r\./g,'r2.')}) AS stockouts
+    `, params)).rows[0];
+    issues = r || issues;
+  } catch {}
+
+  return { filters, kpi, topBrands, topPdvs, topPromoters, issues };
+}
+
+router.post('/ai-chat', async (req, res) => {
+  try {
+    const orgId = await getOrgId(req.userId);
+    if (!orgId) return res.status(403).json({ error: 'Sem organização' });
+
+    const { messages = [], filters = {} } = req.body || {};
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: 'LOVABLE_API_KEY não configurada' });
+
+    const context = await gatherAiContext(orgId, filters);
+
+    const system = `Você é um analista de merchandising da Ayratech. Responda em português (pt-BR), de forma clara, objetiva e com números.
+Use SOMENTE os dados do CONTEXTO abaixo (JSON) para responder. Se a informação não estiver disponível, diga que não há dados suficientes no período/filtros atuais.
+Formate com listas e destaques em Markdown quando fizer sentido. Sempre cite números e percentuais quando aplicável.
+
+CONTEXTO (JSON):
+${JSON.stringify(context).slice(0, 12000)}`;
+
+    const chatMessages = [
+      { role: 'system', content: system },
+      ...messages.filter(m => m && m.role && m.content).map(m => ({ role: m.role, content: String(m.content).slice(0, 4000) })),
+    ];
+
+    const r = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: chatMessages,
+      }),
+    });
+
+    if (!r.ok) {
+      const txt = await r.text();
+      if (r.status === 429) return res.status(429).json({ error: 'Limite temporário de IA atingido. Tente novamente em instantes.' });
+      if (r.status === 402) return res.status(402).json({ error: 'Créditos de IA esgotados. Adicione créditos em Configurações.' });
+      logError('merch-analytics.ai_chat_gateway', new Error(txt.slice(0, 500)));
+      return res.status(500).json({ error: 'Falha na IA', detail: txt.slice(0, 300) });
+    }
+
+    const data = await r.json();
+    const reply = data?.choices?.[0]?.message?.content || 'Sem resposta.';
+    res.json({ reply, context_summary: { ...context.kpi, damages: context.issues.damages, stockouts: context.issues.stockouts } });
+  } catch (err) {
+    logError('merch-analytics.ai_chat', err);
+    res.status(500).json({ error: 'Erro na análise IA' });
+  }
+});
+
 export default router;
