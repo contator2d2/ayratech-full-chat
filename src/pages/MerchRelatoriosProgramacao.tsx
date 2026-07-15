@@ -232,11 +232,19 @@ export default function MerchRelatoriosProgramacao() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [logsFor, setLogsFor] = useState<Schedule | null>(null);
+  const [downloadFor, setDownloadFor] = useState<Schedule | null>(null);
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const [dlFrom, setDlFrom] = useState<string>(weekAgo);
+  const [dlTo, setDlTo] = useState<string>(today);
+  const [dlLoading, setDlLoading] = useState(false);
 
-  const downloadPdf = async (s: Schedule) => {
+  const doDownload = async (s: Schedule, from?: string, to?: string) => {
     try {
+      setDlLoading(true);
       const token = localStorage.getItem("token") || localStorage.getItem("auth_token") || "";
-      const res = await fetch(`${API_URL}/api/merch-report-schedules/${s.id}/pdf`, {
+      const qs = from && to ? `?date_from=${from}&date_to=${to}` : "";
+      const res = await fetch(`${API_URL}/api/merch-report-schedules/${s.id}/pdf${qs}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Erro ${res.status}`);
@@ -244,12 +252,22 @@ export default function MerchRelatoriosProgramacao() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${(s.name || "relatorio").replace(/[^\w-]+/g, "_")}.pdf`;
+      const periodTag = from && to ? `_${from}_${to}` : "";
+      a.download = `${(s.name || "relatorio").replace(/[^\w-]+/g, "_")}${periodTag}.pdf`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setDownloadFor(null);
     } catch (e: any) {
       toast.error(e?.message || "Erro ao baixar PDF");
+    } finally {
+      setDlLoading(false);
     }
+  };
+
+  const openDownload = (s: Schedule) => {
+    setDlFrom(weekAgo);
+    setDlTo(today);
+    setDownloadFor(s);
   };
 
   const { data: deliveries = [] } = useQuery<any[]>({
@@ -374,7 +392,7 @@ export default function MerchRelatoriosProgramacao() {
                       </TableCell>
                       <TableCell>{s.active ? <Badge>Ativo</Badge> : <Badge variant="outline">Pausado</Badge>}</TableCell>
                       <TableCell className="text-right space-x-1">
-                        <Button size="sm" variant="outline" onClick={() => downloadPdf(s)} title="Baixar PDF (não envia)">
+                        <Button size="sm" variant="outline" onClick={() => openDownload(s)} title="Baixar PDF (escolha o período)">
                           <Download className="h-3 w-3 mr-1" /> Baixar PDF
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => sendNow.mutate(s.id)} disabled={sendNow.isPending} title="Gerar e enviar agora">
@@ -799,6 +817,64 @@ export default function MerchRelatoriosProgramacao() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setLogsFor(null)}>Fechar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!downloadFor} onOpenChange={(o) => !o && setDownloadFor(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Baixar PDF — escolha o período</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Relatório: <b>{downloadFor?.name}</b>
+                {downloadFor?.brand_name ? <> · Marca: <b>{downloadFor.brand_name}</b></> : null}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Data inicial</Label>
+                  <Input type="date" value={dlFrom} onChange={(e) => setDlFrom(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Data final</Label>
+                  <Input type="date" value={dlTo} onChange={(e) => setDlTo(e.target.value)} />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Button type="button" size="sm" variant="outline" onClick={() => {
+                  const t = new Date(); setDlTo(t.toISOString().slice(0, 10));
+                  setDlFrom(new Date(t.getTime() - 6 * 86400000).toISOString().slice(0, 10));
+                }}>Últimos 7 dias</Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => {
+                  const t = new Date(); setDlTo(t.toISOString().slice(0, 10));
+                  setDlFrom(new Date(t.getTime() - 29 * 86400000).toISOString().slice(0, 10));
+                }}>Últimos 30 dias</Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => {
+                  const t = new Date();
+                  const start = new Date(t.getFullYear(), t.getMonth(), 1);
+                  const end = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+                  setDlFrom(start.toISOString().slice(0, 10));
+                  setDlTo(end.toISOString().slice(0, 10));
+                }}>Mês atual</Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => {
+                  const t = new Date();
+                  const start = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+                  const end = new Date(t.getFullYear(), t.getMonth(), 0);
+                  setDlFrom(start.toISOString().slice(0, 10));
+                  setDlTo(end.toISOString().slice(0, 10));
+                }}>Mês anterior</Button>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDownloadFor(null)}>Cancelar</Button>
+              <Button
+                onClick={() => downloadFor && doDownload(downloadFor, dlFrom, dlTo)}
+                disabled={dlLoading || !dlFrom || !dlTo}
+              >
+                {dlLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                Baixar PDF
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
