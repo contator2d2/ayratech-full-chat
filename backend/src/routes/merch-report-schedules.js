@@ -491,6 +491,7 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote, b
       page.drawText(l.label, { x: lx + 18, y: y - 8, size: 9, font, color: rgb(0.25, 0.25, 0.25) });
       lx += 110;
     }
+    } // end else (analyticalRows.length)
   }
 
   // Footers on every page
