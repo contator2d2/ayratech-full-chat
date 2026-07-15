@@ -198,8 +198,11 @@ export default function MerchRelatorios() {
             <Button variant="outline" size="sm" onClick={() => window.location.href = '/merch/relatorios/programacao'}>
               <Calendar className="h-4 w-4 mr-1" />Programar envios / Personalizar PDF
             </Button>
-            <Button variant="outline" size="sm" onClick={() => exportCurrentTab(tab, filters)}>
+            <Button variant="outline" size="sm" onClick={() => exportCurrentTabCSV(tab, filters)}>
               <Download className="h-4 w-4 mr-1" />Exportar CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => exportCurrentTabPDF(tab, filters)}>
+              <FileText className="h-4 w-4 mr-1" />Exportar PDF
             </Button>
             <Button size="sm" className="bg-gradient-to-r from-primary to-primary/80" onClick={() => setAiOpen(true)}>
               <Sparkles className="h-4 w-4 mr-1" />Análise IA
