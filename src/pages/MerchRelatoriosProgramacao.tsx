@@ -488,7 +488,7 @@ export default function MerchRelatoriosProgramacao() {
                       onChange={(e) => setForm({ ...form, day_of_month: Number(e.target.value) })} />
                   </div>
                 )}
-                {form.frequency !== "ondemand" && (
+                {form.frequency !== "ondemand" && form.frequency !== "hourly" && (
                   <div>
                     <Label>Hora do envio</Label>
                     <Input type="number" min={0} max={23} value={form.send_hour ?? 8}
