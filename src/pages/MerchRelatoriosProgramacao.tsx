@@ -232,11 +232,19 @@ export default function MerchRelatoriosProgramacao() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [logsFor, setLogsFor] = useState<Schedule | null>(null);
+  const [downloadFor, setDownloadFor] = useState<Schedule | null>(null);
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const [dlFrom, setDlFrom] = useState<string>(weekAgo);
+  const [dlTo, setDlTo] = useState<string>(today);
+  const [dlLoading, setDlLoading] = useState(false);
 
-  const downloadPdf = async (s: Schedule) => {
+  const doDownload = async (s: Schedule, from?: string, to?: string) => {
     try {
+      setDlLoading(true);
       const token = localStorage.getItem("token") || localStorage.getItem("auth_token") || "";
-      const res = await fetch(`${API_URL}/api/merch-report-schedules/${s.id}/pdf`, {
+      const qs = from && to ? `?date_from=${from}&date_to=${to}` : "";
+      const res = await fetch(`${API_URL}/api/merch-report-schedules/${s.id}/pdf${qs}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Erro ${res.status}`);
@@ -244,12 +252,22 @@ export default function MerchRelatoriosProgramacao() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${(s.name || "relatorio").replace(/[^\w-]+/g, "_")}.pdf`;
+      const periodTag = from && to ? `_${from}_${to}` : "";
+      a.download = `${(s.name || "relatorio").replace(/[^\w-]+/g, "_")}${periodTag}.pdf`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setDownloadFor(null);
     } catch (e: any) {
       toast.error(e?.message || "Erro ao baixar PDF");
+    } finally {
+      setDlLoading(false);
     }
+  };
+
+  const openDownload = (s: Schedule) => {
+    setDlFrom(weekAgo);
+    setDlTo(today);
+    setDownloadFor(s);
   };
 
   const { data: deliveries = [] } = useQuery<any[]>({
