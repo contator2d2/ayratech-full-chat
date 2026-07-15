@@ -486,25 +486,47 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote, b
 
     newPage();
 
+    // Group rows by PDV
+    const groups = new Map();
     for (const row of analyticalRows) {
-      if (y - rowH < pageBottomY) newPage();
-      const totalW = cols.reduce((s, c) => s + c.w, 0);
-      page.drawRectangle({ x: startX, y: y - rowH, width: totalW, height: rowH, color: statusColor(row) });
-      page.drawRectangle({ x: startX, y: y - rowH, width: totalW, height: rowH, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 0.5 });
-      let x = startX;
-      const values = {
-        pdv_name: (row.pdv_name || '').slice(0, 30),
-        pdv_city: `${(row.pdv_city || '').slice(0, 14)}${row.pdv_state ? '/' + row.pdv_state : ''}`,
-        promoter_name: (row.promoter_name || '—').slice(0, 22),
-        visit_date: row.visit_date ? new Date(row.visit_date).toLocaleDateString('pt-BR') : '—',
-        items: `${row.items_executed || 0}/${row.items_scheduled || 0}`,
-        status: statusLabel(row),
-      };
-      for (const c of cols) {
-        page.drawText(String(values[c.key] ?? ''), { x: x + 4, y: y - 13, size: 9, font, color: rgb(0.15, 0.15, 0.15) });
-        x += c.w;
+      const key = `${row.pdv_id || row.pdv_name || '—'}`;
+      if (!groups.has(key)) groups.set(key, { pdv_name: row.pdv_name || '—', pdv_city: row.pdv_city || '', pdv_state: row.pdv_state || '', rows: [] });
+      groups.get(key).rows.push(row);
+    }
+    const sortedGroups = [...groups.values()].sort((a, b) => a.pdv_name.localeCompare(b.pdv_name, 'pt-BR'));
+
+    const totalW = cols.reduce((s, c) => s + c.w, 0);
+    const groupHeaderH = 20;
+    const groupGap = 10;
+
+    for (const g of sortedGroups) {
+      if (y - (groupHeaderH + rowH) < pageBottomY) newPage();
+      page.drawRectangle({ x: startX, y: y - groupHeaderH, width: totalW, height: groupHeaderH, color: rgb(0.93, 0.95, 0.98) });
+      page.drawRectangle({ x: startX, y: y - groupHeaderH, width: totalW, height: groupHeaderH, borderColor: rgb(0.75, 0.8, 0.88), borderWidth: 0.5 });
+      const cityStr = g.pdv_city ? ` — ${g.pdv_city}${g.pdv_state ? '/' + g.pdv_state : ''}` : '';
+      page.drawText(`${g.pdv_name}${cityStr}  (${g.rows.length})`, { x: startX + 6, y: y - 14, size: 10, font: bold, color: rgb(0.15, 0.2, 0.35) });
+      y -= groupHeaderH;
+
+      for (const row of g.rows) {
+        if (y - rowH < pageBottomY) newPage();
+        page.drawRectangle({ x: startX, y: y - rowH, width: totalW, height: rowH, color: statusColor(row) });
+        page.drawRectangle({ x: startX, y: y - rowH, width: totalW, height: rowH, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 0.5 });
+        let x = startX;
+        const values = {
+          pdv_name: (row.pdv_name || '').slice(0, 30),
+          pdv_city: `${(row.pdv_city || '').slice(0, 14)}${row.pdv_state ? '/' + row.pdv_state : ''}`,
+          promoter_name: (row.promoter_name || '—').slice(0, 22),
+          visit_date: row.visit_date ? new Date(row.visit_date).toLocaleDateString('pt-BR') : '—',
+          items: `${row.items_executed || 0}/${row.items_scheduled || 0}`,
+          status: statusLabel(row),
+        };
+        for (const c of cols) {
+          page.drawText(String(values[c.key] ?? ''), { x: x + 4, y: y - 13, size: 9, font, color: rgb(0.15, 0.15, 0.15) });
+          x += c.w;
+        }
+        y -= rowH;
       }
-      y -= rowH;
+      y -= groupGap;
     }
 
     // Legend
