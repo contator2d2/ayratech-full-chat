@@ -668,11 +668,11 @@ router.get('/analytical', async (req, res) => {
       FROM merch_routes r
       LEFT JOIN pdvs p ON p.id = r.pdv_id
       LEFT JOIN employees e ON e.id = r.promoter_id
-      LEFT JOIN brands b ON b.id = r.brand_id
+      LEFT JOIN merch_brands b ON b.id = r.brand_id
       WHERE r.organization_id=$1 ${filters}
       ORDER BY p.name NULLS LAST, r.visit_date
     `;
-    const brandWithMulti = `COALESCE(NULLIF(b.name,''), (SELECT string_agg(b2.name, ', ' ORDER BY b2.name) FROM route_brands rb JOIN brands b2 ON b2.id = rb.brand_id WHERE rb.route_id = r.id), '')`;
+    const brandWithMulti = `COALESCE(NULLIF(b.name,''), (SELECT string_agg(b2.name, ', ' ORDER BY b2.name) FROM route_brands rb JOIN merch_brands b2 ON b2.id = rb.brand_id WHERE rb.route_id = r.id), '')`;
     const brandSimple = `COALESCE(b.name, '')`;
     const withExec = {
       scheduled: `(SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id)`,
