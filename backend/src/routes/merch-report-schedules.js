@@ -187,8 +187,12 @@ async function resolveBrand(orgId, brandId) {
   return r.rows[0] || { id: brandId, name: 'Marca', logo_url: null };
 }
 async function resolveOrg(orgId) {
-  const r = await query('SELECT id, name FROM organizations WHERE id=$1', [orgId]);
-  const org = r.rows[0] || { name: '' };
+  // Try to grab as much company info as we can; tolerate missing columns
+  let org = { name: '' };
+  try {
+    const r = await query('SELECT * FROM organizations WHERE id=$1', [orgId]);
+    org = r.rows[0] || { name: '' };
+  } catch { /* ignore */ }
   try {
     const l = await query('SELECT logo_url, primary_color, header_text, footer_text FROM merch_org_letterhead WHERE organization_id=$1', [orgId]);
     if (l.rows[0]) org.letterhead = l.rows[0];
