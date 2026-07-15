@@ -16,7 +16,7 @@ import { api } from "@/lib/api";
 import {
   useMerchDashboard, useMerchReportPDV, useMerchReportBrand,
   useMerchReportPromoter, useMerchReportProduct, useMerchReportCategory,
-  useMerchRoutesTimeline, useMerchRankingIssues,
+  useMerchRoutesTimeline, useMerchRankingIssues, useMerchAnalytical,
 } from "@/hooks/use-merch-analytics";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell,
