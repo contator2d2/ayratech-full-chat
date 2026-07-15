@@ -790,7 +790,8 @@ function AnaliticoTab({ filters }: { filters: any }) {
                 <TableBody>
                   {g.items.map((i: any) => {
                     const meta = statusMeta(i.status, i.visit_date);
-                    const dateStr = i.visit_date ? new Date(i.visit_date + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+                    const _vd = parseVisitDate(i.visit_date);
+                    const dateStr = _vd ? _vd.toLocaleDateString('pt-BR') : '-';
                     return (
                       <TableRow key={i.id}>
                         <TableCell className="text-sm">{dateStr}</TableCell>
