@@ -802,10 +802,48 @@ router.get('/:id/deliveries', async (req, res) => {
   try {
     const orgId = await getOrgId(req.userId);
     const r = await query(
+      `SELECT d.*,
+              eq.status AS email_status,
+              eq.error_message AS email_error,
+              eq.sent_at AS email_sent_at,
+              eq.retry_count
+       FROM merch_report_deliveries d
+       LEFT JOIN email_queue eq ON eq.context_type='merch_report' AND eq.context_id=d.schedule_id
+         AND eq.to_email = d.recipient
+         AND eq.created_at BETWEEN d.created_at - INTERVAL '5 seconds' AND d.created_at + INTERVAL '5 seconds'
+       WHERE d.schedule_id=$1 AND d.organization_id=$2
+       ORDER BY d.created_at DESC LIMIT 100`,
+      [req.params.id, orgId]).catch(() => query(
       `SELECT * FROM merch_report_deliveries WHERE schedule_id=$1 AND organization_id=$2 ORDER BY created_at DESC LIMIT 100`,
-      [req.params.id, orgId]);
+      [req.params.id, orgId]));
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Download the PDF for a saved schedule (does not send anything)
+router.get('/:id/pdf', async (req, res) => {
+  try {
+    await ensureTables();
+    const orgId = await getOrgId(req.userId);
+    const r = await query('SELECT * FROM merch_report_schedules WHERE id=$1 AND organization_id=$2', [req.params.id, orgId]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+    const sched = r.rows[0];
+    const org = await resolveOrg(orgId);
+    const brand = await resolveBrand(orgId, sched.brand_id);
+    const period = computePeriod(sched.frequency);
+    const metrics = await computeMetrics(orgId, sched.brand_id, period.start, period.end);
+    const opts = optionsFrom(sched);
+    const analyticalRows = (opts.report_type === 'analytical' || opts.report_type === 'both')
+      ? await computeAnalyticalRows(orgId, sched.brand_id, period.start, period.end).catch(() => [])
+      : [];
+    const pdf = await buildReportPDF({
+      org, brand, period, metrics, branding: brandingFrom(sched), analyticalRows, options: opts,
+    });
+    const safe = (sched.name || 'relatorio').replace(/[^\w-]+/g, '_');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}_${period.start}_${period.end}.pdf"`);
+    res.send(pdf);
+  } catch (e) { logError('merch-report-schedules.pdf', e); res.status(500).json({ error: e.message }); }
 });
 
 export { ensureTables };
