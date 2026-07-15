@@ -757,7 +757,7 @@ function AnaliticoTab({ filters }: { filters: any }) {
           const done = g.items.filter((i) => i.status === 'completed').length;
           const upcoming = g.items.filter((i) => {
             const today = new Date(); today.setHours(0, 0, 0, 0);
-            const vd = i.visit_date ? new Date(i.visit_date + 'T00:00:00') : null;
+            const vd = parseVisitDate(i.visit_date);
             return vd && vd.getTime() >= today.getTime() && !['completed', 'cancelled', 'justified', 'no_show', 'skipped'].includes(i.status);
           }).length;
           return (
