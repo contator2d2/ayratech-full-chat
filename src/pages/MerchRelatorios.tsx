@@ -688,9 +688,15 @@ function AvariasTab({ filters }: { filters: any }) {
 }
 
 // ===== Analítico Tab (versão analítica – mesmo conteúdo do PDF) =====
+function parseVisitDate(v: any): Date | null {
+  if (!v) return null;
+  const s = String(v).slice(0, 10);
+  const d = new Date(s + 'T00:00:00');
+  return isNaN(d.getTime()) ? null : d;
+}
 function statusMeta(status: string, visit_date: string) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const vd = visit_date ? new Date(visit_date + 'T00:00:00') : null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const vd = parseVisitDate(visit_date);
   const isFuture = vd && vd.getTime() > today.getTime();
   const isToday = vd && vd.getTime() === today.getTime();
   const wkEnd = new Date(today); wkEnd.setDate(wkEnd.getDate() + 7);
@@ -751,7 +757,7 @@ function AnaliticoTab({ filters }: { filters: any }) {
           const done = g.items.filter((i) => i.status === 'completed').length;
           const upcoming = g.items.filter((i) => {
             const today = new Date(); today.setHours(0, 0, 0, 0);
-            const vd = i.visit_date ? new Date(i.visit_date + 'T00:00:00') : null;
+            const vd = parseVisitDate(i.visit_date);
             return vd && vd.getTime() >= today.getTime() && !['completed', 'cancelled', 'justified', 'no_show', 'skipped'].includes(i.status);
           }).length;
           return (
@@ -784,7 +790,8 @@ function AnaliticoTab({ filters }: { filters: any }) {
                 <TableBody>
                   {g.items.map((i: any) => {
                     const meta = statusMeta(i.status, i.visit_date);
-                    const dateStr = i.visit_date ? new Date(i.visit_date + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+                    const _vd = parseVisitDate(i.visit_date);
+                    const dateStr = _vd ? _vd.toLocaleDateString('pt-BR') : '-';
                     return (
                       <TableRow key={i.id}>
                         <TableCell className="text-sm">{dateStr}</TableCell>

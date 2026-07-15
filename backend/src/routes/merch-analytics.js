@@ -652,15 +652,17 @@ router.get('/analytical', async (req, res) => {
     };
 
     // Detail rows — one per route, grouped by PDV
-    const baseSelect = (itemsExpr) => `
+    const baseSelect = (itemsExpr, brandExpr) => `
       SELECT
-        r.id, r.visit_date, r.status, COALESCE(r.progress_pct,0) AS progress_pct,
+        r.id,
+        to_char(r.visit_date, 'YYYY-MM-DD') AS visit_date,
+        r.status, COALESCE(r.progress_pct,0) AS progress_pct,
         COALESCE(p.id::text, '') AS pdv_id,
         COALESCE(p.name, '') AS pdv_name,
         COALESCE(p.city, '') AS pdv_city,
         COALESCE(p.state, '') AS pdv_state,
         COALESCE(e.full_name, '') AS promoter_name,
-        COALESCE(b.name, '') AS brand_name,
+        ${brandExpr} AS brand_name,
         ${itemsExpr.scheduled} AS items_scheduled,
         ${itemsExpr.executed} AS items_executed
       FROM merch_routes r
@@ -670,12 +672,19 @@ router.get('/analytical', async (req, res) => {
       WHERE r.organization_id=$1 ${filters}
       ORDER BY p.name NULLS LAST, r.visit_date
     `;
+    const brandWithMulti = `COALESCE(NULLIF(b.name,''), (SELECT string_agg(b2.name, ', ' ORDER BY b2.name) FROM route_brands rb JOIN brands b2 ON b2.id = rb.brand_id WHERE rb.route_id = r.id), '')`;
+    const brandSimple = `COALESCE(b.name, '')`;
     const withExec = {
       scheduled: `(SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id)`,
       executed: `(SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id AND rpe.checked=true)`,
     };
     const noExec = { scheduled: '0', executed: '0' };
-    const fallbacks = [baseSelect(withExec), baseSelect(noExec)];
+    const fallbacks = [
+      baseSelect(withExec, brandWithMulti),
+      baseSelect(withExec, brandSimple),
+      baseSelect(noExec, brandWithMulti),
+      baseSelect(noExec, brandSimple),
+    ];
 
     let rows = [];
     for (const q of fallbacks) {
