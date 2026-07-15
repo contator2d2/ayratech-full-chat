@@ -347,8 +347,14 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote, b
     // Colored band only on the top
     drawHeader(cover, 'Relatório de Rotas');
 
-    // Big title area (white background)
+    // Hero: brand logo big + title side by side
     let cy = 720;
+    if (clientLogo) {
+      const scale = Math.min(120 / clientLogo.height, 260 / clientLogo.width);
+      const w = clientLogo.width * scale, h = clientLogo.height * scale;
+      cover.drawImage(clientLogo, { x: 40, y: cy - h, width: w, height: h });
+      cy -= (h + 20);
+    }
     cover.drawText('Relatório de Rotas', { x: 40, y: cy, size: 26, font: bold, color: primary });
     cy -= 26;
     cover.drawText(`Marca: ${brand.name}`, { x: 40, y: cy, size: 14, font, color: rgb(0.2, 0.2, 0.2) }); cy -= 20;
@@ -371,14 +377,8 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote, b
     cy -= 10;
     cover.drawText('Cliente / Marca', { x: 40, y: cy, size: 11, font: bold, color: primary }); cy -= 16;
     cover.drawText(brand.name, { x: 40, y: cy, size: 12, font, color: rgb(0.2, 0.2, 0.2) }); cy -= 30;
-
-    // Client logo (bottom center, optional)
-    if (clientLogo) {
-      const scale = Math.min(70 / clientLogo.height, 220 / clientLogo.width);
-      const w = clientLogo.width * scale, h = clientLogo.height * scale;
-      cover.drawImage(clientLogo, { x: (595 - w) / 2, y: 160, width: w, height: h });
-    }
   }
+
 
 
   // ===== Summary =====
