@@ -78,8 +78,17 @@ async function ensureTables() {
 
 // ==== Period + next_run computation ====
 export function computePeriod(frequency, ref = new Date()) {
+  if (frequency === 'hourly') {
+    const end = new Date(ref);
+    const start = new Date(ref.getTime() - 60 * 60 * 1000);
+    return { start: fmt(start), end: fmt(end) };
+  }
   const d = new Date(ref);
   d.setHours(0, 0, 0, 0);
+  if (frequency === 'daily') {
+    const end = new Date(d); end.setDate(end.getDate() - 1);
+    return { start: fmt(end), end: fmt(end) };
+  }
   if (frequency === 'weekly') {
     const end = new Date(d); end.setDate(end.getDate() - 1);
     const start = new Date(end); start.setDate(start.getDate() - 6);
@@ -106,6 +115,16 @@ export function computeNextRun(sched, from = new Date()) {
   const hour = Number(sched.send_hour ?? 8);
   const base = new Date(from); base.setSeconds(0, 0);
   if (sched.frequency === 'ondemand') return null;
+  if (sched.frequency === 'hourly') {
+    const next = new Date(base); next.setMinutes(0, 0, 0);
+    next.setHours(next.getHours() + 1);
+    return next;
+  }
+  if (sched.frequency === 'daily') {
+    const next = new Date(base); next.setHours(hour, 0, 0, 0);
+    if (next <= base) next.setDate(next.getDate() + 1);
+    return next;
+  }
   if (sched.frequency === 'weekly' || sched.frequency === 'biweekly') {
     const target = Number(sched.day_of_week ?? 1);
     const next = new Date(base); next.setHours(hour, 0, 0, 0);
