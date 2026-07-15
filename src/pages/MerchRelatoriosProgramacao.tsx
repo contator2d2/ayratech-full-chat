@@ -231,6 +231,32 @@ export default function MerchRelatoriosProgramacao() {
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [logsFor, setLogsFor] = useState<Schedule | null>(null);
+
+  const downloadPdf = async (s: Schedule) => {
+    try {
+      const token = localStorage.getItem("token") || localStorage.getItem("auth_token") || "";
+      const res = await fetch(`${API_URL}/api/merch-report-schedules/${s.id}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(s.name || "relatorio").replace(/[^\w-]+/g, "_")}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao baixar PDF");
+    }
+  };
+
+  const { data: deliveries = [] } = useQuery<any[]>({
+    queryKey: ["merch-report-deliveries", logsFor?.id],
+    queryFn: () => api(`/api/merch-report-schedules/${logsFor!.id}/deliveries`),
+    enabled: !!logsFor,
+  });
 
   const handlePreview = async () => {
     try {
