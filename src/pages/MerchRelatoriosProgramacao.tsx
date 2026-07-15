@@ -820,6 +820,64 @@ export default function MerchRelatoriosProgramacao() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <Dialog open={!!downloadFor} onOpenChange={(o) => !o && setDownloadFor(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Baixar PDF — escolha o período</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Relatório: <b>{downloadFor?.name}</b>
+                {downloadFor?.brand_name ? <> · Marca: <b>{downloadFor.brand_name}</b></> : null}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Data inicial</Label>
+                  <Input type="date" value={dlFrom} onChange={(e) => setDlFrom(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Data final</Label>
+                  <Input type="date" value={dlTo} onChange={(e) => setDlTo(e.target.value)} />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Button type="button" size="sm" variant="outline" onClick={() => {
+                  const t = new Date(); setDlTo(t.toISOString().slice(0, 10));
+                  setDlFrom(new Date(t.getTime() - 6 * 86400000).toISOString().slice(0, 10));
+                }}>Últimos 7 dias</Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => {
+                  const t = new Date(); setDlTo(t.toISOString().slice(0, 10));
+                  setDlFrom(new Date(t.getTime() - 29 * 86400000).toISOString().slice(0, 10));
+                }}>Últimos 30 dias</Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => {
+                  const t = new Date();
+                  const start = new Date(t.getFullYear(), t.getMonth(), 1);
+                  const end = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+                  setDlFrom(start.toISOString().slice(0, 10));
+                  setDlTo(end.toISOString().slice(0, 10));
+                }}>Mês atual</Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => {
+                  const t = new Date();
+                  const start = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+                  const end = new Date(t.getFullYear(), t.getMonth(), 0);
+                  setDlFrom(start.toISOString().slice(0, 10));
+                  setDlTo(end.toISOString().slice(0, 10));
+                }}>Mês anterior</Button>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDownloadFor(null)}>Cancelar</Button>
+              <Button
+                onClick={() => downloadFor && doDownload(downloadFor, dlFrom, dlTo)}
+                disabled={dlLoading || !dlFrom || !dlTo}
+              >
+                {dlLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                Baixar PDF
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   );
