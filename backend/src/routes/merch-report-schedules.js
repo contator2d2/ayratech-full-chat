@@ -157,16 +157,16 @@ export async function computeAnalyticalRows(orgId, brandId, startISO, endISO) {
     params.push(brandId);
     brandFilter = ` AND (r.brand_id = $4 OR EXISTS (SELECT 1 FROM route_brands rb WHERE rb.route_id=r.id AND rb.brand_id=$4))`;
   }
-  const fullQ = `
+  const baseSelect = (promoterExpr, itemsExpr) => `
     SELECT
       r.id, r.visit_date, r.status, r.progress_pct,
       COALESCE(p.name, '') AS pdv_name,
       COALESCE(p.city, '') AS pdv_city,
       COALESCE(p.state, '') AS pdv_state,
-      COALESCE(e.full_name, e.name, '') AS promoter_name,
+      ${promoterExpr} AS promoter_name,
       COALESCE(b.name, '') AS brand_name,
-      (SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id) AS items_scheduled,
-      (SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id AND rpe.checked=true) AS items_executed
+      ${itemsExpr.scheduled} AS items_scheduled,
+      ${itemsExpr.executed} AS items_executed
     FROM merch_routes r
     LEFT JOIN pdvs p ON p.id = r.pdv_id
     LEFT JOIN employees e ON e.id = r.promoter_id
@@ -174,30 +174,26 @@ export async function computeAnalyticalRows(orgId, brandId, startISO, endISO) {
     WHERE r.organization_id=$1 AND r.visit_date BETWEEN $2::date AND $3::date ${brandFilter}
     ORDER BY p.name NULLS LAST, r.visit_date
   `;
+  const withExec = {
+    scheduled: `(SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id)`,
+    executed: `(SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id AND rpe.checked=true)`,
+  };
+  const noExec = { scheduled: '0', executed: '0' };
   const fallbacks = [
-    fullQ,
-    fullQ.replace(/COALESCE\(e\.full_name, e\.name, ''\)/, "COALESCE(e.name, '')"),
-    `SELECT r.id, r.visit_date, r.status, r.progress_pct,
+    baseSelect("COALESCE(e.full_name, '')", withExec),
+    baseSelect("COALESCE(e.full_name, '')", noExec),
+    `SELECT r.id, r.visit_date, r.status, COALESCE(r.progress_pct,0) AS progress_pct,
        COALESCE(p.name, '') AS pdv_name,
        COALESCE(p.city, '') AS pdv_city,
        COALESCE(p.state, '') AS pdv_state,
-       COALESCE(e.name, '') AS promoter_name,
+       '' AS promoter_name,
        COALESCE(b.name, '') AS brand_name,
        0 AS items_scheduled, 0 AS items_executed
      FROM merch_routes r
      LEFT JOIN pdvs p ON p.id = r.pdv_id
-     LEFT JOIN employees e ON e.id = r.promoter_id
      LEFT JOIN brands b ON b.id = r.brand_id
      WHERE r.organization_id=$1 AND r.visit_date BETWEEN $2::date AND $3::date ${brandFilter}
      ORDER BY p.name NULLS LAST, r.visit_date`,
-    `SELECT r.id, r.visit_date, r.status,
-       COALESCE(r.progress_pct, 0) AS progress_pct,
-       '' AS pdv_name, '' AS pdv_city, '' AS pdv_state,
-       '' AS promoter_name, '' AS brand_name,
-       0 AS items_scheduled, 0 AS items_executed
-     FROM merch_routes r
-     WHERE r.organization_id=$1 AND r.visit_date BETWEEN $2::date AND $3::date ${brandFilter}
-     ORDER BY r.visit_date`,
   ];
   let lastErr = null;
   for (const q of fallbacks) {
@@ -209,6 +205,7 @@ export async function computeAnalyticalRows(orgId, brandId, startISO, endISO) {
   logError('merch-report-schedules.analytical_query_failed', lastErr);
   return [];
 }
+
 
 async function resolveBrand(orgId, brandId) {
   if (!brandId) return { id: null, name: 'Todas as marcas', logo_url: null };
