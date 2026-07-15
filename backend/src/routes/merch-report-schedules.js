@@ -187,8 +187,12 @@ async function resolveBrand(orgId, brandId) {
   return r.rows[0] || { id: brandId, name: 'Marca', logo_url: null };
 }
 async function resolveOrg(orgId) {
-  const r = await query('SELECT id, name FROM organizations WHERE id=$1', [orgId]);
-  const org = r.rows[0] || { name: '' };
+  // Try to grab as much company info as we can; tolerate missing columns
+  let org = { name: '' };
+  try {
+    const r = await query('SELECT * FROM organizations WHERE id=$1', [orgId]);
+    org = r.rows[0] || { name: '' };
+  } catch { /* ignore */ }
   try {
     const l = await query('SELECT logo_url, primary_color, header_text, footer_text FROM merch_org_letterhead WHERE organization_id=$1', [orgId]);
     if (l.rows[0]) org.letterhead = l.rows[0];
@@ -307,31 +311,45 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote, b
     }
   };
 
-  // ===== Cover =====
+  // ===== Cover (white background, only a colored header band) =====
   if (includeCover) {
     const cover = pdf.addPage(A4);
-    cover.drawRectangle({ x: 0, y: 0, width: 595, height: 842, color: primary });
-    // Logos centered
-    if (orgLogo) {
-      const scale = Math.min(80 / orgLogo.height, 260 / orgLogo.width);
-      const w = orgLogo.width * scale, h = orgLogo.height * scale;
-      cover.drawImage(orgLogo, { x: (595 - w) / 2, y: 620, width: w, height: h });
+    // Colored band only on the top
+    drawHeader(cover, 'Relatório de Rotas');
+
+    // Big title area (white background)
+    let cy = 720;
+    cover.drawText('Relatório de Rotas', { x: 40, y: cy, size: 26, font: bold, color: primary });
+    cy -= 26;
+    cover.drawText(`Marca: ${brand.name}`, { x: 40, y: cy, size: 14, font, color: rgb(0.2, 0.2, 0.2) }); cy -= 20;
+    cover.drawText(`Período: ${period.start} a ${period.end}`, { x: 40, y: cy, size: 14, font, color: rgb(0.2, 0.2, 0.2) }); cy -= 30;
+
+    // Company info block
+    cover.drawText('Empresa', { x: 40, y: cy, size: 11, font: bold, color: primary }); cy -= 16;
+    const lines = [
+      org.name && `Razão social: ${org.name}`,
+      org.email && `E-mail: ${org.email}`,
+      org.phone && `Telefone: ${org.phone}`,
+      (org.cnpj || org.document) && `CNPJ: ${org.cnpj || org.document}`,
+      (org.address || org.city) && `Endereço: ${[org.address, org.city, org.state].filter(Boolean).join(' — ')}`,
+    ].filter(Boolean);
+    if (lines.length === 0) lines.push(`Razão social: ${org.name || '—'}`);
+    for (const l of lines) {
+      cover.drawText(String(l), { x: 40, y: cy, size: 10, font, color: rgb(0.25, 0.25, 0.25) });
+      cy -= 14;
     }
-    cover.drawText(branding.header_title || org.name || 'Relatório', {
-      x: 40, y: 500, size: 28, font: bold, color: rgb(1, 1, 1)
-    });
-    cover.drawText('Relatório de Rotas', { x: 40, y: 460, size: 20, font, color: rgb(0.95, 0.95, 0.95) });
-    cover.drawText(`Marca: ${brand.name}`, { x: 40, y: 420, size: 14, font, color: rgb(1, 1, 1) });
-    cover.drawText(`Período: ${period.start} a ${period.end}`, { x: 40, y: 396, size: 14, font, color: rgb(1, 1, 1) });
+    cy -= 10;
+    cover.drawText('Cliente / Marca', { x: 40, y: cy, size: 11, font: bold, color: primary }); cy -= 16;
+    cover.drawText(brand.name, { x: 40, y: cy, size: 12, font, color: rgb(0.2, 0.2, 0.2) }); cy -= 30;
+
+    // Client logo (bottom center, optional)
     if (clientLogo) {
       const scale = Math.min(70 / clientLogo.height, 220 / clientLogo.width);
       const w = clientLogo.width * scale, h = clientLogo.height * scale;
-      cover.drawImage(clientLogo, { x: (595 - w) / 2, y: 200, width: w, height: h });
+      cover.drawImage(clientLogo, { x: (595 - w) / 2, y: 160, width: w, height: h });
     }
-    cover.drawText(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, {
-      x: 40, y: 60, size: 9, font, color: rgb(0.9, 0.9, 0.9)
-    });
   }
+
 
   // ===== Summary =====
   if (reportType === 'summary' || reportType === 'both') {
@@ -395,8 +413,17 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote, b
   }
 
   // ===== Analytical (per-PDV table, color-coded) =====
-  if ((reportType === 'analytical' || reportType === 'both') && analyticalRows.length) {
-    // Table columns
+  if (reportType === 'analytical' || reportType === 'both') {
+    if (!analyticalRows.length) {
+      const page = pdf.addPage(A4);
+      drawHeader(page, `Analítico • ${brand.name}`);
+      page.drawText('Sem registros de rotas no período selecionado.', {
+        x: 40, y: 720, size: 12, font, color: rgb(0.35, 0.35, 0.35),
+      });
+      page.drawText('Verifique se existem rotas agendadas para a marca e o intervalo escolhidos.', {
+        x: 40, y: 700, size: 10, font, color: rgb(0.5, 0.5, 0.5),
+      });
+    } else {
     const cols = [
       { key: 'pdv_name', label: 'PDV', w: 150 },
       { key: 'pdv_city', label: 'Cidade/UF', w: 90 },
@@ -464,6 +491,7 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote, b
       page.drawText(l.label, { x: lx + 18, y: y - 8, size: 9, font, color: rgb(0.25, 0.25, 0.25) });
       lx += 110;
     }
+    } // end else (analyticalRows.length)
   }
 
   // Footers on every page
@@ -774,10 +802,48 @@ router.get('/:id/deliveries', async (req, res) => {
   try {
     const orgId = await getOrgId(req.userId);
     const r = await query(
+      `SELECT d.*,
+              eq.status AS email_status,
+              eq.error_message AS email_error,
+              eq.sent_at AS email_sent_at,
+              eq.retry_count
+       FROM merch_report_deliveries d
+       LEFT JOIN email_queue eq ON eq.context_type='merch_report' AND eq.context_id=d.schedule_id
+         AND eq.to_email = d.recipient
+         AND eq.created_at BETWEEN d.created_at - INTERVAL '5 seconds' AND d.created_at + INTERVAL '5 seconds'
+       WHERE d.schedule_id=$1 AND d.organization_id=$2
+       ORDER BY d.created_at DESC LIMIT 100`,
+      [req.params.id, orgId]).catch(() => query(
       `SELECT * FROM merch_report_deliveries WHERE schedule_id=$1 AND organization_id=$2 ORDER BY created_at DESC LIMIT 100`,
-      [req.params.id, orgId]);
+      [req.params.id, orgId]));
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Download the PDF for a saved schedule (does not send anything)
+router.get('/:id/pdf', async (req, res) => {
+  try {
+    await ensureTables();
+    const orgId = await getOrgId(req.userId);
+    const r = await query('SELECT * FROM merch_report_schedules WHERE id=$1 AND organization_id=$2', [req.params.id, orgId]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+    const sched = r.rows[0];
+    const org = await resolveOrg(orgId);
+    const brand = await resolveBrand(orgId, sched.brand_id);
+    const period = computePeriod(sched.frequency);
+    const metrics = await computeMetrics(orgId, sched.brand_id, period.start, period.end);
+    const opts = optionsFrom(sched);
+    const analyticalRows = (opts.report_type === 'analytical' || opts.report_type === 'both')
+      ? await computeAnalyticalRows(orgId, sched.brand_id, period.start, period.end).catch(() => [])
+      : [];
+    const pdf = await buildReportPDF({
+      org, brand, period, metrics, branding: brandingFrom(sched), analyticalRows, options: opts,
+    });
+    const safe = (sched.name || 'relatorio').replace(/[^\w-]+/g, '_');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}_${period.start}_${period.end}.pdf"`);
+    res.send(pdf);
+  } catch (e) { logError('merch-report-schedules.pdf', e); res.status(500).json({ error: e.message }); }
 });
 
 export { ensureTables };

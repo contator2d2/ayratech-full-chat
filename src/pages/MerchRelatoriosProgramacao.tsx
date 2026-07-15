@@ -16,7 +16,7 @@ import { api } from "@/lib/api";
 import { useBrands } from "@/hooks/use-merchandising";
 import { useUpload } from "@/hooks/use-upload";
 import { toast } from "sonner";
-import { Plus, Trash2, Send, Calendar, Mail, MessageCircle, Edit, Play, Eye, Image as ImageIcon, Upload, Loader2, X } from "lucide-react";
+import { Plus, Trash2, Send, Calendar, Mail, MessageCircle, Edit, Play, Eye, Image as ImageIcon, Upload, Loader2, X, Download, History, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { API_URL } from "@/lib/api";
 
 // Uploader de logo: preview + botão "Carregar do computador"
@@ -231,6 +231,32 @@ export default function MerchRelatoriosProgramacao() {
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [logsFor, setLogsFor] = useState<Schedule | null>(null);
+
+  const downloadPdf = async (s: Schedule) => {
+    try {
+      const token = localStorage.getItem("token") || localStorage.getItem("auth_token") || "";
+      const res = await fetch(`${API_URL}/api/merch-report-schedules/${s.id}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(s.name || "relatorio").replace(/[^\w-]+/g, "_")}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao baixar PDF");
+    }
+  };
+
+  const { data: deliveries = [] } = useQuery<any[]>({
+    queryKey: ["merch-report-deliveries", logsFor?.id],
+    queryFn: () => api(`/api/merch-report-schedules/${logsFor!.id}/deliveries`),
+    enabled: !!logsFor,
+  });
 
   const handlePreview = async () => {
     try {
@@ -348,8 +374,14 @@ export default function MerchRelatoriosProgramacao() {
                       </TableCell>
                       <TableCell>{s.active ? <Badge>Ativo</Badge> : <Badge variant="outline">Pausado</Badge>}</TableCell>
                       <TableCell className="text-right space-x-1">
-                        <Button size="sm" variant="outline" onClick={() => sendNow.mutate(s.id)} disabled={sendNow.isPending}>
+                        <Button size="sm" variant="outline" onClick={() => downloadPdf(s)} title="Baixar PDF (não envia)">
+                          <Download className="h-3 w-3 mr-1" /> Baixar PDF
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => sendNow.mutate(s.id)} disabled={sendNow.isPending} title="Gerar e enviar agora">
                           <Play className="h-3 w-3 mr-1" /> Enviar agora
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setLogsFor(s)} title="Logs de envio">
+                          <History className="h-3 w-3" />
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => startEdit(s)}><Edit className="h-3 w-3" /></Button>
                         <Button size="sm" variant="ghost" onClick={() => confirm("Remover?") && del.mutate(s.id)}>
@@ -699,6 +731,74 @@ export default function MerchRelatoriosProgramacao() {
               <Button onClick={previewBranding} disabled={previewLoading}>
                 <Eye className="h-4 w-4 mr-2" /> {previewLoading ? "Gerando..." : "Ver preview do PDF"}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Diálogo de Logs de Envio */}
+        <Dialog open={!!logsFor} onOpenChange={(v) => { if (!v) setLogsFor(null); }}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Logs de envio — {logsFor?.name}</DialogTitle>
+            </DialogHeader>
+            {deliveries.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">
+                Nenhum envio registrado ainda. Use <b>Enviar agora</b> para gerar o primeiro envio.
+                <br /><br />
+                <span className="text-xs">
+                  💡 Se os e-mails não chegam, verifique se o SMTP está configurado em <b>Configurações → E-mail</b>.
+                  Sem SMTP ativo, os envios ficam na fila com status "failed".
+                </span>
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Canal</TableHead>
+                    <TableHead>Destinatário</TableHead>
+                    <TableHead>Período</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Detalhes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deliveries.map((d) => {
+                    const finalStatus = d.email_status || d.status;
+                    const isSent = finalStatus === "sent";
+                    const isFailed = finalStatus === "failed";
+                    return (
+                      <TableRow key={d.id}>
+                        <TableCell className="text-xs">
+                          {new Date(d.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                        </TableCell>
+                        <TableCell>
+                          {d.channel === "email"
+                            ? <Badge variant="secondary"><Mail className="h-3 w-3 mr-1" />E-mail</Badge>
+                            : <Badge variant="secondary"><MessageCircle className="h-3 w-3 mr-1" />WhatsApp</Badge>}
+                        </TableCell>
+                        <TableCell className="text-xs">{d.recipient}</TableCell>
+                        <TableCell className="text-xs">{d.period_start} → {d.period_end}</TableCell>
+                        <TableCell>
+                          {isSent ? (
+                            <Badge className="bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Enviado</Badge>
+                          ) : isFailed ? (
+                            <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Falha</Badge>
+                          ) : (
+                            <Badge variant="outline"><Clock className="h-3 w-3 mr-1" />{finalStatus}</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-[240px] truncate" title={d.email_error || d.error || ""}>
+                          {d.email_error || d.error || (isSent && d.email_sent_at ? `Enviado às ${new Date(d.email_sent_at).toLocaleTimeString("pt-BR")}` : "—")}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setLogsFor(null)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
