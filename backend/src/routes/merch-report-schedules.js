@@ -634,13 +634,34 @@ export async function executeSchedule(sched, { periodOverride } = {}) {
   const branding = brandingFrom(sched);
 
   let pdfBuffer = null;
-  if (channels.email && sched.format === 'pdf') {
-    pdfBuffer = await buildReportPDF({ org, brand, period, metrics, branding, analyticalRows, options: opts });
+  let pdfUrl = null;
+  let pdfFilename = null;
+  if (channels.email || channels.whatsapp) {
+    if (sched.format === 'pdf' || channels.whatsapp) {
+      pdfBuffer = await buildReportPDF({ org, brand, period, metrics, branding, analyticalRows, options: opts });
+      // Persist to /uploads/reports so it can be attached / linked
+      try {
+        const reportsDir = path.join(UPLOADS_DIR, 'reports');
+        if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+        const safe = (sched.name || 'relatorio').replace(/[^\w-]+/g, '_');
+        pdfFilename = `${safe}_${period.start}_${period.end}_${Date.now()}.pdf`;
+        const abs = path.join(reportsDir, pdfFilename);
+        fs.writeFileSync(abs, pdfBuffer);
+        const baseUrl = String(process.env.API_BASE_URL || '').trim().replace(/\/+$/, '');
+        pdfUrl = baseUrl ? `${baseUrl}/uploads/reports/${pdfFilename}` : `/uploads/reports/${pdfFilename}`;
+      } catch (err) {
+        logError('merch-report-schedules.pdf_persist', err);
+      }
+    }
   }
   const textSummary = buildTextSummary({ brand, period, metrics });
+  const emailIntroHtml = sched.email_intro
+    ? `<div style="font-family:Arial,sans-serif;color:#374151;margin-bottom:16px;white-space:pre-wrap">${String(sched.email_intro).replace(/</g, '&lt;')}</div>`
+    : '';
+  const whatsappIntro = sched.whatsapp_intro ? String(sched.whatsapp_intro).trim() : '';
 
   if (channels.email) {
-    const html = `<div style="font-family:Arial,sans-serif;color:#1f2937">
+    const html = `${emailIntroHtml}<div style="font-family:Arial,sans-serif;color:#1f2937">
       <h2 style="color:#111827">${org.name || ''} — Relatório de rotas</h2>
       <p style="color:#4b5563"><strong>Marca:</strong> ${brand.name}<br/>
       <strong>Período:</strong> ${period.start} a ${period.end}</p>
@@ -651,23 +672,32 @@ export async function executeSchedule(sched, { periodOverride } = {}) {
         <tr><td style="border:1px solid #e5e7eb"><b>Em andamento</b></td><td style="border:1px solid #e5e7eb">${metrics.in_progress}</td></tr>
         <tr><td style="border:1px solid #e5e7eb"><b>% Conclusão</b></td><td style="border:1px solid #e5e7eb">${metrics.completion_pct}%</td></tr>
       </table>
+      ${pdfUrl ? `<p style="color:#4b5563;margin-top:12px;font-size:12px">PDF em anexo${pdfUrl ? ` — também disponível em <a href="${pdfUrl}">${pdfFilename}</a>` : ''}.</p>` : ''}
     </div>`;
+
+    // Attachments payload for the queue → email-scheduler
+    const attachmentsPayload = pdfBuffer && pdfFilename ? [{
+      filename: pdfFilename,
+      path: path.join(UPLOADS_DIR, 'reports', pdfFilename),
+      contentType: 'application/pdf',
+    }] : [];
 
     for (const rcp of recipients) {
       if (!rcp?.email) continue;
       try {
         const ins = await query(
-          `INSERT INTO email_queue (organization_id, sender_user_id, to_email, to_name, subject, body_html, body_text, context_type, context_id, status, scheduled_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'merch_report', $8, 'pending', NOW()) RETURNING id`,
+          `INSERT INTO email_queue (organization_id, sender_user_id, to_email, to_name, subject, body_html, body_text, context_type, context_id, status, scheduled_at, attachments)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'merch_report', $8, 'pending', NOW(), $9) RETURNING id`,
           [orgId, sched.created_by || null, rcp.email, rcp.name || null,
             `${org.name || 'Relatório'} — ${brand.name} — ${period.start} a ${period.end}`,
-            html, textSummary, sched.id]
+            html, (sched.email_intro ? sched.email_intro + '\n\n' : '') + textSummary, sched.id,
+            JSON.stringify(attachmentsPayload)]
         );
         results.push({ channel: 'email', recipient: rcp.email, status: 'queued', delivery_id: ins.rows[0].id });
         await query(
           `INSERT INTO merch_report_deliveries (schedule_id, organization_id, period_start, period_end, channel, recipient, status, payload)
            VALUES ($1,$2,$3,$4,'email',$5,'queued',$6)`,
-          [sched.id, orgId, period.start, period.end, rcp.email, JSON.stringify({ metrics, hasPdf: !!pdfBuffer })]
+          [sched.id, orgId, period.start, period.end, rcp.email, JSON.stringify({ metrics, hasPdf: !!pdfBuffer, pdfUrl })]
         );
       } catch (err) {
         results.push({ channel: 'email', recipient: rcp.email, status: 'failed', error: err.message });
@@ -685,14 +715,27 @@ export async function executeSchedule(sched, { periodOverride } = {}) {
         continue;
       }
       try {
-        const res = await whatsappProvider.sendMessage(connection, phone, textSummary, 'text');
-        const ok = res?.success === true;
-        results.push({ channel: 'whatsapp', recipient: phone, status: ok ? 'sent' : 'failed', error: ok ? null : (res?.error || 'falha') });
+        const introText = whatsappIntro ? `${whatsappIntro}\n\n${textSummary}` : textSummary;
+        const res = await whatsappProvider.sendMessage(connection, phone, introText, 'text');
+        let ok = res?.success === true;
+        let sendErr = ok ? null : (res?.error || 'falha');
+        // Send PDF as document if available and text succeeded
+        if (ok && pdfUrl) {
+          try {
+            const docRes = await whatsappProvider.sendMessage(connection, phone, pdfFilename, 'document', pdfUrl);
+            if (docRes?.success !== true) {
+              sendErr = `texto ok, doc falhou: ${docRes?.error || 'falha'}`;
+            }
+          } catch (docErr) {
+            sendErr = `texto ok, doc erro: ${docErr.message}`;
+          }
+        }
+        results.push({ channel: 'whatsapp', recipient: phone, status: ok ? 'sent' : 'failed', error: sendErr });
         await query(
           `INSERT INTO merch_report_deliveries (schedule_id, organization_id, period_start, period_end, channel, recipient, status, payload, sent_at, error)
            VALUES ($1,$2,$3,$4,'whatsapp',$5,$6,$7,${ok ? 'NOW()' : 'NULL'},$8)`,
           [sched.id, orgId, period.start, period.end, phone, ok ? 'sent' : 'failed',
-            JSON.stringify({ metrics }), ok ? null : (res?.error || 'falha')]
+            JSON.stringify({ metrics, pdfUrl }), sendErr]
         );
       } catch (err) {
         results.push({ channel: 'whatsapp', recipient: phone, status: 'failed', error: err.message });
@@ -706,7 +749,7 @@ export async function executeSchedule(sched, { periodOverride } = {}) {
     [next, sched.id]
   );
 
-  return { period, metrics, results, next_run_at: next };
+  return { period, metrics, results, next_run_at: next, pdfUrl };
 }
 
 // ==== ROUTES ====
