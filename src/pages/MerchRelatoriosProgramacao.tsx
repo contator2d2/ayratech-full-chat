@@ -135,6 +135,8 @@ interface Schedule {
   report_type?: "summary" | "analytical" | "both";
   include_cover?: boolean;
   include_chart?: boolean;
+  email_intro?: string | null;
+  whatsapp_intro?: string | null;
 }
 
 const emptyForm: Partial<Schedule> = {
