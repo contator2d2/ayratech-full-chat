@@ -664,6 +664,32 @@ export default function MerchRelatoriosProgramacao() {
                   <Input type="color" value={brandingForm.primary_color || "#1e293b"} onChange={(e) => setBrandingForm({ ...brandingForm, primary_color: e.target.value })} className="h-10 p-1" />
                 </div>
               </div>
+
+              <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
+                <Label className="font-semibold text-sm">Conteúdo do relatório</Label>
+                <div className="grid grid-cols-3 gap-3 items-end">
+                  <div className="col-span-3 sm:col-span-1">
+                    <Label className="text-xs">Tipo</Label>
+                    <Select value={brandingForm.report_type || "both"} onValueChange={(v: any) => setBrandingForm({ ...brandingForm, report_type: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="summary">Resumo</SelectItem>
+                        <SelectItem value="analytical">Analítico</SelectItem>
+                        <SelectItem value="both">Ambos</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={brandingForm.include_cover !== false} onCheckedChange={(v) => setBrandingForm({ ...brandingForm, include_cover: !!v })} />
+                    Capa
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={brandingForm.include_chart !== false} onCheckedChange={(v) => setBrandingForm({ ...brandingForm, include_chart: !!v })} />
+                    Gráfico
+                  </label>
+                </div>
+              </div>
+
               <p className="text-xs text-muted-foreground">
                 Este preview usa dados reais do período atual. Para salvar as personalizações, crie uma programação em "Nova programação".
               </p>
