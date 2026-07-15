@@ -26,6 +26,7 @@ import {
   TrendingUp, TrendingDown, Camera, DollarSign, ShoppingCart, Clock, Target,
   Download, Sparkles, Filter, Calendar,
 } from "lucide-react";
+import { AiAnalysisChat } from "@/components/merch/AiAnalysisChat";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 
 const PERIOD_PRESETS = [
@@ -87,6 +88,7 @@ async function exportCurrentTab(tab: string, filters: any) {
 
 export default function MerchRelatorios() {
   const [tab, setTab] = useState('dashboard');
+  const [aiOpen, setAiOpen] = useState(false);
   const [period, setPeriod] = useState('month');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -126,7 +128,7 @@ export default function MerchRelatorios() {
             <Button variant="outline" size="sm" onClick={() => exportCurrentTab(tab, filters)}>
               <Download className="h-4 w-4 mr-1" />Exportar CSV
             </Button>
-            <Button size="sm" className="bg-gradient-to-r from-primary to-primary/80">
+            <Button size="sm" className="bg-gradient-to-r from-primary to-primary/80" onClick={() => setAiOpen(true)}>
               <Sparkles className="h-4 w-4 mr-1" />Análise IA
             </Button>
           </div>
@@ -208,6 +210,7 @@ export default function MerchRelatorios() {
           <TabsContent value="avarias"><AvariasTab filters={filters} /></TabsContent>
         </Tabs>
       </div>
+      <AiAnalysisChat open={aiOpen} onOpenChange={setAiOpen} filters={filters} />
     </MainLayout>
   );
 }
