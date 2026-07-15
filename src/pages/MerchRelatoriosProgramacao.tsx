@@ -544,6 +544,36 @@ export default function MerchRelatoriosProgramacao() {
                 </div>
               </div>
 
+              <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+                <Label className="font-semibold">Conteúdo do relatório</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-3 sm:col-span-1">
+                    <Label className="text-xs">Tipo</Label>
+                    <Select value={form.report_type || "both"} onValueChange={(v: any) => setForm({ ...form, report_type: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="summary">Resumo (KPIs + gráfico)</SelectItem>
+                        <SelectItem value="analytical">Analítico (lista de PDVs)</SelectItem>
+                        <SelectItem value="both">Ambos (recomendado)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm mt-5">
+                    <Checkbox checked={form.include_cover !== false} onCheckedChange={(v) => setForm({ ...form, include_cover: !!v })} />
+                    Incluir capa
+                  </label>
+                  <label className="flex items-center gap-2 text-sm mt-5">
+                    <Checkbox checked={form.include_chart !== false} onCheckedChange={(v) => setForm({ ...form, include_chart: !!v })} />
+                    Incluir gráfico
+                  </label>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  O analítico traz uma tabela com todos os PDVs do período, com cores: verde = executada, amarelo = parcial, branco = não realizada.
+                </p>
+              </div>
+
+
+
               <div className="flex items-center gap-2">
                 <Switch checked={form.active !== false} onCheckedChange={(v) => setForm({ ...form, active: v })} />
                 <Label className="cursor-pointer">Programação ativa</Label>
