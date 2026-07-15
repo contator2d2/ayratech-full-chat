@@ -332,10 +332,14 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote, b
     page.drawText(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, {
       x: 40, y: 40, size: 8, font, color: rgb(0.5, 0.5, 0.5)
     });
+    // System signature (centered)
+    const sysText = `Ayratech • Sistema de Gestão v${process.env.APP_VERSION || '1.0.0'}`;
+    page.drawText(sysText, { x: 595 / 2 - (sysText.length * 2.1), y: 40, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
     if (totalPages) {
       page.drawText(`Página ${pageNum} de ${totalPages}`, { x: 500, y: 40, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
     }
   };
+
 
   // ===== Cover (white background, only a colored header band) =====
   if (includeCover) {
