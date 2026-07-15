@@ -798,8 +798,8 @@ router.post('/', async (req, res) => {
       `INSERT INTO merch_report_schedules
        (organization_id, brand_id, name, metrics, frequency, day_of_week, day_of_month, send_hour, channels, format, recipients, connection_id, active, next_run_at, created_by,
         company_logo_url, client_logo_url, header_title, footer_text, primary_color, include_org_logo, include_brand_logo,
-        report_type, include_cover, include_chart)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING *`,
+        report_type, include_cover, include_chart, email_intro, whatsapp_intro)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27) RETURNING *`,
       [orgId, b.brand_id || null, b.name || 'Relatório',
         JSON.stringify(b.metrics || { scheduled: true, completed: true, not_done: true }),
         sched.frequency, sched.day_of_week, sched.day_of_month, sched.send_hour,
@@ -813,7 +813,8 @@ router.post('/', async (req, res) => {
         b.company_logo_url || null, b.client_logo_url || null,
         b.header_title || null, b.footer_text || null, b.primary_color || null,
         b.include_org_logo !== false, b.include_brand_logo !== false,
-        b.report_type || 'both', b.include_cover !== false, b.include_chart !== false]
+        b.report_type || 'both', b.include_cover !== false, b.include_chart !== false,
+        b.email_intro || null, b.whatsapp_intro || null]
     );
     res.json(r.rows[0]);
   } catch (e) { logError('merch-report-schedules.create', e); res.status(500).json({ error: e.message }); }
