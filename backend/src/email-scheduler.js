@@ -116,6 +116,19 @@ export async function processEmailQueue() {
         // Create transporter and send
         const transporter = createTransporter(smtpConfig);
 
+        // Build attachments (supports [{filename, path|url|href|content}])
+        let mailAttachments;
+        try {
+          const raw = email.attachments;
+          const arr = Array.isArray(raw) ? raw : (typeof raw === 'string' && raw ? JSON.parse(raw) : []);
+          mailAttachments = (arr || []).map(a => ({
+            filename: a.filename || a.file_name || 'anexo',
+            path: a.path || a.file_url || a.url,
+            content: a.content,
+            contentType: a.contentType || a.file_type,
+          })).filter(a => a.path || a.content);
+        } catch { mailAttachments = undefined; }
+
         await transporter.sendMail({
           from: `"${smtpConfig.from_name}" <${smtpConfig.from_email}>`,
           to: email.to_name ? `"${email.to_name}" <${email.to_email}>` : email.to_email,
@@ -125,6 +138,7 @@ export async function processEmailQueue() {
           subject: email.subject,
           html: email.body_html,
           text: email.body_text,
+          attachments: mailAttachments && mailAttachments.length ? mailAttachments : undefined,
         });
 
         // Mark as sent
