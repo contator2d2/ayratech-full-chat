@@ -1,4 +1,6 @@
 import express from 'express';
+import path from 'path';
+import fs from 'fs';
 import { query } from '../db.js';
 import { authenticate } from '../middleware/auth.js';
 import { logInfo, logError } from '../logger.js';
@@ -7,6 +9,8 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 const router = express.Router();
 router.use(authenticate);
+
+const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 
 async function getOrgId(userId) {
   const r = await query('SELECT organization_id FROM organization_members WHERE user_id=$1 LIMIT 1', [userId]);
