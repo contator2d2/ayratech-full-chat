@@ -16,7 +16,7 @@ import { api } from "@/lib/api";
 import { useBrands } from "@/hooks/use-merchandising";
 import { useUpload } from "@/hooks/use-upload";
 import { toast } from "sonner";
-import { Plus, Trash2, Send, Calendar, Mail, MessageCircle, Edit, Play, Eye, Image as ImageIcon, Upload, Loader2, X } from "lucide-react";
+import { Plus, Trash2, Send, Calendar, Mail, MessageCircle, Edit, Play, Eye, Image as ImageIcon, Upload, Loader2, X, Download, History, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { API_URL } from "@/lib/api";
 
 // Uploader de logo: preview + botão "Carregar do computador"
