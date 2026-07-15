@@ -222,13 +222,15 @@ router.get('/report/pdv', async (req, res) => {
   try {
     const orgId = await getOrgId(req.userId);
     if (!orgId) return res.status(403).json({ error: 'Sem organização' });
-    const { date_from, date_to, pdv_id } = req.query;
+    const { date_from, date_to, pdv_id, brand_id, promoter_id } = req.query;
     const params = [orgId];
     let idx = 2;
     let filters = '';
     if (date_from) { filters += ` AND r.visit_date >= $${idx}`; params.push(date_from); idx++; }
     if (date_to) { filters += ` AND r.visit_date <= $${idx}`; params.push(date_to); idx++; }
     if (pdv_id) { filters += ` AND r.pdv_id = $${idx}`; params.push(pdv_id); idx++; }
+    if (brand_id) { filters += ` AND r.brand_id = $${idx}`; params.push(brand_id); idx++; }
+    if (promoter_id) { filters += ` AND r.promoter_id = $${idx}`; params.push(promoter_id); idx++; }
 
     const rows = (await query(`
       SELECT p.id as pdv_id, p.name as pdv_name, p.city, p.network,
@@ -245,16 +247,23 @@ router.get('/report/pdv', async (req, res) => {
       LIMIT 200
     `, params)).rows;
 
-    // Enrich with product execution stats
+    // Enrich with product execution stats (rebuild filters per-row with fresh param indexes)
     for (const row of rows) {
       try {
+        const p2 = [row.pdv_id, orgId];
+        let i2 = 3;
+        let f2 = '';
+        if (date_from) { f2 += ` AND r2.visit_date >= $${i2}`; p2.push(date_from); i2++; }
+        if (date_to) { f2 += ` AND r2.visit_date <= $${i2}`; p2.push(date_to); i2++; }
+        if (brand_id) { f2 += ` AND r2.brand_id = $${i2}`; p2.push(brand_id); i2++; }
+        if (promoter_id) { f2 += ` AND r2.promoter_id = $${i2}`; p2.push(promoter_id); i2++; }
         const stats = (await query(`
           SELECT 
-            (SELECT COUNT(*) FROM route_product_executions rpe JOIN merch_routes r2 ON r2.id = rpe.route_id WHERE r2.pdv_id = $1 AND r2.organization_id = $2 ${filters.replace(/r\./g, 'r2.').replace(/r2\.pdv_id[^A]+/g, '')}) as total,
-            (SELECT COUNT(*) FROM route_product_executions rpe JOIN merch_routes r2 ON r2.id = rpe.route_id WHERE r2.pdv_id = $1 AND r2.organization_id = $2 AND rpe.status = 'completed' ${filters.replace(/r\./g, 'r2.').replace(/r2\.pdv_id[^A]+/g, '')}) as executed,
-            (SELECT COALESCE(SUM(qty_store + qty_stock), 0) FROM product_damages pd JOIN merch_routes r2 ON r2.id = pd.route_id WHERE r2.pdv_id = $1 AND r2.organization_id = $2 ${filters.replace(/r\./g, 'r2.').replace(/r2\.pdv_id[^A]+/g, '')}) as damages,
-            (SELECT COALESCE(SUM(qty_store + qty_stock), 0) FROM product_ruptures pr JOIN merch_routes r2 ON r2.id = pr.route_id WHERE r2.pdv_id = $1 AND r2.organization_id = $2 ${filters.replace(/r\./g, 'r2.').replace(/r2\.pdv_id[^A]+/g, '')}) as stockouts
-        `, [row.pdv_id, orgId, ...(date_from ? [date_from] : []), ...(date_to ? [date_to] : [])])).rows[0];
+            (SELECT COUNT(*) FROM route_product_executions rpe JOIN merch_routes r2 ON r2.id = rpe.route_id WHERE r2.pdv_id = $1 AND r2.organization_id = $2 ${f2}) as total,
+            (SELECT COUNT(*) FROM route_product_executions rpe JOIN merch_routes r2 ON r2.id = rpe.route_id WHERE r2.pdv_id = $1 AND r2.organization_id = $2 AND rpe.status = 'completed' ${f2}) as executed,
+            (SELECT COALESCE(SUM(qty_store + qty_stock), 0) FROM product_damages pd JOIN merch_routes r2 ON r2.id = pd.route_id WHERE r2.pdv_id = $1 AND r2.organization_id = $2 ${f2}) as damages,
+            (SELECT COALESCE(SUM(qty_store + qty_stock), 0) FROM product_ruptures pr JOIN merch_routes r2 ON r2.id = pr.route_id WHERE r2.pdv_id = $1 AND r2.organization_id = $2 ${f2}) as stockouts
+        `, p2)).rows[0];
         
         row.total_products = parseInt(stats?.total) || 0;
         row.executed_products = parseInt(stats?.executed) || 0;
@@ -267,7 +276,7 @@ router.get('/report/pdv', async (req, res) => {
       row.score = row.total_visits > 0 ? Math.round((parseInt(row.completed) / parseInt(row.total_visits)) * 100) : 0;
     }
     res.json(rows);
-  } catch (err) { logError('merch-analytics.report.pdv', err); res.status(500).json({ error: 'Erro' }); }
+  } catch (err) { logError('merch-analytics.report.pdv', err); res.status(500).json({ error: 'Erro ao carregar relatório de PDV' }); }
 });
 
 // ===== Report by Brand =====
