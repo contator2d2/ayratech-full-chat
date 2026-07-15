@@ -193,6 +193,7 @@ export default function MerchRelatorios() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="dashboard"><Target className="h-4 w-4 mr-1" />Dashboard</TabsTrigger>
+            <TabsTrigger value="analitico"><FileText className="h-4 w-4 mr-1" />Analítico</TabsTrigger>
             <TabsTrigger value="pdv"><Store className="h-4 w-4 mr-1" />PDV</TabsTrigger>
             <TabsTrigger value="marca"><Building2 className="h-4 w-4 mr-1" />Marca</TabsTrigger>
             <TabsTrigger value="promotor"><User className="h-4 w-4 mr-1" />Promotor</TabsTrigger>
@@ -202,6 +203,7 @@ export default function MerchRelatorios() {
           </TabsList>
 
           <TabsContent value="dashboard"><DashboardTab filters={filters} /></TabsContent>
+          <TabsContent value="analitico"><AnaliticoTab filters={filters} /></TabsContent>
           <TabsContent value="pdv"><PDVTab filters={filters} /></TabsContent>
           <TabsContent value="marca"><MarcaTab filters={filters} /></TabsContent>
           <TabsContent value="promotor"><PromotorTab filters={filters} /></TabsContent>
