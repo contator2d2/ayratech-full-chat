@@ -837,8 +837,9 @@ router.put('/:id', async (req, res) => {
         company_logo_url=$14, client_logo_url=$15, header_title=$16, footer_text=$17,
         primary_color=$18, include_org_logo=$19, include_brand_logo=$20,
         report_type=$21, include_cover=$22, include_chart=$23,
+        email_intro=$24, whatsapp_intro=$25,
         updated_at=NOW()
-       WHERE id=$24 AND organization_id=$25 RETURNING *`,
+       WHERE id=$26 AND organization_id=$27 RETURNING *`,
       [b.brand_id || null, b.name, JSON.stringify(b.metrics || {}), b.frequency,
         b.day_of_week ?? 1, b.day_of_month ?? 1, b.send_hour ?? 8,
         JSON.stringify(b.channels || {}), b.format || 'pdf',
@@ -848,6 +849,7 @@ router.put('/:id', async (req, res) => {
         b.header_title || null, b.footer_text || null, b.primary_color || null,
         b.include_org_logo !== false, b.include_brand_logo !== false,
         b.report_type || 'both', b.include_cover !== false, b.include_chart !== false,
+        b.email_intro || null, b.whatsapp_intro || null,
         req.params.id, orgId]
     );
     res.json(r.rows[0]);
