@@ -41,7 +41,6 @@ async function ensureTables() {
   )`);
   await query(`CREATE INDEX IF NOT EXISTS idx_mrs_org ON merch_report_schedules(organization_id)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_mrs_next ON merch_report_schedules(next_run_at) WHERE active`);
-  // Branding columns (added incrementally)
   for (const col of [
     ['company_logo_url', 'TEXT'],
     ['client_logo_url', 'TEXT'],
@@ -50,6 +49,9 @@ async function ensureTables() {
     ['primary_color', 'VARCHAR(20)'],
     ['include_org_logo', 'BOOLEAN DEFAULT true'],
     ['include_brand_logo', 'BOOLEAN DEFAULT true'],
+    ['report_type', "VARCHAR(20) DEFAULT 'both'"],
+    ['include_cover', 'BOOLEAN DEFAULT true'],
+    ['include_chart', 'BOOLEAN DEFAULT true'],
   ]) {
     await query(`ALTER TABLE merch_report_schedules ADD COLUMN IF NOT EXISTS ${col[0]} ${col[1]}`).catch(() => {});
   }
@@ -94,29 +96,17 @@ export function computePeriod(frequency, ref = new Date()) {
   const start = new Date(d); start.setDate(start.getDate() - 6);
   return { start: fmt(start), end: fmt(end) };
 }
-
 function fmt(d) { return d.toISOString().slice(0, 10); }
 
 export function computeNextRun(sched, from = new Date()) {
   const hour = Number(sched.send_hour ?? 8);
-  const base = new Date(from);
-  base.setSeconds(0, 0);
+  const base = new Date(from); base.setSeconds(0, 0);
   if (sched.frequency === 'ondemand') return null;
-  if (sched.frequency === 'weekly') {
-    const target = Number(sched.day_of_week ?? 1); // 0=Sun..6=Sat
-    const next = new Date(base);
-    next.setHours(hour, 0, 0, 0);
-    let diff = (target - next.getDay() + 7) % 7;
-    if (diff === 0 && next <= base) diff = 7;
-    next.setDate(next.getDate() + diff);
-    return next;
-  }
-  if (sched.frequency === 'biweekly') {
-    const next = new Date(base);
-    next.setHours(hour, 0, 0, 0);
+  if (sched.frequency === 'weekly' || sched.frequency === 'biweekly') {
     const target = Number(sched.day_of_week ?? 1);
+    const next = new Date(base); next.setHours(hour, 0, 0, 0);
     let diff = (target - next.getDay() + 7) % 7;
-    if (diff === 0 && next <= base) diff = 14;
+    if (diff === 0 && next <= base) diff = sched.frequency === 'biweekly' ? 14 : 7;
     next.setDate(next.getDate() + diff);
     return next;
   }
@@ -129,7 +119,7 @@ export function computeNextRun(sched, from = new Date()) {
   return null;
 }
 
-// ==== Metrics query ====
+// ==== Metrics: summary + analytical ====
 export async function computeMetrics(orgId, brandId, startISO, endISO) {
   const params = [orgId, startISO, endISO];
   let brandFilter = '';
@@ -147,9 +137,7 @@ export async function computeMetrics(orgId, brandId, startISO, endISO) {
       )::int AS not_done,
       COUNT(*) FILTER (WHERE r.status='in_progress')::int AS in_progress
     FROM merch_routes r
-    WHERE r.organization_id=$1
-      AND r.visit_date BETWEEN $2::date AND $3::date
-      ${brandFilter}
+    WHERE r.organization_id=$1 AND r.visit_date BETWEEN $2::date AND $3::date ${brandFilter}
   `;
   const r = await query(q, params);
   const row = r.rows[0] || {};
@@ -161,12 +149,43 @@ export async function computeMetrics(orgId, brandId, startISO, endISO) {
   return { scheduled, completed, not_done, in_progress, completion_pct };
 }
 
+// Detail rows for the analytical section — one row per route.
+export async function computeAnalyticalRows(orgId, brandId, startISO, endISO) {
+  const params = [orgId, startISO, endISO];
+  let brandFilter = '';
+  if (brandId) {
+    params.push(brandId);
+    brandFilter = ` AND (r.brand_id = $4 OR EXISTS (SELECT 1 FROM route_brands rb WHERE rb.route_id=r.id AND rb.brand_id=$4))`;
+  }
+  const q = `
+    SELECT
+      r.id, r.visit_date, r.status, r.progress_pct,
+      COALESCE(p.name, '') AS pdv_name,
+      COALESCE(p.city, '') AS pdv_city,
+      COALESCE(p.state, '') AS pdv_state,
+      COALESCE(e.full_name, e.name, '') AS promoter_name,
+      COALESCE(b.name, '') AS brand_name,
+      (SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id) AS items_scheduled,
+      (SELECT COUNT(*)::int FROM route_product_executions rpe WHERE rpe.route_id=r.id AND rpe.checked=true) AS items_executed
+    FROM merch_routes r
+    LEFT JOIN pdvs p ON p.id = r.pdv_id
+    LEFT JOIN employees e ON e.id = r.promoter_id
+    LEFT JOIN brands b ON b.id = r.brand_id
+    WHERE r.organization_id=$1 AND r.visit_date BETWEEN $2::date AND $3::date ${brandFilter}
+    ORDER BY p.name NULLS LAST, r.visit_date
+  `;
+  const r = await query(q, params).catch(async () => {
+    // fallback if employees.full_name column doesn't exist
+    return query(q.replace('COALESCE(e.full_name, e.name, \'\')', 'COALESCE(e.name, \'\')'), params);
+  });
+  return r.rows;
+}
+
 async function resolveBrand(orgId, brandId) {
   if (!brandId) return { id: null, name: 'Todas as marcas', logo_url: null };
   const r = await query('SELECT id, name, logo_url FROM brands WHERE id=$1 AND organization_id=$2', [brandId, orgId]);
   return r.rows[0] || { id: brandId, name: 'Marca', logo_url: null };
 }
-
 async function resolveOrg(orgId) {
   const r = await query('SELECT id, name FROM organizations WHERE id=$1', [orgId]);
   const org = r.rows[0] || { name: '' };
@@ -177,7 +196,6 @@ async function resolveOrg(orgId) {
   return org;
 }
 
-// Hex #RRGGBB -> rgb(0-1)
 function hexToRgb(hex, fallback = [0.12, 0.16, 0.24]) {
   if (!hex || typeof hex !== 'string') return rgb(...fallback);
   const m = hex.replace('#', '').match(/^([0-9a-f]{6})$/i);
@@ -186,44 +204,71 @@ function hexToRgb(hex, fallback = [0.12, 0.16, 0.24]) {
   return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 }
 
+// Read a logo either from local /uploads or via HTTP. Handles the common case
+// where the DB stores a URL that points at this same backend and network fetch
+// would otherwise loop.
 async function fetchImageBytes(url) {
   if (!url) return null;
   try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    const ct = (res.headers.get('content-type') || '').toLowerCase();
-    const isPng = ct.includes('png') || url.toLowerCase().endsWith('.png');
-    return { buf, isPng };
+    // Try to map any URL/path to a local uploads file first
+    const m = String(url).match(/\/uploads\/([^?#]+)$/);
+    if (m) {
+      const safe = m[1].replace(/\.\.\//g, '');
+      const p = path.join(UPLOADS_DIR, safe);
+      if (fs.existsSync(p)) {
+        const buf = fs.readFileSync(p);
+        const isPng = p.toLowerCase().endsWith('.png');
+        return { buf, isPng };
+      }
+    }
+    if (/^https?:\/\//i.test(url)) {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      const isPng = ct.includes('png') || url.toLowerCase().endsWith('.png');
+      return { buf, isPng };
+    }
+    return null;
   } catch { return null; }
 }
 
 async function embedLogo(pdf, url) {
   const data = await fetchImageBytes(url);
   if (!data) return null;
-  try {
-    return data.isPng ? await pdf.embedPng(data.buf) : await pdf.embedJpg(data.buf);
-  } catch {
-    // try the other format
+  try { return data.isPng ? await pdf.embedPng(data.buf) : await pdf.embedJpg(data.buf); }
+  catch {
     try { return data.isPng ? await pdf.embedJpg(data.buf) : await pdf.embedPng(data.buf); }
     catch { return null; }
   }
 }
 
-// ==== PDF ====
-export async function buildReportPDF({ org, brand, period, metrics, extraNote, branding = {} }) {
+// Row status color per user spec: green=done, yellow=partial, white=not done
+function statusColor(row) {
+  const scheduled = Number(row.items_scheduled || 0);
+  const executed = Number(row.items_executed || 0);
+  if (row.status === 'completed' && (scheduled === 0 || executed >= scheduled)) return rgb(0.78, 0.93, 0.78); // green
+  if (executed > 0 || row.status === 'in_progress' || row.status === 'completed') return rgb(1.0, 0.94, 0.70); // yellow (partial)
+  return rgb(1, 1, 1); // white
+}
+
+function statusLabel(row) {
+  const c = statusColor(row);
+  if (c.green > 0.9 && c.red < 0.9) return 'Executada';
+  if (c.red > 0.95 && c.green > 0.9) return 'Parcial';
+  return 'Não realizada';
+}
+
+// ==== PDF builder ====
+export async function buildReportPDF({ org, brand, period, metrics, extraNote, branding = {}, analyticalRows = [], options = {} }) {
   const pdf = await PDFDocument.create();
-  const page = pdf.addPage([595, 842]); // A4
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const primary = hexToRgb(branding.primary_color || org.letterhead?.primary_color);
-  const draw = (t, x, y, opts = {}) => page.drawText(String(t ?? ''), {
-    x, y, size: opts.size || 11, font: opts.bold ? bold : font,
-    color: opts.color || rgb(0.1, 0.1, 0.1)
-  });
-
-  // Header band
-  page.drawRectangle({ x: 0, y: 782, width: 595, height: 60, color: primary });
+  const A4 = [595, 842];
+  const reportType = options.report_type || 'both';
+  const includeCover = options.include_cover !== false;
+  const includeChart = options.include_chart !== false;
 
   const orgLogoUrl = branding.include_org_logo !== false
     ? (branding.company_logo_url || org.letterhead?.logo_url || null) : null;
@@ -233,60 +278,198 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote, b
   const orgLogo = await embedLogo(pdf, orgLogoUrl);
   const clientLogo = await embedLogo(pdf, clientLogoUrl);
 
-  if (orgLogo) {
-    const scale = Math.min(40 / orgLogo.height, 120 / orgLogo.width);
-    const w = orgLogo.width * scale, h = orgLogo.height * scale;
-    page.drawImage(orgLogo, { x: 20, y: 792, width: w, height: h });
+  const drawHeader = (page, subtitle) => {
+    page.drawRectangle({ x: 0, y: 782, width: 595, height: 60, color: primary });
+    if (orgLogo) {
+      const scale = Math.min(40 / orgLogo.height, 120 / orgLogo.width);
+      page.drawImage(orgLogo, { x: 20, y: 792, width: orgLogo.width * scale, height: orgLogo.height * scale });
+    }
+    if (clientLogo) {
+      const scale = Math.min(40 / clientLogo.height, 120 / clientLogo.width);
+      const w = clientLogo.width * scale;
+      page.drawImage(clientLogo, { x: 595 - 20 - w, y: 792, width: w, height: clientLogo.height * scale });
+    }
+    const title = branding.header_title || org.name || 'Relatório';
+    page.drawText(title, { x: orgLogo ? 150 : 40, y: 810, size: 14, font: bold, color: rgb(1, 1, 1) });
+    page.drawText(subtitle || `Relatório de rotas • ${brand.name}`, {
+      x: orgLogo ? 150 : 40, y: 792, size: 10, font, color: rgb(0.95, 0.95, 0.95)
+    });
+  };
+
+  const drawFooter = (page, pageNum, totalPages) => {
+    const footerText = branding.footer_text || org.letterhead?.footer_text;
+    if (footerText) page.drawText(footerText, { x: 40, y: 55, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
+    page.drawText(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, {
+      x: 40, y: 40, size: 8, font, color: rgb(0.5, 0.5, 0.5)
+    });
+    if (totalPages) {
+      page.drawText(`Página ${pageNum} de ${totalPages}`, { x: 500, y: 40, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
+    }
+  };
+
+  // ===== Cover =====
+  if (includeCover) {
+    const cover = pdf.addPage(A4);
+    cover.drawRectangle({ x: 0, y: 0, width: 595, height: 842, color: primary });
+    // Logos centered
+    if (orgLogo) {
+      const scale = Math.min(80 / orgLogo.height, 260 / orgLogo.width);
+      const w = orgLogo.width * scale, h = orgLogo.height * scale;
+      cover.drawImage(orgLogo, { x: (595 - w) / 2, y: 620, width: w, height: h });
+    }
+    cover.drawText(branding.header_title || org.name || 'Relatório', {
+      x: 40, y: 500, size: 28, font: bold, color: rgb(1, 1, 1)
+    });
+    cover.drawText('Relatório de Rotas', { x: 40, y: 460, size: 20, font, color: rgb(0.95, 0.95, 0.95) });
+    cover.drawText(`Marca: ${brand.name}`, { x: 40, y: 420, size: 14, font, color: rgb(1, 1, 1) });
+    cover.drawText(`Período: ${period.start} a ${period.end}`, { x: 40, y: 396, size: 14, font, color: rgb(1, 1, 1) });
+    if (clientLogo) {
+      const scale = Math.min(70 / clientLogo.height, 220 / clientLogo.width);
+      const w = clientLogo.width * scale, h = clientLogo.height * scale;
+      cover.drawImage(clientLogo, { x: (595 - w) / 2, y: 200, width: w, height: h });
+    }
+    cover.drawText(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, {
+      x: 40, y: 60, size: 9, font, color: rgb(0.9, 0.9, 0.9)
+    });
   }
-  if (clientLogo) {
-    const scale = Math.min(40 / clientLogo.height, 120 / clientLogo.width);
-    const w = clientLogo.width * scale, h = clientLogo.height * scale;
-    page.drawImage(clientLogo, { x: 595 - 20 - w, y: 792, width: w, height: h });
+
+  // ===== Summary =====
+  if (reportType === 'summary' || reportType === 'both') {
+    const page = pdf.addPage(A4);
+    drawHeader(page);
+    let y = 750;
+    page.drawText(`Período: ${period.start} a ${period.end}`, { x: 40, y, size: 10, font, color: rgb(0.35, 0.35, 0.35) }); y -= 26;
+
+    const cards = [
+      { label: 'Agendadas', value: metrics.scheduled },
+      { label: 'Concluídas', value: metrics.completed },
+      { label: 'Não realizadas', value: metrics.not_done },
+      { label: '% Conclusão', value: `${metrics.completion_pct}%` },
+    ];
+    let cx = 40;
+    const cardW = 125, cardH = 70;
+    for (const c of cards) {
+      page.drawRectangle({ x: cx, y: y - cardH, width: cardW, height: cardH, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 1 });
+      page.drawText(String(c.label), { x: cx + 10, y: y - 20, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+      page.drawText(String(c.value), { x: cx + 10, y: y - 50, size: 20, font: bold, color: primary });
+      cx += cardW + 10;
+    }
+    y -= (cardH + 30);
+
+    // Bar chart
+    if (includeChart) {
+      page.drawText('Distribuição', { x: 40, y, size: 12, font: bold, color: primary }); y -= 20;
+      const chartBase = y;
+      const chartH = 140;
+      const chartW = 515;
+      page.drawRectangle({ x: 40, y: chartBase - chartH, width: chartW, height: chartH, borderColor: rgb(0.9, 0.9, 0.9), borderWidth: 1 });
+      const maxVal = Math.max(1, metrics.scheduled, metrics.completed, metrics.not_done, metrics.in_progress);
+      const items = [
+        { label: 'Agendadas', v: metrics.scheduled, color: rgb(0.34, 0.54, 0.85) },
+        { label: 'Concluídas', v: metrics.completed, color: rgb(0.30, 0.75, 0.42) },
+        { label: 'Parciais/And.', v: metrics.in_progress, color: rgb(0.96, 0.77, 0.19) },
+        { label: 'Não real.', v: metrics.not_done, color: rgb(0.86, 0.32, 0.31) },
+      ];
+      const barW = 80;
+      const gap = (chartW - barW * items.length) / (items.length + 1);
+      items.forEach((it, i) => {
+        const h = (it.v / maxVal) * (chartH - 40);
+        const x = 40 + gap + i * (barW + gap);
+        page.drawRectangle({ x, y: chartBase - chartH + 30, width: barW, height: h, color: it.color });
+        page.drawText(String(it.v), { x: x + barW / 2 - 8, y: chartBase - chartH + 32 + h + 2, size: 9, font: bold, color: rgb(0.2, 0.2, 0.2) });
+        page.drawText(it.label, { x: x + 2, y: chartBase - chartH + 12, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
+      });
+      y = chartBase - chartH - 20;
+    }
+
+    page.drawText('Resumo', { x: 40, y, size: 12, font: bold, color: primary }); y -= 18;
+    for (const l of [
+      `• Total de rotas agendadas no período: ${metrics.scheduled}`,
+      `• Rotas concluídas: ${metrics.completed}`,
+      `• Rotas não realizadas: ${metrics.not_done}`,
+      `• Em andamento / parciais: ${metrics.in_progress}`,
+      `• Taxa de conclusão: ${metrics.completion_pct}%`,
+    ]) { page.drawText(l, { x: 40, y, size: 11, font }); y -= 16; }
+
+    if (extraNote) { y -= 8; page.drawText(String(extraNote), { x: 40, y, size: 9, font, color: rgb(0.45, 0.45, 0.45) }); }
   }
 
-  const headerTitle = branding.header_title || org.name || 'Relatório';
-  draw(headerTitle, orgLogo ? 150 : 40, 810, { size: 14, bold: true, color: rgb(1, 1, 1) });
-  draw(`Relatório de rotas • ${brand.name}`, orgLogo ? 150 : 40, 792, { size: 10, color: rgb(0.95, 0.95, 0.95) });
+  // ===== Analytical (per-PDV table, color-coded) =====
+  if ((reportType === 'analytical' || reportType === 'both') && analyticalRows.length) {
+    // Table columns
+    const cols = [
+      { key: 'pdv_name', label: 'PDV', w: 150 },
+      { key: 'pdv_city', label: 'Cidade/UF', w: 90 },
+      { key: 'promoter_name', label: 'Promotor', w: 120 },
+      { key: 'visit_date', label: 'Data', w: 60 },
+      { key: 'items', label: 'Itens', w: 45 },
+      { key: 'status', label: 'Status', w: 65 },
+    ];
+    const startX = 40;
+    const rowH = 18;
+    const headerH = 22;
+    const pageTopY = 750;
+    const pageBottomY = 90;
+    let page = null;
+    let y = 0;
 
-  let y = 760;
-  draw(`Período: ${period.start} a ${period.end}`, 40, y, { size: 10, color: rgb(0.35, 0.35, 0.35) }); y -= 24;
+    const newPage = () => {
+      page = pdf.addPage(A4);
+      drawHeader(page, `Analítico • ${brand.name}`);
+      y = pageTopY;
+      // Table header
+      let x = startX;
+      page.drawRectangle({ x: startX, y: y - headerH, width: cols.reduce((s, c) => s + c.w, 0), height: headerH, color: primary });
+      for (const c of cols) {
+        page.drawText(c.label, { x: x + 4, y: y - 15, size: 10, font: bold, color: rgb(1, 1, 1) });
+        x += c.w;
+      }
+      y -= headerH;
+    };
 
-  // KPI cards
-  const cards = [
-    { label: 'Agendadas', value: metrics.scheduled },
-    { label: 'Concluídas', value: metrics.completed },
-    { label: 'Não realizadas', value: metrics.not_done },
-    { label: '% Conclusão', value: `${metrics.completion_pct}%` },
-  ];
-  let cx = 40;
-  const cardW = 125, cardH = 70;
-  cards.forEach((c) => {
-    page.drawRectangle({ x: cx, y: y - cardH, width: cardW, height: cardH, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 1 });
-    draw(c.label, cx + 10, y - 20, { size: 10, color: rgb(0.4, 0.4, 0.4) });
-    draw(c.value, cx + 10, y - 50, { size: 20, bold: true, color: primary });
-    cx += cardW + 10;
-  });
-  y -= (cardH + 30);
+    newPage();
 
-  draw('Resumo', 40, y, { size: 12, bold: true, color: primary }); y -= 18;
-  const lines = [
-    `• Total de rotas agendadas no período: ${metrics.scheduled}`,
-    `• Rotas concluídas: ${metrics.completed}`,
-    `• Rotas não realizadas: ${metrics.not_done}`,
-    `• Em andamento: ${metrics.in_progress}`,
-    `• Taxa de conclusão: ${metrics.completion_pct}%`,
-  ];
-  for (const l of lines) { draw(l, 40, y, { size: 11 }); y -= 16; }
+    for (const row of analyticalRows) {
+      if (y - rowH < pageBottomY) newPage();
+      const totalW = cols.reduce((s, c) => s + c.w, 0);
+      page.drawRectangle({ x: startX, y: y - rowH, width: totalW, height: rowH, color: statusColor(row) });
+      page.drawRectangle({ x: startX, y: y - rowH, width: totalW, height: rowH, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 0.5 });
+      let x = startX;
+      const values = {
+        pdv_name: (row.pdv_name || '').slice(0, 30),
+        pdv_city: `${(row.pdv_city || '').slice(0, 14)}${row.pdv_state ? '/' + row.pdv_state : ''}`,
+        promoter_name: (row.promoter_name || '—').slice(0, 22),
+        visit_date: row.visit_date ? new Date(row.visit_date).toLocaleDateString('pt-BR') : '—',
+        items: `${row.items_executed || 0}/${row.items_scheduled || 0}`,
+        status: statusLabel(row),
+      };
+      for (const c of cols) {
+        page.drawText(String(values[c.key] ?? ''), { x: x + 4, y: y - 13, size: 9, font, color: rgb(0.15, 0.15, 0.15) });
+        x += c.w;
+      }
+      y -= rowH;
+    }
 
-  if (extraNote) { y -= 10; draw(extraNote, 40, y, { size: 9, color: rgb(0.45, 0.45, 0.45) }); }
-
-  const footerText = branding.footer_text || org.letterhead?.footer_text;
-  if (footerText) {
-    draw(footerText, 40, 55, { size: 9, color: rgb(0.4, 0.4, 0.4) });
+    // Legend
+    if (y - 40 < pageBottomY) newPage();
+    y -= 12;
+    const legend = [
+      { label: 'Executada', color: rgb(0.78, 0.93, 0.78) },
+      { label: 'Parcial', color: rgb(1.0, 0.94, 0.70) },
+      { label: 'Não realizada', color: rgb(1, 1, 1) },
+    ];
+    let lx = startX;
+    for (const l of legend) {
+      page.drawRectangle({ x: lx, y: y - 10, width: 14, height: 10, color: l.color, borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 0.5 });
+      page.drawText(l.label, { x: lx + 18, y: y - 8, size: 9, font, color: rgb(0.25, 0.25, 0.25) });
+      lx += 110;
+    }
   }
-  draw(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, 40, 40, {
-    size: 8, color: rgb(0.5, 0.5, 0.5)
-  });
+
+  // Footers on every page
+  const total = pdf.getPageCount();
+  pdf.getPages().forEach((p, i) => drawFooter(p, i + 1, total));
+
   const bytes = await pdf.save();
   return Buffer.from(bytes);
 }
@@ -313,19 +496,8 @@ async function getDefaultConnection(orgId, connectionId) {
   return r.rows[0] || null;
 }
 
-// ==== Execute a schedule (used by API + scheduler) ====
-export async function executeSchedule(sched, { periodOverride } = {}) {
-  const orgId = sched.organization_id;
-  await resolveOrg(orgId); // warm
-  const org = await resolveOrg(orgId);
-  const brand = await resolveBrand(orgId, sched.brand_id);
-  const period = periodOverride || computePeriod(sched.frequency);
-  const metrics = await computeMetrics(orgId, sched.brand_id, period.start, period.end);
-  const channels = sched.channels || {};
-  const recipients = Array.isArray(sched.recipients) ? sched.recipients : [];
-  const results = [];
-
-  const branding = {
+function brandingFrom(sched) {
+  return {
     company_logo_url: sched.company_logo_url,
     client_logo_url: sched.client_logo_url,
     header_title: sched.header_title,
@@ -334,14 +506,36 @@ export async function executeSchedule(sched, { periodOverride } = {}) {
     include_org_logo: sched.include_org_logo,
     include_brand_logo: sched.include_brand_logo,
   };
-  // Build PDF once if needed
+}
+function optionsFrom(sched) {
+  return {
+    report_type: sched.report_type || 'both',
+    include_cover: sched.include_cover !== false,
+    include_chart: sched.include_chart !== false,
+  };
+}
+
+export async function executeSchedule(sched, { periodOverride } = {}) {
+  const orgId = sched.organization_id;
+  const org = await resolveOrg(orgId);
+  const brand = await resolveBrand(orgId, sched.brand_id);
+  const period = periodOverride || computePeriod(sched.frequency);
+  const metrics = await computeMetrics(orgId, sched.brand_id, period.start, period.end);
+  const opts = optionsFrom(sched);
+  const analyticalRows = (opts.report_type === 'analytical' || opts.report_type === 'both')
+    ? await computeAnalyticalRows(orgId, sched.brand_id, period.start, period.end).catch(() => [])
+    : [];
+  const channels = sched.channels || {};
+  const recipients = Array.isArray(sched.recipients) ? sched.recipients : [];
+  const results = [];
+  const branding = brandingFrom(sched);
+
   let pdfBuffer = null;
   if (channels.email && sched.format === 'pdf') {
-    pdfBuffer = await buildReportPDF({ org, brand, period, metrics, branding });
+    pdfBuffer = await buildReportPDF({ org, brand, period, metrics, branding, analyticalRows, options: opts });
   }
   const textSummary = buildTextSummary({ brand, period, metrics });
 
-  // Email
   if (channels.email) {
     const html = `<div style="font-family:Arial,sans-serif;color:#1f2937">
       <h2 style="color:#111827">${org.name || ''} — Relatório de rotas</h2>
@@ -378,7 +572,6 @@ export async function executeSchedule(sched, { periodOverride } = {}) {
     }
   }
 
-  // WhatsApp
   if (channels.whatsapp) {
     const connection = await getDefaultConnection(orgId, sched.connection_id);
     for (const rcp of recipients) {
@@ -404,7 +597,6 @@ export async function executeSchedule(sched, { periodOverride } = {}) {
     }
   }
 
-  // Advance schedule
   const next = computeNextRun(sched, new Date());
   await query(
     `UPDATE merch_report_schedules SET last_run_at=NOW(), next_run_at=$1, updated_at=NOW() WHERE id=$2`,
@@ -459,8 +651,9 @@ router.post('/', async (req, res) => {
     const r = await query(
       `INSERT INTO merch_report_schedules
        (organization_id, brand_id, name, metrics, frequency, day_of_week, day_of_month, send_hour, channels, format, recipients, connection_id, active, next_run_at, created_by,
-        company_logo_url, client_logo_url, header_title, footer_text, primary_color, include_org_logo, include_brand_logo)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
+        company_logo_url, client_logo_url, header_title, footer_text, primary_color, include_org_logo, include_brand_logo,
+        report_type, include_cover, include_chart)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING *`,
       [orgId, b.brand_id || null, b.name || 'Relatório',
         JSON.stringify(b.metrics || { scheduled: true, completed: true, not_done: true }),
         sched.frequency, sched.day_of_week, sched.day_of_month, sched.send_hour,
@@ -473,7 +666,8 @@ router.post('/', async (req, res) => {
         req.userId,
         b.company_logo_url || null, b.client_logo_url || null,
         b.header_title || null, b.footer_text || null, b.primary_color || null,
-        b.include_org_logo !== false, b.include_brand_logo !== false]
+        b.include_org_logo !== false, b.include_brand_logo !== false,
+        b.report_type || 'both', b.include_cover !== false, b.include_chart !== false]
     );
     res.json(r.rows[0]);
   } catch (e) { logError('merch-report-schedules.create', e); res.status(500).json({ error: e.message }); }
@@ -495,8 +689,9 @@ router.put('/:id', async (req, res) => {
         next_run_at=$13,
         company_logo_url=$14, client_logo_url=$15, header_title=$16, footer_text=$17,
         primary_color=$18, include_org_logo=$19, include_brand_logo=$20,
+        report_type=$21, include_cover=$22, include_chart=$23,
         updated_at=NOW()
-       WHERE id=$21 AND organization_id=$22 RETURNING *`,
+       WHERE id=$24 AND organization_id=$25 RETURNING *`,
       [b.brand_id || null, b.name, JSON.stringify(b.metrics || {}), b.frequency,
         b.day_of_week ?? 1, b.day_of_month ?? 1, b.send_hour ?? 8,
         JSON.stringify(b.channels || {}), b.format || 'pdf',
@@ -505,6 +700,7 @@ router.put('/:id', async (req, res) => {
         b.company_logo_url || null, b.client_logo_url || null,
         b.header_title || null, b.footer_text || null, b.primary_color || null,
         b.include_org_logo !== false, b.include_brand_logo !== false,
+        b.report_type || 'both', b.include_cover !== false, b.include_chart !== false,
         req.params.id, orgId]
     );
     res.json(r.rows[0]);
@@ -533,7 +729,18 @@ router.post('/preview-pdf', async (req, res) => {
       include_org_logo: b.include_org_logo,
       include_brand_logo: b.include_brand_logo,
     };
-    const pdf = await buildReportPDF({ org, brand, period, metrics, branding, extraNote: 'PREVIEW — dados reais do período' });
+    const options = {
+      report_type: b.report_type || 'both',
+      include_cover: b.include_cover !== false,
+      include_chart: b.include_chart !== false,
+    };
+    const analyticalRows = (options.report_type === 'analytical' || options.report_type === 'both')
+      ? await computeAnalyticalRows(orgId, b.brand_id || null, period.start, period.end).catch(() => [])
+      : [];
+    const pdf = await buildReportPDF({
+      org, brand, period, metrics, branding, analyticalRows, options,
+      extraNote: 'PREVIEW — dados reais do período'
+    });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="preview.pdf"');
     res.send(pdf);
