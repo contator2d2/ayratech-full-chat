@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { resolveMediaUrl } from "@/lib/media";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ function LogoField({ label, value, onChange, hint }: { label: string; value: str
       <div className="flex items-center gap-2">
         {value ? (
           <div className="h-12 w-20 rounded border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
-            <img src={value} alt={label} className="max-h-full max-w-full object-contain" />
+            <img src={resolveMediaUrl(value) || value} alt={label} className="max-h-full max-w-full object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
           </div>
         ) : (
           <div className="h-12 w-20 rounded border border-dashed bg-muted/20 flex items-center justify-center text-muted-foreground shrink-0">
@@ -128,6 +129,9 @@ interface Schedule {
   primary_color?: string | null;
   include_org_logo?: boolean;
   include_brand_logo?: boolean;
+  report_type?: "summary" | "analytical" | "both";
+  include_cover?: boolean;
+  include_chart?: boolean;
 }
 
 const emptyForm: Partial<Schedule> = {
@@ -149,7 +153,12 @@ const emptyForm: Partial<Schedule> = {
   primary_color: "#1e293b",
   include_org_logo: true,
   include_brand_logo: true,
+  report_type: "both",
+  include_cover: true,
+  include_chart: true,
 };
+
+const BRANDING_STORAGE_KEY = "merch-report-branding-defaults";
 
 export default function MerchRelatoriosProgramacao() {
   const qc = useQueryClient();
@@ -246,7 +255,17 @@ export default function MerchRelatoriosProgramacao() {
   };
 
   const [brandingOpen, setBrandingOpen] = useState(false);
-  const [brandingForm, setBrandingForm] = useState<Partial<Schedule>>({ ...emptyForm, brand_id: ALL_BRANDS });
+  const [brandingForm, setBrandingForm] = useState<Partial<Schedule>>(() => {
+    try {
+      const saved = localStorage.getItem(BRANDING_STORAGE_KEY);
+      if (saved) return { ...emptyForm, brand_id: ALL_BRANDS, ...JSON.parse(saved) };
+    } catch { /* ignore */ }
+    return { ...emptyForm, brand_id: ALL_BRANDS };
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(BRANDING_STORAGE_KEY, JSON.stringify(brandingForm)); } catch { /* ignore */ }
+  }, [brandingForm]);
 
   const previewBranding = async () => {
     try {
@@ -525,6 +544,36 @@ export default function MerchRelatoriosProgramacao() {
                 </div>
               </div>
 
+              <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+                <Label className="font-semibold">Conteúdo do relatório</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-3 sm:col-span-1">
+                    <Label className="text-xs">Tipo</Label>
+                    <Select value={form.report_type || "both"} onValueChange={(v: any) => setForm({ ...form, report_type: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="summary">Resumo (KPIs + gráfico)</SelectItem>
+                        <SelectItem value="analytical">Analítico (lista de PDVs)</SelectItem>
+                        <SelectItem value="both">Ambos (recomendado)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm mt-5">
+                    <Checkbox checked={form.include_cover !== false} onCheckedChange={(v) => setForm({ ...form, include_cover: !!v })} />
+                    Incluir capa
+                  </label>
+                  <label className="flex items-center gap-2 text-sm mt-5">
+                    <Checkbox checked={form.include_chart !== false} onCheckedChange={(v) => setForm({ ...form, include_chart: !!v })} />
+                    Incluir gráfico
+                  </label>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  O analítico traz uma tabela com todos os PDVs do período, com cores: verde = executada, amarelo = parcial, branco = não realizada.
+                </p>
+              </div>
+
+
+
               <div className="flex items-center gap-2">
                 <Switch checked={form.active !== false} onCheckedChange={(v) => setForm({ ...form, active: v })} />
                 <Label className="cursor-pointer">Programação ativa</Label>
@@ -615,6 +664,32 @@ export default function MerchRelatoriosProgramacao() {
                   <Input type="color" value={brandingForm.primary_color || "#1e293b"} onChange={(e) => setBrandingForm({ ...brandingForm, primary_color: e.target.value })} className="h-10 p-1" />
                 </div>
               </div>
+
+              <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
+                <Label className="font-semibold text-sm">Conteúdo do relatório</Label>
+                <div className="grid grid-cols-3 gap-3 items-end">
+                  <div className="col-span-3 sm:col-span-1">
+                    <Label className="text-xs">Tipo</Label>
+                    <Select value={brandingForm.report_type || "both"} onValueChange={(v: any) => setBrandingForm({ ...brandingForm, report_type: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="summary">Resumo</SelectItem>
+                        <SelectItem value="analytical">Analítico</SelectItem>
+                        <SelectItem value="both">Ambos</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={brandingForm.include_cover !== false} onCheckedChange={(v) => setBrandingForm({ ...brandingForm, include_cover: !!v })} />
+                    Capa
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={brandingForm.include_chart !== false} onCheckedChange={(v) => setBrandingForm({ ...brandingForm, include_chart: !!v })} />
+                    Gráfico
+                  </label>
+                </div>
+              </div>
+
               <p className="text-xs text-muted-foreground">
                 Este preview usa dados reais do período atual. Para salvar as personalizações, crie uma programação em "Nova programação".
               </p>
