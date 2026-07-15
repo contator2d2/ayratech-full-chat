@@ -88,6 +88,7 @@ async function exportCurrentTab(tab: string, filters: any) {
 
 export default function MerchRelatorios() {
   const [tab, setTab] = useState('dashboard');
+  const [aiOpen, setAiOpen] = useState(false);
   const [period, setPeriod] = useState('month');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
