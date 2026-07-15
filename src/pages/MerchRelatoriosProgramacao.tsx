@@ -374,8 +374,14 @@ export default function MerchRelatoriosProgramacao() {
                       </TableCell>
                       <TableCell>{s.active ? <Badge>Ativo</Badge> : <Badge variant="outline">Pausado</Badge>}</TableCell>
                       <TableCell className="text-right space-x-1">
-                        <Button size="sm" variant="outline" onClick={() => sendNow.mutate(s.id)} disabled={sendNow.isPending}>
+                        <Button size="sm" variant="outline" onClick={() => downloadPdf(s)} title="Baixar PDF (não envia)">
+                          <Download className="h-3 w-3 mr-1" /> Baixar PDF
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => sendNow.mutate(s.id)} disabled={sendNow.isPending} title="Gerar e enviar agora">
                           <Play className="h-3 w-3 mr-1" /> Enviar agora
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setLogsFor(s)} title="Logs de envio">
+                          <History className="h-3 w-3" />
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => startEdit(s)}><Edit className="h-3 w-3" /></Button>
                         <Button size="sm" variant="ghost" onClick={() => confirm("Remover?") && del.mutate(s.id)}>
