@@ -53,6 +53,11 @@ function createTransporter(config) {
       user: config.username,
       pass: decryptPassword(config.password_encrypted),
     },
+    tls: {
+      // Allow self-signed / hostname-mismatched certs (common on shared hosting)
+      rejectUnauthorized: false,
+      servername: config.host,
+    },
   });
 }
 
