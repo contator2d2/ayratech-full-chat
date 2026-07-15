@@ -38,7 +38,7 @@ function LogoField({ label, value, onChange, hint }: { label: string; value: str
       <div className="flex items-center gap-2">
         {value ? (
           <div className="h-12 w-20 rounded border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
-            <img src={value} alt={label} className="max-h-full max-w-full object-contain" />
+            <img src={resolveMediaUrl(value) || value} alt={label} className="max-h-full max-w-full object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
           </div>
         ) : (
           <div className="h-12 w-20 rounded border border-dashed bg-muted/20 flex items-center justify-center text-muted-foreground shrink-0">
