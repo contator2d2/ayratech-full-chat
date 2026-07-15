@@ -311,31 +311,45 @@ export async function buildReportPDF({ org, brand, period, metrics, extraNote, b
     }
   };
 
-  // ===== Cover =====
+  // ===== Cover (white background, only a colored header band) =====
   if (includeCover) {
     const cover = pdf.addPage(A4);
-    cover.drawRectangle({ x: 0, y: 0, width: 595, height: 842, color: primary });
-    // Logos centered
-    if (orgLogo) {
-      const scale = Math.min(80 / orgLogo.height, 260 / orgLogo.width);
-      const w = orgLogo.width * scale, h = orgLogo.height * scale;
-      cover.drawImage(orgLogo, { x: (595 - w) / 2, y: 620, width: w, height: h });
+    // Colored band only on the top
+    drawHeader(cover, 'Relatório de Rotas');
+
+    // Big title area (white background)
+    let cy = 720;
+    cover.drawText('Relatório de Rotas', { x: 40, y: cy, size: 26, font: bold, color: primary });
+    cy -= 26;
+    cover.drawText(`Marca: ${brand.name}`, { x: 40, y: cy, size: 14, font, color: rgb(0.2, 0.2, 0.2) }); cy -= 20;
+    cover.drawText(`Período: ${period.start} a ${period.end}`, { x: 40, y: cy, size: 14, font, color: rgb(0.2, 0.2, 0.2) }); cy -= 30;
+
+    // Company info block
+    cover.drawText('Empresa', { x: 40, y: cy, size: 11, font: bold, color: primary }); cy -= 16;
+    const lines = [
+      org.name && `Razão social: ${org.name}`,
+      org.email && `E-mail: ${org.email}`,
+      org.phone && `Telefone: ${org.phone}`,
+      (org.cnpj || org.document) && `CNPJ: ${org.cnpj || org.document}`,
+      (org.address || org.city) && `Endereço: ${[org.address, org.city, org.state].filter(Boolean).join(' — ')}`,
+    ].filter(Boolean);
+    if (lines.length === 0) lines.push(`Razão social: ${org.name || '—'}`);
+    for (const l of lines) {
+      cover.drawText(String(l), { x: 40, y: cy, size: 10, font, color: rgb(0.25, 0.25, 0.25) });
+      cy -= 14;
     }
-    cover.drawText(branding.header_title || org.name || 'Relatório', {
-      x: 40, y: 500, size: 28, font: bold, color: rgb(1, 1, 1)
-    });
-    cover.drawText('Relatório de Rotas', { x: 40, y: 460, size: 20, font, color: rgb(0.95, 0.95, 0.95) });
-    cover.drawText(`Marca: ${brand.name}`, { x: 40, y: 420, size: 14, font, color: rgb(1, 1, 1) });
-    cover.drawText(`Período: ${period.start} a ${period.end}`, { x: 40, y: 396, size: 14, font, color: rgb(1, 1, 1) });
+    cy -= 10;
+    cover.drawText('Cliente / Marca', { x: 40, y: cy, size: 11, font: bold, color: primary }); cy -= 16;
+    cover.drawText(brand.name, { x: 40, y: cy, size: 12, font, color: rgb(0.2, 0.2, 0.2) }); cy -= 30;
+
+    // Client logo (bottom center, optional)
     if (clientLogo) {
       const scale = Math.min(70 / clientLogo.height, 220 / clientLogo.width);
       const w = clientLogo.width * scale, h = clientLogo.height * scale;
-      cover.drawImage(clientLogo, { x: (595 - w) / 2, y: 200, width: w, height: h });
+      cover.drawImage(clientLogo, { x: (595 - w) / 2, y: 160, width: w, height: h });
     }
-    cover.drawText(`Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, {
-      x: 40, y: 60, size: 9, font, color: rgb(0.9, 0.9, 0.9)
-    });
   }
+
 
   // ===== Summary =====
   if (reportType === 'summary' || reportType === 'both') {
