@@ -4,6 +4,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -96,6 +97,8 @@ function MultiLogoUploader({ onLogos }: { onLogos: (urls: string[]) => void }) {
 const ALL_BRANDS = "__all__";
 
 const FREQUENCIES = [
+  { value: "hourly", label: "De hora em hora" },
+  { value: "daily", label: "Diária" },
   { value: "weekly", label: "Semanal" },
   { value: "biweekly", label: "Quinzenal" },
   { value: "monthly", label: "Mensal" },
@@ -132,6 +135,8 @@ interface Schedule {
   report_type?: "summary" | "analytical" | "both";
   include_cover?: boolean;
   include_chart?: boolean;
+  email_intro?: string | null;
+  whatsapp_intro?: string | null;
 }
 
 const emptyForm: Partial<Schedule> = {
@@ -156,6 +161,8 @@ const emptyForm: Partial<Schedule> = {
   report_type: "both",
   include_cover: true,
   include_chart: true,
+  email_intro: "",
+  whatsapp_intro: "",
 };
 
 const BRANDING_STORAGE_KEY = "merch-report-branding-defaults";
@@ -481,7 +488,7 @@ export default function MerchRelatoriosProgramacao() {
                       onChange={(e) => setForm({ ...form, day_of_month: Number(e.target.value) })} />
                   </div>
                 )}
-                {form.frequency !== "ondemand" && (
+                {form.frequency !== "ondemand" && form.frequency !== "hourly" && (
                   <div>
                     <Label>Hora do envio</Label>
                     <Input type="number" min={0} max={23} value={form.send_hour ?? 8}
@@ -509,6 +516,32 @@ export default function MerchRelatoriosProgramacao() {
                   </label>
                 </div>
               </div>
+
+              {!!form.channels?.email && (
+                <div>
+                  <Label className="text-xs">Texto de introdução do e-mail</Label>
+                  <Textarea
+                    rows={3}
+                    value={form.email_intro || ""}
+                    onChange={(e) => setForm({ ...form, email_intro: e.target.value })}
+                    placeholder="Ex.: Olá! Segue o relatório de execução das rotas do período. O PDF completo está em anexo."
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">Aparece no topo do e-mail, antes do resumo. O PDF é anexado automaticamente.</p>
+                </div>
+              )}
+
+              {!!form.channels?.whatsapp && (
+                <div>
+                  <Label className="text-xs">Texto de introdução do WhatsApp</Label>
+                  <Textarea
+                    rows={3}
+                    value={form.whatsapp_intro || ""}
+                    onChange={(e) => setForm({ ...form, whatsapp_intro: e.target.value })}
+                    placeholder="Ex.: Boa tarde! Segue abaixo o resumo e o PDF do relatório."
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">Enviado antes do resumo. Se houver conexão ativa, o PDF é enviado como documento.</p>
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between mb-2">
