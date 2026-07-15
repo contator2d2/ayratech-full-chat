@@ -859,7 +859,10 @@ router.get('/:id/pdf', async (req, res) => {
     const sched = r.rows[0];
     const org = await resolveOrg(orgId);
     const brand = await resolveBrand(orgId, sched.brand_id);
-    const period = computePeriod(sched.frequency);
+    const { date_from, date_to } = req.query || {};
+    const period = (date_from && date_to)
+      ? { start: String(date_from), end: String(date_to) }
+      : computePeriod(sched.frequency);
     const metrics = await computeMetrics(orgId, sched.brand_id, period.start, period.end);
     const opts = optionsFrom(sched);
     const analyticalRows = (opts.report_type === 'analytical' || opts.report_type === 'both')
