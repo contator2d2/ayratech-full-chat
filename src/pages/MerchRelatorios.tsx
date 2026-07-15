@@ -210,6 +210,7 @@ export default function MerchRelatorios() {
           <TabsContent value="avarias"><AvariasTab filters={filters} /></TabsContent>
         </Tabs>
       </div>
+      <AiAnalysisChat open={aiOpen} onOpenChange={setAiOpen} filters={filters} />
     </MainLayout>
   );
 }
