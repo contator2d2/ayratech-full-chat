@@ -200,14 +200,14 @@ router.post('/smtp/org/test', async (req, res) => {
     await transporter.sendMail({
       from: `"${smtpConfig.from_name}" <${smtpConfig.from_email}>`,
       to: testEmail,
-      subject: 'Teste de configuração SMTP - Whatsale',
+      subject: 'Teste de configuração SMTP - Ayratech',
       html: `
         <h2>✅ Configuração SMTP funcionando!</h2>
         <p>Este é um email de teste para verificar se sua configuração SMTP está correta.</p>
         <p><strong>Servidor:</strong> ${smtpConfig.host}:${smtpConfig.port}</p>
         <p><strong>Usuário:</strong> ${smtpConfig.username}</p>
         <hr>
-        <p><small>Enviado por Whatsale</small></p>
+        <p><small>Enviado por Ayratech</small></p>
       `,
     });
 
