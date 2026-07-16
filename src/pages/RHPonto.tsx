@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { useTimeRecords, useSaveTimeRecord, useEmployees, useAppPunches, useConsolidatedTimesheet, usePunchDivergences } from "@/hooks/use-rh";
+import { useTimeRecords, useSaveTimeRecord, useEmployees, useAppPunches, useConsolidatedTimesheet, usePunchDivergences, useCreatePunch, useUpdatePunch, useDeletePunch } from "@/hooks/use-rh";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
