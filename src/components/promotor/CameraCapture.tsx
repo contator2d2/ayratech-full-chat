@@ -207,6 +207,7 @@ export function CameraCapture({
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const captureLockRef = useRef(false);
   const { uploadFile, isUploading } = useUpload(customTokenGetter);
   const { isOnline, queueUpload } = useOfflineSync();
   const config = { ...DEFAULT_QUALITY_CONFIG, ...qualityConfig };
