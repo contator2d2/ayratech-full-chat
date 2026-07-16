@@ -545,16 +545,23 @@ export default function RHPonto() {
                   </TableHeader>
                   <TableBody>
                     {loadingPunches ? (
-                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                     ) : appPunches.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum registro do app encontrado</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum registro do app encontrado</TableCell></TableRow>
                     ) : appPunches.map((p: any) => (
-                      <TableRow key={p.id}>
+                      <TableRow key={p.id} className={p.manual_adjustment ? 'bg-amber-50/40 dark:bg-amber-950/10' : ''}>
                         <TableCell className="font-medium text-sm">
                           {formatDateValue(getPunchTimestamp(p), 'dd/MM/yyyy HH:mm:ss', 'Pendente')}
                         </TableCell>
                         <TableCell>{p.employee_name}</TableCell>
-                        <TableCell><span className="text-sm">{PUNCH_LABELS[p.punch_type] || p.punch_type}</span></TableCell>
+                        <TableCell>
+                          <span className="text-sm">{PUNCH_LABELS[p.punch_type] || p.punch_type}</span>
+                          {p.manual_adjustment && (
+                            <Badge variant="outline" className="ml-1 text-[10px] border-amber-500 text-amber-700" title={p.adjustment_reason || ''}>
+                              <Wrench className="h-3 w-3 mr-1" />Manual
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="hidden md:table-cell text-xs">
                           {p.pdv_name ? <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{p.pdv_name}</span> : "—"}
                         </TableCell>
@@ -576,6 +583,16 @@ export default function RHPonto() {
                             <Badge variant={p.sync_status === 'synced' ? 'default' : 'secondary'} className="text-[10px]">
                               {p.sync_status === 'synced' ? '✓ Sync' : '⏳ Pendente'}
                             </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditPunch(p)} title="Ajustar marcação">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => removePunch(p)} title="Remover">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
