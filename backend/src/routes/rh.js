@@ -835,7 +835,8 @@ router.get('/consolidated-timesheet', async (req, res) => {
         json_agg(json_build_object(
           'id', tp.id, 'punch_type', tp.punch_type, 'punched_at', tp.punched_at,
           'geo_status', tp.geo_status, 'is_offline', tp.is_offline, 'pdv_name', p.name,
-          'sync_status', tp.sync_status
+          'sync_status', tp.sync_status,
+          'manual_adjustment', tp.manual_adjustment, 'adjustment_reason', tp.adjustment_reason
         ) ORDER BY tp.punched_at) as punches,
         COUNT(*) as punch_count,
         MIN(tp.punched_at) as first_punch,
