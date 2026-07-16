@@ -234,6 +234,37 @@ export function useAppPunches(filters?: { employee_id?: string; start_date?: str
     queryKey: ['rh-app-punches', qs],
     queryFn: () => api<any[]>(`/api/rh/app-punches${qs ? `?${qs}` : ''}`),
   });
+
+function invalidatePunches(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['rh-app-punches'] });
+  qc.invalidateQueries({ queryKey: ['rh-consolidated-timesheet'] });
+  qc.invalidateQueries({ queryKey: ['rh-punch-divergences'] });
+}
+
+export function useCreatePunch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => api<any>('/api/rh/app-punches', { method: 'POST', body: data }),
+    onSuccess: () => invalidatePunches(qc),
+  });
+}
+
+export function useUpdatePunch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: any) => api<any>(`/api/rh/app-punches/${id}`, { method: 'PATCH', body: data }),
+    onSuccess: () => invalidatePunches(qc),
+  });
+}
+
+export function useDeletePunch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api<any>(`/api/rh/app-punches/${id}?reason=${encodeURIComponent(reason)}`, { method: 'DELETE' }),
+    onSuccess: () => invalidatePunches(qc),
+  });
+}
 }
 
 // ===== SYNC DIAGNOSTICS =====
