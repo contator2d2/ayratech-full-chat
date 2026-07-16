@@ -234,6 +234,9 @@ export function useAppPunches(filters?: { employee_id?: string; start_date?: str
     queryKey: ['rh-app-punches', qs],
     queryFn: () => api<any[]>(`/api/rh/app-punches${qs ? `?${qs}` : ''}`),
   });
+}
+
+
 
 function invalidatePunches(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['rh-app-punches'] });
