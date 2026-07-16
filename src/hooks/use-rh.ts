@@ -265,7 +265,7 @@ export function useDeletePunch() {
     onSuccess: () => invalidatePunches(qc),
   });
 }
-}
+
 
 // ===== SYNC DIAGNOSTICS =====
 export function useSyncDiagnostics() {
