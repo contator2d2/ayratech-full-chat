@@ -31,7 +31,10 @@ export function useAssignSchedule() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: any) => api('/api/rh/employee-schedules', { method: 'POST', body }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rh-schedule-assignments'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rh-schedule-assignments'] });
+      qc.invalidateQueries({ queryKey: ['rh-employee-schedule'] });
+    },
   });
 }
 export function useRemoveAssignment() {
