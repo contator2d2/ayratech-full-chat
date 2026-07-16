@@ -682,6 +682,52 @@ export default function RHPonto() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={punchDialogOpen} onOpenChange={setPunchDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-amber-600" />
+              {punchForm.id ? 'Ajustar Marcação' : 'Registrar Ponto Manual'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Colaborador *</Label>
+              <Select value={punchForm.employee_id} onValueChange={v => setPunchForm((f: any) => ({ ...f, employee_id: v }))} disabled={!!punchForm.id}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Tipo *</Label>
+              <Select value={punchForm.punch_type} onValueChange={v => setPunchForm((f: any) => ({ ...f, punch_type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(PUNCH_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label>Data *</Label><Input type="date" value={punchForm.date} onChange={e => setPunchForm((f: any) => ({ ...f, date: e.target.value }))} /></div>
+              <div><Label>Hora *</Label><Input type="time" step="1" value={punchForm.time} onChange={e => setPunchForm((f: any) => ({ ...f, time: e.target.value }))} /></div>
+            </div>
+            <div>
+              <Label>Motivo do ajuste *</Label>
+              <Input placeholder="Ex.: esquecimento do colaborador, falha do totem..." value={punchForm.adjustment_reason} onChange={e => setPunchForm((f: any) => ({ ...f, adjustment_reason: e.target.value }))} />
+              <p className="text-[11px] text-muted-foreground mt-1">Esta marcação ficará sinalizada como <b>Manual</b> na auditoria.</p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setPunchDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={savePunch} disabled={createPunchMut.isPending || updatePunchMut.isPending}>
+              {(createPunchMut.isPending || updatePunchMut.isPending) ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }
