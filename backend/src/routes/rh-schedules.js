@@ -97,7 +97,7 @@ async function ensureTables() {
 router.get('/schedules', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getUserOrgId(req.user.id);
+    const orgId = await getUserOrgId(req.userId);
     const r = await query(
       `SELECT ws.*,
         (SELECT COUNT(*) FROM employee_schedules es WHERE es.schedule_id = ws.id AND es.active) as assigned_count
@@ -111,7 +111,7 @@ router.get('/schedules', authenticate, async (req, res) => {
 router.post('/schedules', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getUserOrgId(req.user.id);
+    const orgId = await getUserOrgId(req.userId);
     const b = req.body || {};
     const r = await query(
       `INSERT INTO work_schedules
@@ -132,7 +132,7 @@ router.post('/schedules', authenticate, async (req, res) => {
 router.put('/schedules/:id', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getUserOrgId(req.user.id);
+    const orgId = await getUserOrgId(req.userId);
     const b = req.body || {};
     const r = await query(
       `UPDATE work_schedules SET
@@ -157,7 +157,7 @@ router.put('/schedules/:id', authenticate, async (req, res) => {
 router.delete('/schedules/:id', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getUserOrgId(req.user.id);
+    const orgId = await getUserOrgId(req.userId);
     await query(`DELETE FROM work_schedules WHERE id=$1 AND organization_id=$2`, [req.params.id, orgId]);
     res.json({ success: true });
   } catch (err) { logError('rh.schedules.delete', err); res.status(500).json({ error: err.message }); }
@@ -167,7 +167,7 @@ router.delete('/schedules/:id', authenticate, async (req, res) => {
 router.get('/schedules/:id/assignments', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getUserOrgId(req.user.id);
+    const orgId = await getUserOrgId(req.userId);
     const r = await query(
       `SELECT es.*, e.full_name, e.cpf, p.name as pdv_name
        FROM employee_schedules es
@@ -184,7 +184,7 @@ router.get('/schedules/:id/assignments', authenticate, async (req, res) => {
 router.post('/employee-schedules', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getUserOrgId(req.user.id);
+    const orgId = await getUserOrgId(req.userId);
     const b = req.body || {};
     // Deactivate previous assignment
     await query(
@@ -204,7 +204,7 @@ router.post('/employee-schedules', authenticate, async (req, res) => {
 router.delete('/employee-schedules/:id', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getUserOrgId(req.user.id);
+    const orgId = await getUserOrgId(req.userId);
     await query(
       `UPDATE employee_schedules SET active=false, end_date=CURRENT_DATE
        WHERE id=$1 AND organization_id=$2`,
@@ -220,7 +220,7 @@ router.delete('/employee-schedules/:id', authenticate, async (req, res) => {
 router.get('/totem-devices', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getUserOrgId(req.user.id);
+    const orgId = await getUserOrgId(req.userId);
     const r = await query(
       `SELECT td.*, p.name as pdv_name FROM totem_devices td
        LEFT JOIN pdvs p ON p.id = td.pdv_id
@@ -234,7 +234,7 @@ router.get('/totem-devices', authenticate, async (req, res) => {
 router.post('/totem-devices', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getUserOrgId(req.user.id);
+    const orgId = await getUserOrgId(req.userId);
     const b = req.body || {};
     const token = crypto.randomBytes(24).toString('hex');
     const r = await query(
@@ -249,7 +249,7 @@ router.post('/totem-devices', authenticate, async (req, res) => {
 router.delete('/totem-devices/:id', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getUserOrgId(req.user.id);
+    const orgId = await getUserOrgId(req.userId);
     await query(`DELETE FROM totem_devices WHERE id=$1 AND organization_id=$2`, [req.params.id, orgId]);
     res.json({ success: true });
   } catch (err) { logError('rh.totem.delete', err); res.status(500).json({ error: err.message }); }
@@ -355,7 +355,7 @@ function afdTime(d) {
 router.get('/afd/export', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getUserOrgId(req.user.id);
+    const orgId = await getUserOrgId(req.userId);
     const { start, end } = req.query;
     if (!start || !end) return res.status(400).json({ error: 'start e end são obrigatórios (YYYY-MM-DD)' });
 
