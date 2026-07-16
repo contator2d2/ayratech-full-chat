@@ -716,6 +716,47 @@ export default function RHColaboradores() {
                 </div>
                 <div><Label>Salário Mensal (R$)</Label><Input type="number" value={form.salary} onChange={e => setField("salary", e.target.value)} /></div>
 
+                {/* ====== ESCALA VINCULADA ====== */}
+                <div className="col-span-2 space-y-2 p-4 rounded-lg border bg-primary/5">
+                  <Label className="text-sm font-semibold flex items-center gap-2"><Calendar className="h-4 w-4" /> Escala Vinculada (Ponto)</Label>
+                  <p className="text-xs text-muted-foreground">Define os horários usados pelo sistema de ponto. A jornada abaixo é apenas um demonstrativo/salarial.</p>
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Select value={scheduleId || "__none__"} onValueChange={setScheduleId}>
+                        <SelectTrigger><SelectValue placeholder="Sem escala vinculada" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Sem escala vinculada</SelectItem>
+                          {schedules.filter((s: any) => s.active).map((s: any) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name} — {s.schedule_type} ({(s.entry_time || '').slice(0,5)}-{(s.exit_time || '').slice(0,5)})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={!editId || !scheduleId || scheduleId === "__none__" || scheduleId === currentSchedule?.schedule_id || assignScheduleMut.isPending}
+                      onClick={() => {
+                        if (!editId) return;
+                        assignScheduleMut.mutate(
+                          { employee_id: editId, schedule_id: scheduleId },
+                          { onSuccess: () => toast({ title: "Escala vinculada" }) }
+                        );
+                      }}
+                    >
+                      Vincular
+                    </Button>
+                  </div>
+                  {currentSchedule && (
+                    <p className="text-xs text-muted-foreground">
+                      Atual: <b>{currentSchedule.schedule_name}</b> — desde {String(currentSchedule.start_date || '').slice(0,10)}
+                    </p>
+                  )}
+                  {!editId && <p className="text-xs text-amber-600">Salve o colaborador antes de vincular uma escala.</p>}
+                </div>
+
                 {/* ====== JORNADA DE TRABALHO DETALHADA ====== */}
                 <div className="col-span-2 space-y-3 p-4 rounded-lg border bg-muted/30">
                   <Label className="text-sm font-semibold flex items-center gap-2"><Calendar className="h-4 w-4" /> Jornada de Trabalho</Label>
