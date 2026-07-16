@@ -129,9 +129,9 @@ export default function RHEscalas() {
 
         {/* Escala editor */}
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader><DialogTitle>{form.id ? 'Editar' : 'Nova'} Escala</DialogTitle></DialogHeader>
-            <div className="grid grid-cols-2 gap-3">
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0">
+            <DialogHeader className="px-6 pt-6"><DialogTitle>{form.id ? 'Editar' : 'Nova'} Escala</DialogTitle></DialogHeader>
+            <div className="grid grid-cols-2 gap-3 overflow-y-auto px-6 py-2 flex-1">
               <div className="col-span-2">
                 <Label>Nome *</Label>
                 <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ex: Comercial 5x2" />
