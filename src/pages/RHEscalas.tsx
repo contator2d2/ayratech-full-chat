@@ -108,7 +108,7 @@ export default function RHEscalas() {
                     <TableCell className="text-xs">
                       {(s.workdays || []).map((d: number) => DAYS[d]?.l).join(', ')}
                     </TableCell>
-                    <TableCell className="text-xs">{(s.entry_time || '').slice(0,5)} - {(s.exit_time || '').slice(0,5)}</TableCell>
+                    <TableCell className="text-xs">{s.pattern?.per_day ? <Badge variant="outline">Personalizado por dia</Badge> : `${(s.entry_time || '').slice(0,5)} - ${(s.exit_time || '').slice(0,5)}`}</TableCell>
                     <TableCell>
                       <Button variant="ghost" size="sm" onClick={() => setAssignOpen(s)}>
                         <Users className="h-3 w-3 mr-1" /> {s.assigned_count || 0}
