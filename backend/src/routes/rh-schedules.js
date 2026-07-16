@@ -318,6 +318,27 @@ router.post('/totem/lookup', totemAuth, async (req, res) => {
   } catch (err) { logError('rh.totem.lookup', err); res.status(500).json({ error: err.message }); }
 });
 
+// Totem: face-only roster (returns employees with facial descriptor for 1:N match)
+router.post('/totem/roster', totemAuth, async (req, res) => {
+  try {
+    const r = await query(
+      `SELECT id, full_name, face_descriptor, face_photo_url
+       FROM employees
+       WHERE organization_id=$1
+         AND (status IS NULL OR lower(status) <> 'desligado')
+         AND face_descriptor IS NOT NULL`,
+      [req.totem.organization_id]
+    );
+    const rows = r.rows.map(e => ({
+      employee_id: e.id,
+      full_name: e.full_name,
+      face_photo_url: e.face_photo_url,
+      face_descriptor: typeof e.face_descriptor === 'string' ? JSON.parse(e.face_descriptor) : e.face_descriptor,
+    })).filter(e => Array.isArray(e.face_descriptor) && e.face_descriptor.length > 0);
+    res.json({ employees: rows, require_face: req.totem.require_face });
+  } catch (err) { logError('rh.totem.roster', err); res.status(500).json({ error: err.message }); }
+});
+
 // Totem: register punch
 router.post('/totem/punch', totemAuth, async (req, res) => {
   try {
