@@ -586,6 +586,61 @@ router.post('/routes/:id/complete', async (req, res) => {
   }
 });
 
+// Admin/Supervisor: justify a route as not_done (promoter did not go / could not complete)
+router.post('/routes/:id/justify', async (req, res) => {
+  try {
+    const orgRes = await query('SELECT organization_id FROM organization_members WHERE user_id=$1 LIMIT 1', [req.userId]);
+    if (!orgRes.rows.length) return res.status(403).json({ error: 'Sem organização' });
+    const orgId = orgRes.rows[0].organization_id;
+    const { reason } = req.body || {};
+    if (!reason || !String(reason).trim()) return res.status(400).json({ error: 'Motivo obrigatório' });
+
+    try {
+      await query(`ALTER TABLE merch_routes ADD COLUMN IF NOT EXISTS not_done_reason TEXT`);
+      await query(`ALTER TABLE merch_routes ADD COLUMN IF NOT EXISTS not_done_at TIMESTAMPTZ`);
+      await query(`ALTER TABLE merch_routes ADD COLUMN IF NOT EXISTS not_done_by UUID`);
+      await query(`ALTER TABLE merch_routes ADD COLUMN IF NOT EXISTS has_alert BOOLEAN DEFAULT false`);
+    } catch (_) {}
+
+    const route = await query('SELECT * FROM merch_routes WHERE id=$1 AND organization_id=$2', [req.params.id, orgId]);
+    if (!route.rows.length) return res.status(404).json({ error: 'Rota não encontrada' });
+    const old = route.rows[0];
+    if (!['scheduled', 'confirmed', 'in_progress'].includes(old.status)) {
+      return res.status(400).json({ error: 'Rota não pode ser justificada neste status' });
+    }
+
+    const result = await query(
+      `UPDATE merch_routes
+       SET status='not_done', not_done_reason=$3, not_done_at=NOW(), not_done_by=$4,
+           has_alert=true, completed_at=NOW(), updated_at=NOW()
+       WHERE id=$1 AND organization_id=$2 RETURNING *`,
+      [req.params.id, orgId, String(reason).trim(), req.userId]
+    );
+
+    try {
+      await query(
+        `INSERT INTO route_edit_audit_logs (route_id, field_changed, old_value, new_value, edited_by, editor_role, source, reason, route_was_completed)
+         VALUES ($1,'status',$2,'not_done',$3,'supervisor','web',$4,false)`,
+        [req.params.id, old.status, req.userId, String(reason).trim()]
+      );
+    } catch (_) {}
+    try {
+      await query(
+        `INSERT INTO execution_authors (route_id, action, performed_by, performer_role, source, details)
+         VALUES ($1,'route_justified_not_done',$2,'supervisor','web',$3)`,
+        [req.params.id, req.userId, JSON.stringify({ reason: String(reason).trim(), old_status: old.status })]
+      );
+    } catch (_) {}
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    logError('routes.admin_justify', err);
+    res.status(500).json({ error: 'Erro ao justificar rota' });
+  }
+});
+
+
+
 // Delete route (supports scope: 'single' | 'future')
 // Bulk delete (superadmin only) - delete selected routes and optionally all future scheduled siblings
 router.post('/routes/bulk-delete', async (req, res) => {

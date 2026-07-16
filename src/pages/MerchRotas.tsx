@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, User, Eye, Copy, Trash2, Edit, Filter, Repeat, Sparkles, Package, RefreshCw, X, CheckCircle2, Activity, Store, Info, ChevronsUpDown, Check, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AIRoutePlanner from "@/components/merch/AIRoutePlanner";
-import { useMerchRoutes, useCreateMerchRoute, useUpdateMerchRoute, useDeleteMerchRoute, useDuplicateMerchRoute, useBulkDeleteMerchRoutes, useBrandChecklists, useBrandPromoters, useRouteMixPreview, useRouteProducts, useAddRouteProduct, useRemoveRouteProduct, useSyncRouteProducts } from "@/hooks/use-merch-routes";
+import { useMerchRoutes, useCreateMerchRoute, useUpdateMerchRoute, useDeleteMerchRoute, useDuplicateMerchRoute, useBulkDeleteMerchRoutes, useBrandChecklists, useBrandPromoters, useRouteMixPreview, useRouteProducts, useAddRouteProduct, useRemoveRouteProduct, useSyncRouteProducts, useJustifyRoute } from "@/hooks/use-merch-routes";
 import { useSuperadmin } from "@/hooks/use-superadmin";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBrands, useBrandPdvs, usePdvBrands } from "@/hooks/use-merchandising";
@@ -56,6 +56,9 @@ export default function MerchRotas() {
   const [promoterOpen, setPromoterOpen] = useState(false);
   const [showAIPlanner, setShowAIPlanner] = useState(false);
   const [scopeDialog, setScopeDialog] = useState<{ action: 'edit' | 'delete'; data?: any } | null>(null);
+  const [justifyRoute, setJustifyRoute] = useState<any>(null);
+  const [justifyReason, setJustifyReason] = useState('');
+  const justifyMutation = useJustifyRoute();
 
   // Calculate date range
   const dateRange = useMemo(() => {
@@ -562,13 +565,13 @@ export default function MerchRotas() {
                 )}
 
                 {/* Action buttons */}
-                <div className="flex gap-2 pt-2">
+                <div className="flex flex-wrap gap-2 pt-2">
                   {(() => {
                     const locked = viewRoute.status === 'in_progress' || viewRoute.status === 'completed';
                     return (
                       <Button
                         size="sm"
-                        className="flex-1"
+                        className="flex-1 min-w-[120px]"
                         title={locked ? 'Rota em execução: apenas reatribuição de promotor/supervisor e observações' : ''}
                         onClick={() => {
                           if (locked) {
@@ -582,6 +585,20 @@ export default function MerchRotas() {
                       </Button>
                     );
                   })()}
+                  {['scheduled', 'confirmed', 'in_progress'].includes(viewRoute.status) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-red-500/40 text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10"
+                      onClick={() => {
+                        setJustifyRoute(viewRoute);
+                        setJustifyReason('');
+                        setViewRoute(null);
+                      }}
+                    >
+                      <AlertTriangle className="h-4 w-4 mr-1" /> Justificar
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => {
                     duplicateRoute.mutate({ id: viewRoute.id }, {
                       onSuccess: () => { toast.success('Rota duplicada'); setViewRoute(null); }
@@ -601,6 +618,7 @@ export default function MerchRotas() {
             )}
           </DialogContent>
         </Dialog>
+
 
         {/* Route Detail / Edit Dialog */}
         <RouteFormDialog
@@ -659,8 +677,67 @@ export default function MerchRotas() {
           </AlertDialogContent>
         </AlertDialog>
 
+        {/* Justify Route Dialog */}
+        <Dialog open={!!justifyRoute} onOpenChange={(o) => { if (!o) { setJustifyRoute(null); setJustifyReason(''); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                Justificar rota não realizada
+              </DialogTitle>
+              <DialogDescription>
+                A rota será fechada com status <b>Não Realizada</b> e ficará registrada com o motivo abaixo. Isso libera o promotor de justificar posteriormente e mantém o histórico da ocorrência para relatórios.
+              </DialogDescription>
+            </DialogHeader>
+            {justifyRoute && (
+              <div className="space-y-3">
+                <div className="text-xs text-muted-foreground bg-muted/30 rounded-md p-2">
+                  <div><b>PDV:</b> {justifyRoute.pdv_name}</div>
+                  <div><b>Promotor:</b> {justifyRoute.promoter_name || '—'}</div>
+                  <div><b>Data:</b> {justifyRoute.visit_date ? format(parseISO(justifyRoute.visit_date.split('T')[0]), 'dd/MM/yyyy') : '—'}</div>
+                </div>
+                <div>
+                  <Label className="text-xs">Motivo *</Label>
+                  <Textarea
+                    value={justifyReason}
+                    onChange={(e) => setJustifyReason(e.target.value)}
+                    placeholder="Ex.: Promotor faltou por atestado; PDV fechado; alteração de escala; etc."
+                    className="mt-1 min-h-[100px]"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => { setJustifyRoute(null); setJustifyReason(''); }}>Cancelar</Button>
+              <Button
+                variant="destructive"
+                disabled={justifyMutation.isPending || !justifyReason.trim()}
+                onClick={() => {
+                  if (!justifyRoute?.id || !justifyReason.trim()) return;
+                  justifyMutation.mutate(
+                    { id: justifyRoute.id, reason: justifyReason.trim() },
+                    {
+                      onSuccess: () => {
+                        toast.success('Rota justificada e fechada como não realizada');
+                        setJustifyRoute(null);
+                        setJustifyReason('');
+                      },
+                      onError: (e: any) => toast.error(e?.message || 'Erro ao justificar rota'),
+                    }
+                  );
+                }}
+              >
+                {justifyMutation.isPending ? 'Salvando...' : 'Confirmar justificativa'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* AI Route Planner */}
         <AIRoutePlanner open={showAIPlanner} onClose={() => setShowAIPlanner(false)} />
+
+
 
       </div>
     </MainLayout>

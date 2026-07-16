@@ -102,6 +102,19 @@ export function useDeleteMerchRoute() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['merch-routes'] }),
   });
 }
+export function useJustifyRoute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api<any>(`/api/merch/routes/${id}/justify`, { method: 'POST', body: { reason } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['merch-routes'] });
+      qc.invalidateQueries({ queryKey: ['merch-route'] });
+      qc.invalidateQueries({ queryKey: ['merch-routes-live'] });
+    },
+  });
+}
+
 
 export function useBulkDeleteMerchRoutes() {
   const qc = useQueryClient();
