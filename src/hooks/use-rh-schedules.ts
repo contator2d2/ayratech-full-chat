@@ -42,7 +42,14 @@ export function useRemoveAssignment() {
   });
 }
 
-// Totem devices
+export function useEmployeeSchedule(employeeId?: string) {
+  return useQuery({
+    queryKey: ['rh-employee-schedule', employeeId],
+    queryFn: () => api<any>(`/api/rh/employees/${employeeId}/schedule`),
+    enabled: !!employeeId,
+  });
+}
+
 export function useTotemDevices() {
   return useQuery({ queryKey: ['rh-totem-devices'], queryFn: () => api<any[]>('/api/rh/totem-devices') });
 }
