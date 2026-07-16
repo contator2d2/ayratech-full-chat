@@ -261,7 +261,7 @@ export default function RHEscalas() {
                 <Textarea value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} />
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="px-6 pb-6 pt-3 border-t">
               <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
               <Button onClick={submit} disabled={save.isPending}>Salvar</Button>
             </DialogFooter>
