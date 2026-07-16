@@ -553,7 +553,8 @@ export function CameraCapture({
 
                 <button
                   onClick={handleCapture}
-                  className="h-16 w-16 rounded-full border-4 border-white bg-white/20 hover:bg-white/40 transition-all active:scale-90"
+                  disabled={isProcessing}
+                  className="h-16 w-16 rounded-full border-4 border-white bg-white/20 hover:bg-white/40 transition-all active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
 
                 <Button
