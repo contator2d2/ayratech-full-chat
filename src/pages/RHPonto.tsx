@@ -540,6 +540,7 @@ export default function RHPonto() {
                       <TableHead className="hidden md:table-cell">PDV</TableHead>
                       <TableHead>Geo</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
