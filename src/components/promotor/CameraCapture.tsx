@@ -207,6 +207,7 @@ export function CameraCapture({
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const captureLockRef = useRef(false);
   const { uploadFile, isUploading } = useUpload(customTokenGetter);
   const { isOnline, queueUpload } = useOfflineSync();
   const config = { ...DEFAULT_QUALITY_CONFIG, ...qualityConfig };
@@ -340,27 +341,34 @@ export function CameraCapture({
 
   const handleCapture = async () => {
     if (!videoRef.current || !canvasRef.current) return;
+    // Guard against double-tap / double-invocation which would upload the same photo twice.
+    if (captureLockRef.current || isProcessing) return;
+    captureLockRef.current = true;
 
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0);
 
-    // Validate quality
-    const result = analyzeImageQuality(canvas, config);
-    if (!result.valid) {
-      setValidationError(result.message || "Foto inválida");
-      setCapturedImage(null);
-      return;
+      // Validate quality
+      const result = analyzeImageQuality(canvas, config);
+      if (!result.valid) {
+        setValidationError(result.message || "Foto inválida");
+        setCapturedImage(null);
+        return;
+      }
+
+      setValidationError(null);
+      // Auto-aprovar: processa e envia imediatamente (sem etapa extra de "Salvar").
+      await processAndUpload(canvas);
+    } finally {
+      captureLockRef.current = false;
     }
-
-    setValidationError(null);
-    // Auto-aprovar: processa e envia imediatamente (sem etapa extra de "Salvar").
-    await processAndUpload(canvas);
   };
 
   const handleRetake = () => {
@@ -545,7 +553,8 @@ export function CameraCapture({
 
                 <button
                   onClick={handleCapture}
-                  className="h-16 w-16 rounded-full border-4 border-white bg-white/20 hover:bg-white/40 transition-all active:scale-90"
+                  disabled={isProcessing}
+                  className="h-16 w-16 rounded-full border-4 border-white bg-white/20 hover:bg-white/40 transition-all active:scale-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
 
                 <Button

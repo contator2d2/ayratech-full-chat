@@ -831,7 +831,10 @@ export default function PromotorRota() {
       // Progresso tem que ser produto a produto via formulário do produto.
       const brandRequiresStock = !!source?.require_stock_count;
       const brandRequiresValidity = !!source?.require_validity_check;
-      if (brandRequiresStock || brandRequiresValidity) return;
+      // Extra-point groups don't collect stock/validity — they are photo-only,
+      // so the stock/validity guard should NOT block their auto-completion
+      // (otherwise the route can never be concluded when a ponto extra is registered).
+      if (!isExtraGroup && (brandRequiresStock || brandRequiresValidity)) return;
 
       const requireCategoryPhotos = source?.require_category_photos !== false;
       const photoMode = source?.category_photo_mode || 'both';
