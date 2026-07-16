@@ -314,6 +314,9 @@ export default function RHPonto() {
             <Button variant="outline" onClick={() => exportEmployeeXLS(employeeFilter || undefined)} className="gap-2">
               <FileSpreadsheet className="h-4 w-4" /> Exportar XLS
             </Button>
+            <Button variant="outline" onClick={openNewPunch} className="gap-2">
+              <Wrench className="h-4 w-4" /> Ajuste Manual
+            </Button>
             <Button onClick={() => setDialogOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Registrar Ponto</Button>
           </div>
         </div>
