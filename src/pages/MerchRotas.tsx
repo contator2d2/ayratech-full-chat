@@ -565,13 +565,13 @@ export default function MerchRotas() {
                 )}
 
                 {/* Action buttons */}
-                <div className="flex gap-2 pt-2">
+                <div className="flex flex-wrap gap-2 pt-2">
                   {(() => {
                     const locked = viewRoute.status === 'in_progress' || viewRoute.status === 'completed';
                     return (
                       <Button
                         size="sm"
-                        className="flex-1"
+                        className="flex-1 min-w-[120px]"
                         title={locked ? 'Rota em execução: apenas reatribuição de promotor/supervisor e observações' : ''}
                         onClick={() => {
                           if (locked) {
@@ -585,6 +585,20 @@ export default function MerchRotas() {
                       </Button>
                     );
                   })()}
+                  {['scheduled', 'confirmed', 'in_progress'].includes(viewRoute.status) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-red-500/40 text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10"
+                      onClick={() => {
+                        setJustifyRoute(viewRoute);
+                        setJustifyReason('');
+                        setViewRoute(null);
+                      }}
+                    >
+                      <AlertTriangle className="h-4 w-4 mr-1" /> Justificar
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => {
                     duplicateRoute.mutate({ id: viewRoute.id }, {
                       onSuccess: () => { toast.success('Rota duplicada'); setViewRoute(null); }
@@ -604,6 +618,7 @@ export default function MerchRotas() {
             )}
           </DialogContent>
         </Dialog>
+
 
         {/* Route Detail / Edit Dialog */}
         <RouteFormDialog
