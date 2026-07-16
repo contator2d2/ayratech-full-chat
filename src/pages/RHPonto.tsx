@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { useTimeRecords, useSaveTimeRecord, useEmployees, useAppPunches, useConsolidatedTimesheet, usePunchDivergences } from "@/hooks/use-rh";
+import { useTimeRecords, useSaveTimeRecord, useEmployees, useAppPunches, useConsolidatedTimesheet, usePunchDivergences, useCreatePunch, useUpdatePunch, useDeletePunch } from "@/hooks/use-rh";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Clock, Smartphone, MapPin, CheckCircle2, AlertTriangle, Wifi, WifiOff,
   Download, FileSpreadsheet, CalendarDays, CalendarRange, Calendar, Filter,
-  TrendingUp, UserX, ShieldAlert
+  TrendingUp, UserX, ShieldAlert, Pencil, Trash2, Wrench
 } from "lucide-react";
 import { OvertimeRequestsPanel, useOvertimePendingCount } from "@/components/rh/OvertimeRequestsPanel";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, subMonths } from "date-fns";
@@ -114,6 +114,63 @@ export default function RHPonto() {
   const { data: divergences = [] } = usePunchDivergences({ start_date: startDate, end_date: endDate });
   const { data: employees = [] } = useEmployees({ status: "ativo" });
   const saveMut = useSaveTimeRecord();
+  const createPunchMut = useCreatePunch();
+  const updatePunchMut = useUpdatePunch();
+  const deletePunchMut = useDeletePunch();
+
+  const [punchDialogOpen, setPunchDialogOpen] = useState(false);
+  const [punchForm, setPunchForm] = useState<any>({
+    id: null, employee_id: "", punch_type: "entrada",
+    date: format(new Date(), "yyyy-MM-dd"), time: "08:00",
+    adjustment_reason: "",
+  });
+  const openNewPunch = () => {
+    setPunchForm({ id: null, employee_id: employeeFilter || "", punch_type: "entrada", date: format(new Date(), "yyyy-MM-dd"), time: "08:00", adjustment_reason: "" });
+    setPunchDialogOpen(true);
+  };
+  const openEditPunch = (p: any) => {
+    const dt = parseDateValue(getPunchTimestamp(p));
+    setPunchForm({
+      id: p.id,
+      employee_id: p.employee_id,
+      punch_type: p.punch_type,
+      date: dt ? format(dt, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
+      time: dt ? format(dt, "HH:mm") : "08:00",
+      adjustment_reason: p.adjustment_reason || "",
+    });
+    setPunchDialogOpen(true);
+  };
+  const savePunch = async () => {
+    if (!punchForm.employee_id || !punchForm.date || !punchForm.time) {
+      toast({ title: "Preencha colaborador, data e hora", variant: "destructive" }); return;
+    }
+    if (!punchForm.adjustment_reason?.trim()) {
+      toast({ title: "Informe o motivo do ajuste", variant: "destructive" }); return;
+    }
+    const punched_at = `${punchForm.date}T${punchForm.time}:00`;
+    try {
+      if (punchForm.id) {
+        await updatePunchMut.mutateAsync({ id: punchForm.id, punched_at, punch_type: punchForm.punch_type, adjustment_reason: punchForm.adjustment_reason });
+        toast({ title: "Ajuste salvo" });
+      } else {
+        await createPunchMut.mutateAsync({ employee_id: punchForm.employee_id, punch_type: punchForm.punch_type, punched_at, adjustment_reason: punchForm.adjustment_reason });
+        toast({ title: "Ponto manual registrado" });
+      }
+      setPunchDialogOpen(false);
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+  };
+  const removePunch = async (p: any) => {
+    const reason = window.prompt(`Motivo para remover a marcação (${PUNCH_LABELS[p.punch_type] || p.punch_type} - ${formatDateValue(getPunchTimestamp(p), "dd/MM HH:mm")}):`);
+    if (!reason || !reason.trim()) return;
+    try {
+      await deletePunchMut.mutateAsync({ id: p.id, reason: reason.trim() });
+      toast({ title: "Marcação removida" });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+  };
 
   const filteredDivergences = useMemo(() => {
     if (!employeeFilter) return divergences;
@@ -256,6 +313,9 @@ export default function RHPonto() {
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => exportEmployeeXLS(employeeFilter || undefined)} className="gap-2">
               <FileSpreadsheet className="h-4 w-4" /> Exportar XLS
+            </Button>
+            <Button variant="outline" onClick={openNewPunch} className="gap-2">
+              <Wrench className="h-4 w-4" /> Ajuste Manual
             </Button>
             <Button onClick={() => setDialogOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Registrar Ponto</Button>
           </div>
@@ -480,20 +540,28 @@ export default function RHPonto() {
                       <TableHead className="hidden md:table-cell">PDV</TableHead>
                       <TableHead>Geo</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loadingPunches ? (
-                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                     ) : appPunches.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum registro do app encontrado</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum registro do app encontrado</TableCell></TableRow>
                     ) : appPunches.map((p: any) => (
-                      <TableRow key={p.id}>
+                      <TableRow key={p.id} className={p.manual_adjustment ? 'bg-amber-50/40 dark:bg-amber-950/10' : ''}>
                         <TableCell className="font-medium text-sm">
                           {formatDateValue(getPunchTimestamp(p), 'dd/MM/yyyy HH:mm:ss', 'Pendente')}
                         </TableCell>
                         <TableCell>{p.employee_name}</TableCell>
-                        <TableCell><span className="text-sm">{PUNCH_LABELS[p.punch_type] || p.punch_type}</span></TableCell>
+                        <TableCell>
+                          <span className="text-sm">{PUNCH_LABELS[p.punch_type] || p.punch_type}</span>
+                          {p.manual_adjustment && (
+                            <Badge variant="outline" className="ml-1 text-[10px] border-amber-500 text-amber-700" title={p.adjustment_reason || ''}>
+                              <Wrench className="h-3 w-3 mr-1" />Manual
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="hidden md:table-cell text-xs">
                           {p.pdv_name ? <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{p.pdv_name}</span> : "—"}
                         </TableCell>
@@ -515,6 +583,16 @@ export default function RHPonto() {
                             <Badge variant={p.sync_status === 'synced' ? 'default' : 'secondary'} className="text-[10px]">
                               {p.sync_status === 'synced' ? '✓ Sync' : '⏳ Pendente'}
                             </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditPunch(p)} title="Ajustar marcação">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => removePunch(p)} title="Remover">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -601,6 +679,52 @@ export default function RHPonto() {
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saveMut.isPending}>{saveMut.isPending ? "Salvando..." : "Salvar"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={punchDialogOpen} onOpenChange={setPunchDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-amber-600" />
+              {punchForm.id ? 'Ajustar Marcação' : 'Registrar Ponto Manual'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Colaborador *</Label>
+              <Select value={punchForm.employee_id} onValueChange={v => setPunchForm((f: any) => ({ ...f, employee_id: v }))} disabled={!!punchForm.id}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Tipo *</Label>
+              <Select value={punchForm.punch_type} onValueChange={v => setPunchForm((f: any) => ({ ...f, punch_type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(PUNCH_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label>Data *</Label><Input type="date" value={punchForm.date} onChange={e => setPunchForm((f: any) => ({ ...f, date: e.target.value }))} /></div>
+              <div><Label>Hora *</Label><Input type="time" step="1" value={punchForm.time} onChange={e => setPunchForm((f: any) => ({ ...f, time: e.target.value }))} /></div>
+            </div>
+            <div>
+              <Label>Motivo do ajuste *</Label>
+              <Input placeholder="Ex.: esquecimento do colaborador, falha do totem..." value={punchForm.adjustment_reason} onChange={e => setPunchForm((f: any) => ({ ...f, adjustment_reason: e.target.value }))} />
+              <p className="text-[11px] text-muted-foreground mt-1">Esta marcação ficará sinalizada como <b>Manual</b> na auditoria.</p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setPunchDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={savePunch} disabled={createPunchMut.isPending || updatePunchMut.isPending}>
+              {(createPunchMut.isPending || updatePunchMut.isPending) ? 'Salvando...' : 'Salvar'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
