@@ -163,7 +163,24 @@ router.delete('/schedules/:id', authenticate, async (req, res) => {
   } catch (err) { logError('rh.schedules.delete', err); res.status(500).json({ error: err.message }); }
 });
 
-// Assignments
+// Current active schedule for an employee
+router.get('/employees/:id/schedule', authenticate, async (req, res) => {
+  try {
+    await ensureTables();
+    const orgId = await getUserOrgId(req.userId);
+    const r = await query(
+      `SELECT es.*, ws.name as schedule_name, ws.schedule_type, ws.entry_time, ws.exit_time, ws.workdays, ws.pattern
+       FROM employee_schedules es
+       JOIN work_schedules ws ON ws.id = es.schedule_id
+       WHERE es.employee_id = $1 AND es.organization_id = $2 AND es.active = true
+       ORDER BY es.start_date DESC LIMIT 1`,
+      [req.params.id, orgId]
+    );
+    res.json(r.rows[0] || null);
+  } catch (err) { logError('rh.employee.schedule', err); res.status(500).json({ error: err.message }); }
+});
+
+
 router.get('/schedules/:id/assignments', authenticate, async (req, res) => {
   try {
     await ensureTables();

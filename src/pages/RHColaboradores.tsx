@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useEmployees, useCreateEmployee, useUpdateEmployee, useDeleteEmployee, useRhDepartments, useBranches, useCreateBranch, useDeleteBranch, useCreateRhDepartment, useDeleteRhDepartment, useRhPositions, useCreateRhPosition, useDeleteRhPosition, useWorkerProfiles, useCreateWorkerProfile, useDeleteWorkerProfile, useRhDocuments, useCreateRhDocument, useDeleteRhDocument } from "@/hooks/use-rh";
+import { useSchedules, useEmployeeSchedule, useAssignSchedule } from "@/hooks/use-rh-schedules";
 import { useAppAccess, useGrantAppAccess, useBlockAppAccess, useResetAppPassword } from "@/hooks/use-promotor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -175,6 +176,11 @@ export default function RHColaboradores() {
   const { data: branches = [] } = useBranches();
   const { data: positions = [] } = useRhPositions();
   const { data: workerProfiles = [] } = useWorkerProfiles();
+  const { data: schedules = [] } = useSchedules();
+  const { data: currentSchedule } = useEmployeeSchedule(editId || undefined);
+  const assignScheduleMut = useAssignSchedule();
+  const [scheduleId, setScheduleId] = useState<string>("");
+  useEffect(() => { setScheduleId(currentSchedule?.schedule_id || ""); }, [currentSchedule?.schedule_id, editId]);
   const createMut = useCreateEmployee();
   const updateMut = useUpdateEmployee();
   const deleteMut = useDeleteEmployee();
@@ -709,6 +715,47 @@ export default function RHColaboradores() {
                   )}
                 </div>
                 <div><Label>Salário Mensal (R$)</Label><Input type="number" value={form.salary} onChange={e => setField("salary", e.target.value)} /></div>
+
+                {/* ====== ESCALA VINCULADA ====== */}
+                <div className="col-span-2 space-y-2 p-4 rounded-lg border bg-primary/5">
+                  <Label className="text-sm font-semibold flex items-center gap-2"><Calendar className="h-4 w-4" /> Escala Vinculada (Ponto)</Label>
+                  <p className="text-xs text-muted-foreground">Define os horários usados pelo sistema de ponto. A jornada abaixo é apenas um demonstrativo/salarial.</p>
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Select value={scheduleId || "__none__"} onValueChange={setScheduleId}>
+                        <SelectTrigger><SelectValue placeholder="Sem escala vinculada" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Sem escala vinculada</SelectItem>
+                          {schedules.filter((s: any) => s.active).map((s: any) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name} — {s.schedule_type} ({(s.entry_time || '').slice(0,5)}-{(s.exit_time || '').slice(0,5)})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={!editId || !scheduleId || scheduleId === "__none__" || scheduleId === currentSchedule?.schedule_id || assignScheduleMut.isPending}
+                      onClick={() => {
+                        if (!editId) return;
+                        assignScheduleMut.mutate(
+                          { employee_id: editId, schedule_id: scheduleId },
+                          { onSuccess: () => toast({ title: "Escala vinculada" }) }
+                        );
+                      }}
+                    >
+                      Vincular
+                    </Button>
+                  </div>
+                  {currentSchedule && (
+                    <p className="text-xs text-muted-foreground">
+                      Atual: <b>{currentSchedule.schedule_name}</b> — desde {String(currentSchedule.start_date || '').slice(0,10)}
+                    </p>
+                  )}
+                  {!editId && <p className="text-xs text-amber-600">Salve o colaborador antes de vincular uma escala.</p>}
+                </div>
 
                 {/* ====== JORNADA DE TRABALHO DETALHADA ====== */}
                 <div className="col-span-2 space-y-3 p-4 rounded-lg border bg-muted/30">

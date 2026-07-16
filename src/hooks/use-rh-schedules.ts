@@ -31,7 +31,10 @@ export function useAssignSchedule() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: any) => api('/api/rh/employee-schedules', { method: 'POST', body }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rh-schedule-assignments'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rh-schedule-assignments'] });
+      qc.invalidateQueries({ queryKey: ['rh-employee-schedule'] });
+    },
   });
 }
 export function useRemoveAssignment() {
@@ -42,7 +45,14 @@ export function useRemoveAssignment() {
   });
 }
 
-// Totem devices
+export function useEmployeeSchedule(employeeId?: string) {
+  return useQuery({
+    queryKey: ['rh-employee-schedule', employeeId],
+    queryFn: () => api<any>(`/api/rh/employees/${employeeId}/schedule`),
+    enabled: !!employeeId,
+  });
+}
+
 export function useTotemDevices() {
   return useQuery({ queryKey: ['rh-totem-devices'], queryFn: () => api<any[]>('/api/rh/totem-devices') });
 }
