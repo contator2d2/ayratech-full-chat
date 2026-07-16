@@ -176,6 +176,11 @@ export default function RHColaboradores() {
   const { data: branches = [] } = useBranches();
   const { data: positions = [] } = useRhPositions();
   const { data: workerProfiles = [] } = useWorkerProfiles();
+  const { data: schedules = [] } = useSchedules();
+  const { data: currentSchedule } = useEmployeeSchedule(editId || undefined);
+  const assignScheduleMut = useAssignSchedule();
+  const [scheduleId, setScheduleId] = useState<string>("");
+  useEffect(() => { setScheduleId(currentSchedule?.schedule_id || ""); }, [currentSchedule?.schedule_id, editId]);
   const createMut = useCreateEmployee();
   const updateMut = useUpdateEmployee();
   const deleteMut = useDeleteEmployee();
