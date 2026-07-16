@@ -56,6 +56,9 @@ export default function MerchRotas() {
   const [promoterOpen, setPromoterOpen] = useState(false);
   const [showAIPlanner, setShowAIPlanner] = useState(false);
   const [scopeDialog, setScopeDialog] = useState<{ action: 'edit' | 'delete'; data?: any } | null>(null);
+  const [justifyRoute, setJustifyRoute] = useState<any>(null);
+  const [justifyReason, setJustifyReason] = useState('');
+  const justifyMutation = useJustifyRoute();
 
   // Calculate date range
   const dateRange = useMemo(() => {
