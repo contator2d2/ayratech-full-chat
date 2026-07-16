@@ -114,6 +114,63 @@ export default function RHPonto() {
   const { data: divergences = [] } = usePunchDivergences({ start_date: startDate, end_date: endDate });
   const { data: employees = [] } = useEmployees({ status: "ativo" });
   const saveMut = useSaveTimeRecord();
+  const createPunchMut = useCreatePunch();
+  const updatePunchMut = useUpdatePunch();
+  const deletePunchMut = useDeletePunch();
+
+  const [punchDialogOpen, setPunchDialogOpen] = useState(false);
+  const [punchForm, setPunchForm] = useState<any>({
+    id: null, employee_id: "", punch_type: "entrada",
+    date: format(new Date(), "yyyy-MM-dd"), time: "08:00",
+    adjustment_reason: "",
+  });
+  const openNewPunch = () => {
+    setPunchForm({ id: null, employee_id: employeeFilter || "", punch_type: "entrada", date: format(new Date(), "yyyy-MM-dd"), time: "08:00", adjustment_reason: "" });
+    setPunchDialogOpen(true);
+  };
+  const openEditPunch = (p: any) => {
+    const dt = parseDateValue(getPunchTimestamp(p));
+    setPunchForm({
+      id: p.id,
+      employee_id: p.employee_id,
+      punch_type: p.punch_type,
+      date: dt ? format(dt, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
+      time: dt ? format(dt, "HH:mm") : "08:00",
+      adjustment_reason: p.adjustment_reason || "",
+    });
+    setPunchDialogOpen(true);
+  };
+  const savePunch = async () => {
+    if (!punchForm.employee_id || !punchForm.date || !punchForm.time) {
+      toast({ title: "Preencha colaborador, data e hora", variant: "destructive" }); return;
+    }
+    if (!punchForm.adjustment_reason?.trim()) {
+      toast({ title: "Informe o motivo do ajuste", variant: "destructive" }); return;
+    }
+    const punched_at = `${punchForm.date}T${punchForm.time}:00`;
+    try {
+      if (punchForm.id) {
+        await updatePunchMut.mutateAsync({ id: punchForm.id, punched_at, punch_type: punchForm.punch_type, adjustment_reason: punchForm.adjustment_reason });
+        toast({ title: "Ajuste salvo" });
+      } else {
+        await createPunchMut.mutateAsync({ employee_id: punchForm.employee_id, punch_type: punchForm.punch_type, punched_at, adjustment_reason: punchForm.adjustment_reason });
+        toast({ title: "Ponto manual registrado" });
+      }
+      setPunchDialogOpen(false);
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+  };
+  const removePunch = async (p: any) => {
+    const reason = window.prompt(`Motivo para remover a marcação (${PUNCH_LABELS[p.punch_type] || p.punch_type} - ${formatDateValue(getPunchTimestamp(p), "dd/MM HH:mm")}):`);
+    if (!reason || !reason.trim()) return;
+    try {
+      await deletePunchMut.mutateAsync({ id: p.id, reason: reason.trim() });
+      toast({ title: "Marcação removida" });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+  };
 
   const filteredDivergences = useMemo(() => {
     if (!employeeFilter) return divergences;
