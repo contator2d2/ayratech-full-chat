@@ -341,27 +341,34 @@ export function CameraCapture({
 
   const handleCapture = async () => {
     if (!videoRef.current || !canvasRef.current) return;
+    // Guard against double-tap / double-invocation which would upload the same photo twice.
+    if (captureLockRef.current || isProcessing) return;
+    captureLockRef.current = true;
 
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0);
 
-    // Validate quality
-    const result = analyzeImageQuality(canvas, config);
-    if (!result.valid) {
-      setValidationError(result.message || "Foto inválida");
-      setCapturedImage(null);
-      return;
+      // Validate quality
+      const result = analyzeImageQuality(canvas, config);
+      if (!result.valid) {
+        setValidationError(result.message || "Foto inválida");
+        setCapturedImage(null);
+        return;
+      }
+
+      setValidationError(null);
+      // Auto-aprovar: processa e envia imediatamente (sem etapa extra de "Salvar").
+      await processAndUpload(canvas);
+    } finally {
+      captureLockRef.current = false;
     }
-
-    setValidationError(null);
-    // Auto-aprovar: processa e envia imediatamente (sem etapa extra de "Salvar").
-    await processAndUpload(canvas);
   };
 
   const handleRetake = () => {
