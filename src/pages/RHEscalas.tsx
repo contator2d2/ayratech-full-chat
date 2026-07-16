@@ -108,7 +108,7 @@ export default function RHEscalas() {
                     <TableCell className="text-xs">
                       {(s.workdays || []).map((d: number) => DAYS[d]?.l).join(', ')}
                     </TableCell>
-                    <TableCell className="text-xs">{(s.entry_time || '').slice(0,5)} - {(s.exit_time || '').slice(0,5)}</TableCell>
+                    <TableCell className="text-xs">{s.pattern?.per_day ? <Badge variant="outline">Personalizado por dia</Badge> : `${(s.entry_time || '').slice(0,5)} - ${(s.exit_time || '').slice(0,5)}`}</TableCell>
                     <TableCell>
                       <Button variant="ghost" size="sm" onClick={() => setAssignOpen(s)}>
                         <Users className="h-3 w-3 mr-1" /> {s.assigned_count || 0}
@@ -191,6 +191,71 @@ export default function RHEscalas() {
                   ))}
                 </div>
               </div>
+
+              <div className="col-span-2 border-t pt-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Horários diferentes por dia</Label>
+                    <p className="text-xs text-muted-foreground">Ex: Seg-Sex 08:00-18:00, Sáb 08:00-12:00</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={form.pattern?.per_day ? 'default' : 'outline'}
+                    onClick={() => {
+                      const enabled = !form.pattern?.per_day;
+                      const days: Record<string, any> = { ...(form.pattern?.days || {}) };
+                      if (enabled) {
+                        (form.workdays || []).forEach((d: number) => {
+                          if (!days[d]) days[d] = {
+                            entry: form.entry_time || '08:00',
+                            exit: form.exit_time || '18:00',
+                            break_start: form.break_start || '12:00',
+                            break_end: form.break_end || '13:00',
+                          };
+                        });
+                      }
+                      setForm({ ...form, pattern: { ...(form.pattern || {}), per_day: enabled, days } });
+                    }}
+                  >
+                    {form.pattern?.per_day ? 'Ativado' : 'Ativar'}
+                  </Button>
+                </div>
+                {form.pattern?.per_day && (
+                  <div className="mt-3 space-y-2">
+                    {DAYS.filter(d => (form.workdays || []).includes(d.v)).map(d => {
+                      const day = form.pattern?.days?.[d.v] || { entry: '08:00', exit: '18:00', break_start: '12:00', break_end: '13:00' };
+                      const setDay = (patch: any) => {
+                        const days = { ...(form.pattern?.days || {}), [d.v]: { ...day, ...patch } };
+                        setForm({ ...form, pattern: { ...form.pattern, days } });
+                      };
+                      return (
+                        <div key={d.v} className="grid grid-cols-5 gap-2 items-center bg-muted/40 rounded p-2">
+                          <div className="text-sm font-medium">{d.l}</div>
+                          <div>
+                            <Label className="text-[10px]">Entrada</Label>
+                            <Input type="time" value={day.entry} onChange={e => setDay({ entry: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">Saída</Label>
+                            <Input type="time" value={day.exit} onChange={e => setDay({ exit: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">Ini. Intervalo</Label>
+                            <Input type="time" value={day.break_start || ''} onChange={e => setDay({ break_start: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">Fim Intervalo</Label>
+                            <Input type="time" value={day.break_end || ''} onChange={e => setDay({ break_end: e.target.value })} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <p className="text-xs text-muted-foreground">Os campos "Entrada/Saída" acima passam a servir apenas como padrão para dias sem configuração específica.</p>
+                  </div>
+                )}
+              </div>
+
               <div className="col-span-2">
                 <Label>Observações</Label>
                 <Textarea value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} />
