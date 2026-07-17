@@ -339,16 +339,17 @@ router.post('/execute', authenticate, async (req, res) => {
       [route_id, brand_id, pdv_id])).rows[0];
 
     if (!exec) {
-      const today = new Date();
-      const dow = (today.getDay() + 6) % 7;
-      const monday = new Date(today); monday.setDate(today.getDate() - dow);
-      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+      const rule = (await query(
+        `SELECT frequency, frequency_interval, custom_days FROM stock_count_rules WHERE organization_id=$1 AND brand_id=$2 LIMIT 1`,
+        [orgId, brand_id])).rows[0];
+      const { start, end } = computePeriodWindow(
+        new Date(), rule?.frequency || 'weekly', rule?.frequency_interval || 1, rule?.custom_days
+      );
       exec = (await query(
         `INSERT INTO stock_count_executions
          (organization_id, route_id, brand_id, pdv_id, promoter_id, status, week_start, week_end, started_at)
          VALUES ($1,$2,$3,$4,$5,'in_progress',$6,$7,NOW()) RETURNING *`,
-        [orgId, route_id, brand_id, pdv_id, promoter_id,
-         monday.toISOString().slice(0, 10), sunday.toISOString().slice(0, 10)])).rows[0];
+        [orgId, route_id, brand_id, pdv_id, promoter_id, start, end])).rows[0];
     }
 
     let filled = 0;
