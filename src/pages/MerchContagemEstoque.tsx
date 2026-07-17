@@ -196,6 +196,9 @@ export default function MerchContagemEstoque() {
                                   {rule.enabled ? "Ativa" : "Desativada"}
                                 </Badge>
                                 <Badge variant="outline">{freqLabel(rule)}</Badge>
+                                {weekdaysLabel(rule) && (
+                                  <Badge variant="outline">{weekdaysLabel(rule)}</Badge>
+                                )}
                                 {rule.block_route_completion && (
                                   <Badge className="bg-red-100 text-red-800">Bloqueia conclusão</Badge>
                                 )}
