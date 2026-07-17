@@ -32,6 +32,7 @@ async function ensureTables() {
   try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS frequency_interval INTEGER DEFAULT 1`); } catch {}
   try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS custom_days INTEGER`); } catch {}
   try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS weekdays JSONB`); } catch {}
+  try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS pdv_overrides JSONB`); } catch {}
 
   await query(`CREATE TABLE IF NOT EXISTS stock_count_executions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -168,7 +169,7 @@ router.post('/rules', authenticate, async (req, res) => {
     const orgId = await getOrgId(req.userId);
     if (!orgId) return res.status(403).json({ error: 'Sem organização' });
     const {
-      id, brand_id, enabled, frequency, frequency_interval, custom_days, weekdays,
+      id, brand_id, enabled, frequency, frequency_interval, custom_days, weekdays, pdv_overrides,
       require_photo, require_justification,
       allow_postpone, postpone_limit_type, block_route_completion, selected_products,
     } = req.body;
@@ -179,6 +180,7 @@ router.post('/rules', authenticate, async (req, res) => {
       frequency_interval: Number.isFinite(Number(frequency_interval)) && Number(frequency_interval) > 0 ? Number(frequency_interval) : 1,
       custom_days: frequency === 'custom' && Number(custom_days) > 0 ? Number(custom_days) : null,
       weekdays: Array.isArray(weekdays) && weekdays.length ? JSON.stringify(weekdays.map((n) => Number(n)).filter((n) => n >= 0 && n <= 6)) : null,
+      pdv_overrides: pdv_overrides && typeof pdv_overrides === 'object' && Object.keys(pdv_overrides).length ? JSON.stringify(pdv_overrides) : null,
       require_photo: require_photo ?? false,
       require_justification: require_justification ?? true,
       allow_postpone: allow_postpone ?? true,
@@ -201,6 +203,7 @@ router.post('/rules', authenticate, async (req, res) => {
            enabled=EXCLUDED.enabled, frequency=EXCLUDED.frequency,
            frequency_interval=EXCLUDED.frequency_interval, custom_days=EXCLUDED.custom_days,
            weekdays=EXCLUDED.weekdays,
+           pdv_overrides=EXCLUDED.pdv_overrides,
            require_photo=EXCLUDED.require_photo, require_justification=EXCLUDED.require_justification,
            allow_postpone=EXCLUDED.allow_postpone, postpone_limit_type=EXCLUDED.postpone_limit_type,
            block_route_completion=EXCLUDED.block_route_completion,
@@ -257,9 +260,18 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
 
 
     for (const rule of rules) {
-      // If rule has specific weekdays configured, only surface on those days
-      const wd = Array.isArray(rule.weekdays) ? rule.weekdays : (rule.weekdays ? JSON.parse(rule.weekdays) : null);
-      if (wd && wd.length && !wd.map(Number).includes(visitDow)) continue;
+      // Per-PDV override takes precedence over rule.weekdays
+      const overrides = rule.pdv_overrides
+        ? (typeof rule.pdv_overrides === 'object' ? rule.pdv_overrides : JSON.parse(rule.pdv_overrides))
+        : null;
+      const pdvOv = overrides && routeRow.pdv_id ? overrides[routeRow.pdv_id] : null;
+      let effectiveWd = null;
+      if (pdvOv && Array.isArray(pdvOv.weekdays)) {
+        effectiveWd = pdvOv.weekdays;
+      } else {
+        effectiveWd = Array.isArray(rule.weekdays) ? rule.weekdays : (rule.weekdays ? JSON.parse(rule.weekdays) : null);
+      }
+      if (effectiveWd && effectiveWd.length && !effectiveWd.map(Number).includes(visitDow)) continue;
       // Per-rule period window based on rule.frequency
       const { start: weekStart, end: weekEnd } = computePeriodWindow(
         visitDate, rule.frequency, rule.frequency_interval || 1, rule.custom_days

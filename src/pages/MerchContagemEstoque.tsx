@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useBrands, useProducts } from "@/hooks/use-merchandising";
+import { useBrands, useProducts, useBrandPdvs } from "@/hooks/use-merchandising";
 import {
   useStockCountRules, useUpsertStockCountRule, useDeleteStockCountRule,
 } from "@/hooks/use-stock-count";
@@ -50,6 +50,7 @@ const emptyRule = {
   frequency_interval: 1,
   custom_days: 30,
   weekdays: [] as number[],
+  pdv_overrides: {} as Record<string, { weekdays: number[] }>,
   require_photo: false,
   require_justification: true,
   allow_postpone: true,
@@ -71,6 +72,7 @@ export default function MerchContagemEstoque() {
   const { data: products = [] } = useProducts(
     form.brand_id ? { brand_id: form.brand_id } : undefined,
   );
+  const { data: brandPdvs = [] } = useBrandPdvs(form.brand_id || undefined);
 
   const rulesByBrand = useMemo(() => {
     const map = new Map<string, any>();
@@ -91,6 +93,9 @@ export default function MerchContagemEstoque() {
           weekdays: Array.isArray(existing.weekdays)
             ? existing.weekdays
             : (existing.weekdays ? JSON.parse(existing.weekdays) : []),
+          pdv_overrides: existing.pdv_overrides
+            ? (typeof existing.pdv_overrides === 'object' ? existing.pdv_overrides : JSON.parse(existing.pdv_overrides))
+            : {},
         }
       : { ...emptyRule, brand_id: brand.id });
     setProdSearch("");
@@ -151,6 +156,25 @@ export default function MerchContagemEstoque() {
         ? f.weekdays.filter((x: number) => x !== n)
         : [...f.weekdays, n].sort((a: number, b: number) => a - b),
     }));
+  };
+
+  const togglePdvWeekday = (pdvId: string, n: number) => {
+    setForm((f: any) => {
+      const ov = { ...(f.pdv_overrides || {}) };
+      const cur = ov[pdvId]?.weekdays || [];
+      const next = cur.includes(n) ? cur.filter((x: number) => x !== n) : [...cur, n].sort((a: number, b: number) => a - b);
+      if (next.length === 0) delete ov[pdvId];
+      else ov[pdvId] = { weekdays: next };
+      return { ...f, pdv_overrides: ov };
+    });
+  };
+
+  const clearPdvOverride = (pdvId: string) => {
+    setForm((f: any) => {
+      const ov = { ...(f.pdv_overrides || {}) };
+      delete ov[pdvId];
+      return { ...f, pdv_overrides: ov };
+    });
   };
 
   return (
@@ -315,6 +339,60 @@ export default function MerchContagemEstoque() {
                 })}
               </div>
             </div>
+
+            <div className="border rounded-lg p-3">
+              <Label className="text-sm">Dias específicos por PDV (opcional)</Label>
+              <p className="text-[11px] text-muted-foreground mb-2">
+                Sobrescreve os dias da regra para PDVs específicos. Ex.: PDV A na segunda, PDV B na terça.
+                Deixe sem marcar para o PDV seguir os dias gerais acima.
+              </p>
+              {brandPdvs.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhum PDV vinculado a esta marca.</p>
+              ) : (
+                <ScrollArea className="h-56 pr-2">
+                  <div className="space-y-2">
+                    {(brandPdvs as any[]).map((p: any) => {
+                      const pdvId = p.pdv_id || p.id;
+                      const pdvName = p.pdv_name || p.name || pdvId;
+                      const ov = form.pdv_overrides?.[pdvId]?.weekdays || [];
+                      const hasOv = ov.length > 0;
+                      return (
+                        <div key={pdvId} className="border rounded p-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-xs font-medium">{pdvName}</p>
+                            {hasOv && (
+                              <Button type="button" size="sm" variant="ghost" className="h-6 text-[10px]"
+                                onClick={() => clearPdvOverride(pdvId)}>
+                                Limpar
+                              </Button>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {WEEKDAYS.map(w => {
+                              const active = ov.includes(w.value);
+                              return (
+                                <Button
+                                  key={w.value}
+                                  type="button"
+                                  size="sm"
+                                  variant={active ? "default" : "outline"}
+                                  className="h-7 px-2 text-[11px]"
+                                  onClick={() => togglePdvWeekday(pdvId, w.value)}
+                                >
+                                  {w.label}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
+
+
 
             <div className="grid grid-cols-1 gap-2 border rounded-lg p-3">
               <label className="flex items-center gap-2 text-sm">
