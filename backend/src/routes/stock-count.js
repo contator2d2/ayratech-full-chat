@@ -96,6 +96,55 @@ async function getProductCols() {
   return cols;
 }
 
+// Compute the period window (start,end inclusive) that contains `date` for a given rule frequency.
+// Supported: weekly | biweekly | monthly | bimonthly | quarterly | semiannual | annual | custom (uses custom_days)
+function computePeriodWindow(date, frequency = 'weekly', interval = 1, customDays = null) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const fmt = (x) => x.toISOString().slice(0, 10);
+
+  const monthsMap = { monthly: 1, bimonthly: 2, quarterly: 3, semiannual: 6, annual: 12 };
+
+  if (frequency === 'weekly' || frequency === 'biweekly') {
+    const weeks = frequency === 'biweekly' ? 2 : 1;
+    // ISO Monday-based anchor
+    const dow = (d.getDay() + 6) % 7;
+    const monday = new Date(d); monday.setDate(d.getDate() - dow);
+    // Anchor from a fixed reference (epoch Monday 1970-01-05) to keep buckets stable
+    const anchor = new Date(Date.UTC(1970, 0, 5));
+    const diffWeeks = Math.floor((monday - anchor) / (7 * 86400000));
+    const bucketIdx = Math.floor(diffWeeks / (weeks * (interval || 1)));
+    const start = new Date(anchor.getTime() + bucketIdx * weeks * (interval || 1) * 7 * 86400000);
+    const end = new Date(start); end.setDate(start.getDate() + weeks * (interval || 1) * 7 - 1);
+    return { start: fmt(start), end: fmt(end) };
+  }
+  if (monthsMap[frequency]) {
+    const step = monthsMap[frequency] * (interval || 1);
+    // Buckets anchored at month 0 (Jan) of year 1970
+    const monthsSinceAnchor = (d.getFullYear() - 1970) * 12 + d.getMonth();
+    const bucketIdx = Math.floor(monthsSinceAnchor / step);
+    const startMonthAbs = bucketIdx * step;
+    const startYear = 1970 + Math.floor(startMonthAbs / 12);
+    const startMonth = startMonthAbs % 12;
+    const start = new Date(startYear, startMonth, 1);
+    const end = new Date(startYear, startMonth + step, 0); // last day of period
+    return { start: fmt(start), end: fmt(end) };
+  }
+  if (frequency === 'custom' && customDays && customDays > 0) {
+    const anchor = new Date(Date.UTC(1970, 0, 5));
+    const diffDays = Math.floor((d - anchor) / 86400000);
+    const bucketIdx = Math.floor(diffDays / customDays);
+    const start = new Date(anchor.getTime() + bucketIdx * customDays * 86400000);
+    const end = new Date(start.getTime() + (customDays - 1) * 86400000);
+    return { start: fmt(start), end: fmt(end) };
+  }
+  // fallback = weekly
+  const dow = (d.getDay() + 6) % 7;
+  const monday = new Date(d); monday.setDate(d.getDate() - dow);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  return { start: fmt(monday), end: fmt(sunday) };
+}
+
 // ===== RULES =====
 router.get('/rules', authenticate, async (req, res) => {
   try {
