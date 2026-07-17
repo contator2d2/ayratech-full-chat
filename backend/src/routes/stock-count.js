@@ -203,6 +203,7 @@ router.post('/rules', authenticate, async (req, res) => {
            enabled=EXCLUDED.enabled, frequency=EXCLUDED.frequency,
            frequency_interval=EXCLUDED.frequency_interval, custom_days=EXCLUDED.custom_days,
            weekdays=EXCLUDED.weekdays,
+           pdv_overrides=EXCLUDED.pdv_overrides,
            require_photo=EXCLUDED.require_photo, require_justification=EXCLUDED.require_justification,
            allow_postpone=EXCLUDED.allow_postpone, postpone_limit_type=EXCLUDED.postpone_limit_type,
            block_route_completion=EXCLUDED.block_route_completion,
