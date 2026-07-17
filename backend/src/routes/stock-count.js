@@ -167,13 +167,16 @@ router.post('/rules', authenticate, async (req, res) => {
     const orgId = await getOrgId(req.userId);
     if (!orgId) return res.status(403).json({ error: 'Sem organização' });
     const {
-      id, brand_id, enabled, frequency, require_photo, require_justification,
+      id, brand_id, enabled, frequency, frequency_interval, custom_days,
+      require_photo, require_justification,
       allow_postpone, postpone_limit_type, block_route_completion, selected_products,
     } = req.body;
     const cols = {
       brand_id: brand_id || null,
       enabled: enabled ?? false,
       frequency: frequency ?? 'weekly',
+      frequency_interval: Number.isFinite(Number(frequency_interval)) && Number(frequency_interval) > 0 ? Number(frequency_interval) : 1,
+      custom_days: frequency === 'custom' && Number(custom_days) > 0 ? Number(custom_days) : null,
       require_photo: require_photo ?? false,
       require_justification: require_justification ?? true,
       allow_postpone: allow_postpone ?? true,
@@ -194,6 +197,7 @@ router.post('/rules', authenticate, async (req, res) => {
         `INSERT INTO stock_count_rules (${keys.join(',')}) VALUES (${ph})
          ON CONFLICT (organization_id, brand_id) DO UPDATE SET
            enabled=EXCLUDED.enabled, frequency=EXCLUDED.frequency,
+           frequency_interval=EXCLUDED.frequency_interval, custom_days=EXCLUDED.custom_days,
            require_photo=EXCLUDED.require_photo, require_justification=EXCLUDED.require_justification,
            allow_postpone=EXCLUDED.allow_postpone, postpone_limit_type=EXCLUDED.postpone_limit_type,
            block_route_completion=EXCLUDED.block_route_completion,
