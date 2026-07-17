@@ -32,6 +32,16 @@ const FREQ_OPTIONS = [
   { value: "custom", label: "Personalizado (X dias)" },
 ];
 
+const WEEKDAYS = [
+  { value: 0, label: "Dom" },
+  { value: 1, label: "Seg" },
+  { value: 2, label: "Ter" },
+  { value: 3, label: "Qua" },
+  { value: 4, label: "Qui" },
+  { value: 5, label: "Sex" },
+  { value: 6, label: "Sáb" },
+];
+
 const emptyRule = {
   id: null as string | null,
   brand_id: "",
@@ -39,6 +49,7 @@ const emptyRule = {
   frequency: "weekly",
   frequency_interval: 1,
   custom_days: 30,
+  weekdays: [] as number[],
   require_photo: false,
   require_justification: true,
   allow_postpone: true,
@@ -77,6 +88,9 @@ export default function MerchContagemEstoque() {
             ? existing.selected_products : [],
           frequency_interval: existing.frequency_interval || 1,
           custom_days: existing.custom_days || 30,
+          weekdays: Array.isArray(existing.weekdays)
+            ? existing.weekdays
+            : (existing.weekdays ? JSON.parse(existing.weekdays) : []),
         }
       : { ...emptyRule, brand_id: brand.id });
     setProdSearch("");
@@ -124,6 +138,21 @@ export default function MerchContagemEstoque() {
     return base;
   };
 
+  const weekdaysLabel = (r: any) => {
+    const wd = Array.isArray(r.weekdays) ? r.weekdays : (r.weekdays ? JSON.parse(r.weekdays) : null);
+    if (!wd || !wd.length) return null;
+    return wd.map((n: number) => WEEKDAYS.find(w => w.value === Number(n))?.label).filter(Boolean).join(", ");
+  };
+
+  const toggleWeekday = (n: number) => {
+    setForm((f: any) => ({
+      ...f,
+      weekdays: f.weekdays.includes(n)
+        ? f.weekdays.filter((x: number) => x !== n)
+        : [...f.weekdays, n].sort((a: number, b: number) => a - b),
+    }));
+  };
+
   return (
     <MainLayout>
       <div className="space-y-4">
@@ -167,6 +196,9 @@ export default function MerchContagemEstoque() {
                                   {rule.enabled ? "Ativa" : "Desativada"}
                                 </Badge>
                                 <Badge variant="outline">{freqLabel(rule)}</Badge>
+                                {weekdaysLabel(rule) && (
+                                  <Badge variant="outline">{weekdaysLabel(rule)}</Badge>
+                                )}
                                 {rule.block_route_completion && (
                                   <Badge className="bg-red-100 text-red-800">Bloqueia conclusão</Badge>
                                 )}
@@ -258,6 +290,30 @@ export default function MerchContagemEstoque() {
                   />
                 </div>
               )}
+            </div>
+
+            <div className="border rounded-lg p-3">
+              <Label className="text-sm">Dias da semana</Label>
+              <p className="text-[11px] text-muted-foreground mb-2">
+                Selecione em quais dias da semana a contagem deve aparecer. Deixe vazio para todos os dias.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {WEEKDAYS.map(w => {
+                  const active = form.weekdays?.includes(w.value);
+                  return (
+                    <Button
+                      key={w.value}
+                      type="button"
+                      size="sm"
+                      variant={active ? "default" : "outline"}
+                      className="h-8 px-3"
+                      onClick={() => toggleWeekday(w.value)}
+                    >
+                      {w.label}
+                    </Button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-2 border rounded-lg p-3">
