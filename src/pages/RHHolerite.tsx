@@ -114,6 +114,84 @@ export default function RHHolerite() {
   const totalLiquido = payslips.reduce((s: number, p: any) => s + (parseFloat(p.net_salary) || 0), 0);
   const totalBruto = payslips.reduce((s: number, p: any) => s + (parseFloat(p.gross_salary) || 0), 0);
 
+  const uploadOne = async (file: File): Promise<string> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const token = getAuthToken();
+    const res = await fetch(`${API_URL}/api/uploads`, {
+      method: 'POST',
+      body: fd,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new Error('Upload falhou');
+    const data = await res.json();
+    let url = data?.file?.url || data?.url || data?.file_url || data?.path;
+    if (url && url.startsWith('/') && API_URL) url = `${API_URL}${url}`;
+    return url;
+  };
+
+  const handleBulkFiles = (files: FileList | null) => {
+    if (!files) return;
+    const arr = Array.from(files).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    setBulkFiles(prev => [...prev, ...arr]);
+  };
+
+  const handleBulkStart = async () => {
+    if (bulkFiles.length === 0) { toast({ title: 'Selecione ao menos um PDF', variant: 'destructive' }); return; }
+    if (!bulkReference) { toast({ title: 'Informe o mês de referência', variant: 'destructive' }); return; }
+    setBulkProcessing(true);
+    setBulkProgress({ done: 0, total: bulkFiles.length });
+    try {
+      // Upload all in parallel with progress
+      const uploaded: Array<{ filename: string; pdf_url: string }> = [];
+      let done = 0;
+      await Promise.all(bulkFiles.map(async (f) => {
+        try {
+          const url = await uploadOne(f);
+          uploaded.push({ filename: f.name, pdf_url: url });
+        } catch (e) {
+          console.error('Upload err', f.name, e);
+        } finally {
+          done++;
+          setBulkProgress({ done, total: bulkFiles.length });
+        }
+      }));
+      if (uploaded.length === 0) throw new Error('Nenhum upload concluído');
+      const matchRes: any = await bulkMatchMut.mutateAsync({ filenames: uploaded.map(u => u.filename) });
+      const rows = uploaded.map(u => {
+        const m = (matchRes?.matches || []).find((x: any) => x.filename === u.filename);
+        return { filename: u.filename, pdf_url: u.pdf_url, employee_id: m?.employee_id || '', score: m?.score || 0 };
+      });
+      setBulkRows(rows);
+      setBulkStep('review');
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message || 'Falha no processamento', variant: 'destructive' });
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  const handleBulkConfirm = async () => {
+    const items = bulkRows.filter(r => r.employee_id);
+    if (items.length === 0) { toast({ title: 'Nenhuma linha com colaborador definido', variant: 'destructive' }); return; }
+    setBulkProcessing(true);
+    try {
+      const r: any = await bulkImportMut.mutateAsync({
+        reference_month: bulkReference,
+        payment_type: bulkPaymentType,
+        send_for_signature: bulkSendSignature,
+        items: items.map(x => ({ employee_id: x.employee_id, pdf_url: x.pdf_url, filename: x.filename })),
+      });
+      toast({ title: `${r.created_count} holerite(s) importado(s)`, description: r.error_count ? `${r.error_count} com erro` : undefined });
+      setBulkOpen(false);
+    } catch (e: any) {
+      toast({ title: 'Erro na importação', description: e.message, variant: 'destructive' });
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+
   return (
     <MainLayout>
       <div className="space-y-4">
