@@ -292,6 +292,30 @@ export default function MerchContagemEstoque() {
               )}
             </div>
 
+            <div className="border rounded-lg p-3">
+              <Label className="text-sm">Dias da semana</Label>
+              <p className="text-[11px] text-muted-foreground mb-2">
+                Selecione em quais dias da semana a contagem deve aparecer. Deixe vazio para todos os dias.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {WEEKDAYS.map(w => {
+                  const active = form.weekdays?.includes(w.value);
+                  return (
+                    <Button
+                      key={w.value}
+                      type="button"
+                      size="sm"
+                      variant={active ? "default" : "outline"}
+                      className="h-8 px-3"
+                      onClick={() => toggleWeekday(w.value)}
+                    >
+                      {w.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 gap-2 border rounded-lg p-3">
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox
