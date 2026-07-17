@@ -122,8 +122,9 @@ export default function RHHolerite() {
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><FileText className="h-6 w-6 text-primary" /> Holerites</h1>
             <p className="text-sm text-muted-foreground">Demonstrativos de pagamento</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="gap-2"><Upload className="h-4 w-4" /> Importar PDF</Button>
+            <Button variant="outline" onClick={() => { setBulkOpen(true); setBulkStep('select'); setBulkFiles([]); setBulkRows([]); }} className="gap-2"><FolderUp className="h-4 w-4" /> Importar em Lote</Button>
             <Button onClick={() => setDialogOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Gerar Holerite</Button>
           </div>
         </div>
