@@ -1078,7 +1078,136 @@ router.post('/payslips/import', async (req, res) => {
   }
 });
 
-// ===== ABSENCES =====
+// ===== BULK IMPORT (multiple PDFs at once, auto-match by filename) =====
+
+function normalizeText(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function onlyDigits(s) { return String(s || '').replace(/\D+/g, ''); }
+
+function scoreFilenameEmployee(filename, emp) {
+  const base = normalizeText(filename.replace(/\.pdf$/i, '').replace(/[_\-]+/g, ' '));
+  const digits = onlyDigits(filename);
+  let score = 0;
+  // CPF (11 digits) match
+  const cpfDigits = onlyDigits(emp.cpf);
+  if (cpfDigits && digits.includes(cpfDigits)) score += 100;
+  // Registration number
+  if (emp.registration_number) {
+    const reg = onlyDigits(emp.registration_number) || String(emp.registration_number).toLowerCase();
+    if (reg && (digits.includes(reg) || base.includes(String(reg).toLowerCase()))) score += 60;
+  }
+  // Name tokens
+  const name = normalizeText(emp.full_name);
+  if (!name) return score;
+  const tokens = name.split(' ').filter(t => t.length >= 3);
+  let hits = 0;
+  for (const t of tokens) if (base.includes(t)) hits++;
+  if (hits > 0) score += hits * 10 + (hits === tokens.length ? 20 : 0);
+  // Full name substring
+  if (base.includes(name)) score += 40;
+  return score;
+}
+
+// Match a list of filenames against active employees (no persistence)
+router.post('/payslips/bulk-match', async (req, res) => {
+  try {
+    const orgId = await getUserOrgId(req.userId);
+    if (!orgId) return res.status(400).json({ error: 'Organização não encontrada' });
+    const filenames = Array.isArray(req.body?.filenames) ? req.body.filenames : [];
+    if (!filenames.length) return res.json({ matches: [] });
+    const empRes = await query(
+      `SELECT id, full_name, cpf, registration_number FROM employees WHERE organization_id=$1 AND status='ativo'`,
+      [orgId]
+    );
+    const employees = empRes.rows;
+    const matches = filenames.map((filename) => {
+      let best = null;
+      let bestScore = 0;
+      for (const emp of employees) {
+        const s = scoreFilenameEmployee(filename, emp);
+        if (s > bestScore) { bestScore = s; best = emp; }
+      }
+      return {
+        filename,
+        employee_id: bestScore >= 20 ? best.id : null,
+        employee_name: bestScore >= 20 ? best.full_name : null,
+        score: bestScore,
+      };
+    });
+    res.json({ matches, employees: employees.map(e => ({ id: e.id, full_name: e.full_name })) });
+  } catch (err) {
+    logError('rh.payslips.bulk-match', err);
+    res.status(500).json({ error: 'Erro ao mapear holerites' });
+  }
+});
+
+// Import many payslips at once (each with its own employee_id + pdf_url)
+router.post('/payslips/bulk-import', async (req, res) => {
+  try {
+    const orgId = await getUserOrgId(req.userId);
+    if (!orgId) return res.status(400).json({ error: 'Organização não encontrada' });
+    const { reference_month, payment_type, send_for_signature, items } = req.body || {};
+    if (!reference_month || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'reference_month e items são obrigatórios' });
+    }
+    const created = [];
+    const errors = [];
+    for (const it of items) {
+      if (!it?.employee_id || !it?.pdf_url) {
+        errors.push({ filename: it?.filename, error: 'employee_id/pdf_url ausente' });
+        continue;
+      }
+      try {
+        const r = await query(
+          `INSERT INTO payslips (organization_id, employee_id, reference_month, payment_type, pdf_url, status, notes, generated_by)
+           VALUES ($1,$2,$3,$4,$5,'gerado',$6,$7) RETURNING *`,
+          [orgId, it.employee_id, reference_month, payment_type || 'mensal', it.pdf_url, it.notes || '', req.userId]
+        );
+        const payslip = r.rows[0];
+
+        if (send_for_signature) {
+          try {
+            const empRes = await query('SELECT full_name, email, cpf, phone FROM employees WHERE id=$1', [it.employee_id]);
+            const emp = empRes.rows[0];
+            if (emp) {
+              const docRes = await query(
+                `INSERT INTO doc_signature_documents (organization_id, title, description, file_url, status, created_by)
+                 VALUES ($1,$2,$3,$4,'pendente',$5) RETURNING *`,
+                [orgId, `Holerite ${reference_month} - ${emp.full_name}`, `Demonstrativo de pagamento ref. ${reference_month}`, it.pdf_url, req.userId]
+              );
+              const doc = docRes.rows[0];
+              const crypto = await import('crypto');
+              const token = crypto.randomBytes(32).toString('hex');
+              await query(
+                `INSERT INTO doc_signature_signers (document_id, name, email, cpf, phone, sign_order, token)
+                 VALUES ($1,$2,$3,$4,$5,1,$6)`,
+                [doc.id, emp.full_name, emp.email, emp.cpf, emp.phone, token]
+              );
+              await query('UPDATE payslips SET notes = COALESCE(notes,\'\') || $2 WHERE id=$1',
+                [payslip.id, `\n[Assinatura: ${doc.id}]`]);
+              payslip.signature_document_id = doc.id;
+            }
+          } catch (sigErr) {
+            logError('rh.payslips.bulk-import.signature', sigErr);
+          }
+        }
+        created.push({ filename: it.filename, payslip });
+      } catch (e) {
+        errors.push({ filename: it?.filename, error: e.message });
+      }
+    }
+    res.json({ created_count: created.length, error_count: errors.length, created, errors });
+  } catch (err) {
+    logError('rh.payslips.bulk-import', err);
+    res.status(500).json({ error: 'Erro ao importar holerites em lote' });
+  }
+});
 
 router.get('/absences', async (req, res) => {
   try {
