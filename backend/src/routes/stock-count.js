@@ -244,18 +244,17 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
     if (rules.length === 0) return res.json([]);
 
     const visitDate = routeRow.visit_date ? new Date(routeRow.visit_date) : new Date();
-    // Week ISO monday..sunday
-    const dow = (visitDate.getDay() + 6) % 7; // 0=Mon
-    const monday = new Date(visitDate); monday.setDate(visitDate.getDate() - dow);
-    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
-    const weekStart = monday.toISOString().slice(0, 10);
-    const weekEnd = sunday.toISOString().slice(0, 10);
 
     const productCols = await getProductCols();
     const result = [];
 
     for (const rule of rules) {
-      // Look for an execution for this brand+pdv+week, prefer the one attached to this route
+      // Per-rule period window based on rule.frequency
+      const { start: weekStart, end: weekEnd } = computePeriodWindow(
+        visitDate, rule.frequency, rule.frequency_interval || 1, rule.custom_days
+      );
+
+      // Look for an execution for this brand+pdv+period, prefer the one attached to this route
       let exec = (await query(
         `SELECT * FROM stock_count_executions
          WHERE organization_id=$1 AND brand_id=$2 AND pdv_id=$3 AND week_start=$4
