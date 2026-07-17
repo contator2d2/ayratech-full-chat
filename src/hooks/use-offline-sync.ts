@@ -26,6 +26,7 @@ export function useOnlineStatus() {
 export function useOfflineSync() {
   const isOnline = useOnlineStatus();
   const [isSyncing, setIsSyncing] = useState(false);
+  const syncingRef = useRef(false);
   const [localFileUrls, setLocalFileUrls] = useState<Record<string, string>>({});
   const urlsToRevoke = useRef<Set<string>>(new Set());
 
