@@ -72,7 +72,8 @@ export default function MerchContagemEstoque() {
   const { data: products = [] } = useProducts(
     form.brand_id ? { brand_id: form.brand_id } : undefined,
   );
-  const { data: brandPdvs = [] } = useBrandPdvs(form.brand_id || undefined);
+  const [showAllPdvs, setShowAllPdvs] = useState(false);
+  const { data: brandPdvs = [] } = useBrandPdvs(form.brand_id || undefined, { all: showAllPdvs });
 
   const rulesByBrand = useMemo(() => {
     const map = new Map<string, any>();
