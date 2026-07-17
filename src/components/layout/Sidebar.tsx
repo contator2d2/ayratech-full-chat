@@ -273,8 +273,12 @@ function SidebarContentComponent({ isExpanded, isSuperadmin, onNavigate }: Sideb
         
         // If user has a permission template, use it instead of role-based checks
         if (hasTemplate && item.pageKey) {
-          // Template explicitly controls access - if key exists, use its value; if not in template, deny
-          return pagePermissions[item.pageKey] === true;
+          // Template explicitly controls access - if key exists, use its value.
+          // If the key is not present in the template (new/unmapped page), fall back to role-based checks
+          // so newly-added pages are not accidentally hidden from everyone.
+          if (item.pageKey in (pagePermissions || {})) {
+            return pagePermissions[item.pageKey] === true;
+          }
         }
         
         // Fallback to role-based checks when no template
