@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useBrands, useProducts } from "@/hooks/use-merchandising";
+import { useBrands, useProducts, useBrandPdvs } from "@/hooks/use-merchandising";
 import {
   useStockCountRules, useUpsertStockCountRule, useDeleteStockCountRule,
 } from "@/hooks/use-stock-count";
