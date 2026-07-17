@@ -54,6 +54,7 @@ import merchandisingRoutes from './routes/merchandising.js';
 import merchRoutesRoutes from './routes/merch-routes.js';
 import accessControlRoutes from './routes/access-control.js';
 import priceResearchRoutes from './routes/price-research.js';
+import stockCountRoutes from './routes/stock-count.js';
 import merchAnalyticsRoutes from './routes/merch-analytics.js';
 import merchChecklistsRoutes from './routes/merch-checklists.js';
 import ayratechAiRoutes from './routes/ayratech-ai.js';
