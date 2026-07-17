@@ -200,6 +200,7 @@ router.post('/rules', authenticate, async (req, res) => {
          ON CONFLICT (organization_id, brand_id) DO UPDATE SET
            enabled=EXCLUDED.enabled, frequency=EXCLUDED.frequency,
            frequency_interval=EXCLUDED.frequency_interval, custom_days=EXCLUDED.custom_days,
+           weekdays=EXCLUDED.weekdays,
            require_photo=EXCLUDED.require_photo, require_justification=EXCLUDED.require_justification,
            allow_postpone=EXCLUDED.allow_postpone, postpone_limit_type=EXCLUDED.postpone_limit_type,
            block_route_completion=EXCLUDED.block_route_completion,
