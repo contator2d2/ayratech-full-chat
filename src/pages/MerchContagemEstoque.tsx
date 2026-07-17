@@ -50,6 +50,7 @@ const emptyRule = {
   frequency_interval: 1,
   custom_days: 30,
   weekdays: [] as number[],
+  pdv_overrides: {} as Record<string, { weekdays: number[] }>,
   require_photo: false,
   require_justification: true,
   allow_postpone: true,
