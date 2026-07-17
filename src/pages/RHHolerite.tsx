@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { usePayslips, useCreatePayslip, useUpdatePayslip, useImportPayslip, useEmployees } from "@/hooks/use-rh";
+import { usePayslips, useCreatePayslip, useUpdatePayslip, useImportPayslip, useEmployees, useBulkMatchPayslips, useBulkImportPayslips } from "@/hooks/use-rh";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Upload, PenTool } from "lucide-react";
+import { Plus, FileText, Upload, PenTool, Trash2, CheckCircle2, AlertCircle, FolderUp } from "lucide-react";
 import { format } from "date-fns";
-import { api } from "@/lib/api";
+import { api, API_URL, getAuthToken } from "@/lib/api";
 
 const STATUS_COLORS: Record<string, string> = {
   rascunho: "bg-yellow-500/10 text-yellow-700 border-yellow-200",
@@ -38,7 +38,19 @@ export default function RHHolerite() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bulkInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Bulk import state
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkStep, setBulkStep] = useState<'select' | 'review'>('select');
+  const [bulkReference, setBulkReference] = useState(format(new Date(), 'yyyy-MM'));
+  const [bulkPaymentType, setBulkPaymentType] = useState('mensal');
+  const [bulkSendSignature, setBulkSendSignature] = useState(true);
+  const [bulkFiles, setBulkFiles] = useState<File[]>([]);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
+  const [bulkRows, setBulkRows] = useState<Array<{ filename: string; pdf_url: string; employee_id: string; score: number }>>([]);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   const { data: payslips = [], isLoading } = usePayslips({
     reference_month: monthFilter || undefined,
@@ -47,6 +59,9 @@ export default function RHHolerite() {
   const { data: employees = [] } = useEmployees({ status: "ativo" });
   const createMut = useCreatePayslip();
   const importMut = useImportPayslip();
+  const bulkMatchMut = useBulkMatchPayslips();
+  const bulkImportMut = useBulkImportPayslips();
+
 
   const fmtCurrency = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 
@@ -99,6 +114,84 @@ export default function RHHolerite() {
   const totalLiquido = payslips.reduce((s: number, p: any) => s + (parseFloat(p.net_salary) || 0), 0);
   const totalBruto = payslips.reduce((s: number, p: any) => s + (parseFloat(p.gross_salary) || 0), 0);
 
+  const uploadOne = async (file: File): Promise<string> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const token = getAuthToken();
+    const res = await fetch(`${API_URL}/api/uploads`, {
+      method: 'POST',
+      body: fd,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new Error('Upload falhou');
+    const data = await res.json();
+    let url = data?.file?.url || data?.url || data?.file_url || data?.path;
+    if (url && url.startsWith('/') && API_URL) url = `${API_URL}${url}`;
+    return url;
+  };
+
+  const handleBulkFiles = (files: FileList | null) => {
+    if (!files) return;
+    const arr = Array.from(files).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    setBulkFiles(prev => [...prev, ...arr]);
+  };
+
+  const handleBulkStart = async () => {
+    if (bulkFiles.length === 0) { toast({ title: 'Selecione ao menos um PDF', variant: 'destructive' }); return; }
+    if (!bulkReference) { toast({ title: 'Informe o mês de referência', variant: 'destructive' }); return; }
+    setBulkProcessing(true);
+    setBulkProgress({ done: 0, total: bulkFiles.length });
+    try {
+      // Upload all in parallel with progress
+      const uploaded: Array<{ filename: string; pdf_url: string }> = [];
+      let done = 0;
+      await Promise.all(bulkFiles.map(async (f) => {
+        try {
+          const url = await uploadOne(f);
+          uploaded.push({ filename: f.name, pdf_url: url });
+        } catch (e) {
+          console.error('Upload err', f.name, e);
+        } finally {
+          done++;
+          setBulkProgress({ done, total: bulkFiles.length });
+        }
+      }));
+      if (uploaded.length === 0) throw new Error('Nenhum upload concluído');
+      const matchRes: any = await bulkMatchMut.mutateAsync({ filenames: uploaded.map(u => u.filename) });
+      const rows = uploaded.map(u => {
+        const m = (matchRes?.matches || []).find((x: any) => x.filename === u.filename);
+        return { filename: u.filename, pdf_url: u.pdf_url, employee_id: m?.employee_id || '', score: m?.score || 0 };
+      });
+      setBulkRows(rows);
+      setBulkStep('review');
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message || 'Falha no processamento', variant: 'destructive' });
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  const handleBulkConfirm = async () => {
+    const items = bulkRows.filter(r => r.employee_id);
+    if (items.length === 0) { toast({ title: 'Nenhuma linha com colaborador definido', variant: 'destructive' }); return; }
+    setBulkProcessing(true);
+    try {
+      const r: any = await bulkImportMut.mutateAsync({
+        reference_month: bulkReference,
+        payment_type: bulkPaymentType,
+        send_for_signature: bulkSendSignature,
+        items: items.map(x => ({ employee_id: x.employee_id, pdf_url: x.pdf_url, filename: x.filename })),
+      });
+      toast({ title: `${r.created_count} holerite(s) importado(s)`, description: r.error_count ? `${r.error_count} com erro` : undefined });
+      setBulkOpen(false);
+    } catch (e: any) {
+      toast({ title: 'Erro na importação', description: e.message, variant: 'destructive' });
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+
   return (
     <MainLayout>
       <div className="space-y-4">
@@ -107,8 +200,9 @@ export default function RHHolerite() {
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><FileText className="h-6 w-6 text-primary" /> Holerites</h1>
             <p className="text-sm text-muted-foreground">Demonstrativos de pagamento</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="gap-2"><Upload className="h-4 w-4" /> Importar PDF</Button>
+            <Button variant="outline" onClick={() => { setBulkOpen(true); setBulkStep('select'); setBulkFiles([]); setBulkRows([]); }} className="gap-2"><FolderUp className="h-4 w-4" /> Importar em Lote</Button>
             <Button onClick={() => setDialogOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Gerar Holerite</Button>
           </div>
         </div>
@@ -306,6 +400,156 @@ export default function RHHolerite() {
             <Button variant="outline" onClick={() => setImportDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleImport} disabled={importing}>{importing ? "Importando..." : "Importar e Enviar"}</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Import Dialog */}
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderUp className="h-5 w-5" /> Importar Holerites em Lote
+            </DialogTitle>
+          </DialogHeader>
+
+          {bulkStep === 'select' && (
+            <div className="space-y-4 overflow-y-auto pr-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <Label>Mês Referência *</Label>
+                  <Input type="month" value={bulkReference} onChange={e => setBulkReference(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Tipo</Label>
+                  <Select value={bulkPaymentType} onValueChange={setBulkPaymentType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mensal">Mensal</SelectItem>
+                      <SelectItem value="adiantamento">Adiantamento</SelectItem>
+                      <SelectItem value="13o">13º Salário</SelectItem>
+                      <SelectItem value="ferias">Férias</SelectItem>
+                      <SelectItem value="rescisao">Rescisão</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between border rounded-md p-2">
+                  <div className="flex items-center gap-2">
+                    <PenTool className="h-4 w-4 text-primary" />
+                    <span className="text-sm">Enviar p/ assinatura</span>
+                  </div>
+                  <Switch checked={bulkSendSignature} onCheckedChange={setBulkSendSignature} />
+                </div>
+              </div>
+
+              <div
+                className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => bulkInputRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={e => { e.preventDefault(); e.stopPropagation(); handleBulkFiles(e.dataTransfer.files); }}
+              >
+                <input ref={bulkInputRef} type="file" accept=".pdf" multiple className="hidden" onChange={e => handleBulkFiles(e.target.files)} />
+                <FolderUp className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">Clique ou arraste múltiplos PDFs aqui</p>
+                <p className="text-xs text-muted-foreground mt-1">Dica: use nomes com o CPF, matrícula ou nome do colaborador para melhor mapeamento automático</p>
+              </div>
+
+              {bulkFiles.length > 0 && (
+                <div className="border rounded-lg max-h-64 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Arquivo</TableHead>
+                        <TableHead className="w-24">Tamanho</TableHead>
+                        <TableHead className="w-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bulkFiles.map((f, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-sm">{f.name}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{(f.size / 1024).toFixed(0)} KB</TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" onClick={() => setBulkFiles(prev => prev.filter((_, idx) => idx !== i))}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {bulkProcessing && (
+                <div className="text-sm text-muted-foreground">
+                  Enviando arquivos... {bulkProgress.done}/{bulkProgress.total}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" onClick={() => setBulkOpen(false)}>Cancelar</Button>
+                <Button onClick={handleBulkStart} disabled={bulkProcessing || bulkFiles.length === 0}>
+                  {bulkProcessing ? 'Processando...' : `Processar ${bulkFiles.length} arquivo(s)`}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {bulkStep === 'review' && (
+            <div className="space-y-3 overflow-hidden flex flex-col flex-1">
+              <p className="text-sm text-muted-foreground">
+                Revise o mapeamento automático. Ajuste o colaborador se necessário. Linhas sem colaborador serão ignoradas.
+              </p>
+              <div className="border rounded-lg overflow-y-auto flex-1">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Arquivo</TableHead>
+                      <TableHead>Colaborador</TableHead>
+                      <TableHead className="w-24">Confiança</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bulkRows.map((row, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="text-sm truncate max-w-xs">{row.filename}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={row.employee_id || '__none__'}
+                            onValueChange={v => setBulkRows(prev => prev.map((r, idx) => idx === i ? { ...r, employee_id: v === '__none__' ? '' : v } : r))}
+                          >
+                            <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— Ignorar —</SelectItem>
+                              {employees.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {row.employee_id ? (
+                            row.score >= 100 ? <Badge className="bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" /> Alta</Badge>
+                            : row.score >= 40 ? <Badge className="bg-yellow-500">Média</Badge>
+                            : <Badge variant="outline"><AlertCircle className="h-3 w-3 mr-1" /> Baixa</Badge>
+                          ) : <Badge variant="outline">—</Badge>}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t">
+                <span className="text-sm text-muted-foreground">
+                  {bulkRows.filter(r => r.employee_id).length} de {bulkRows.length} prontos p/ importar
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setBulkStep('select')}>Voltar</Button>
+                  <Button onClick={handleBulkConfirm} disabled={bulkProcessing}>
+                    {bulkProcessing ? 'Importando...' : 'Confirmar e Importar'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </MainLayout>
