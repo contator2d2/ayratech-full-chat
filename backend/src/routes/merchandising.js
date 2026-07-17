@@ -950,6 +950,16 @@ router.get('/brand-pdvs/:brandId', async (req, res) => {
        ORDER BY p.name`,
       [req.params.brandId, req.orgId]
     );
+    // Fallback: if no explicit links, return all org PDVs so admins can still configure per-PDV rules
+    if (r.rows.length === 0 || req.query.all === '1') {
+      const all = await query(
+        `SELECT NULL::uuid as id, $1::uuid as brand_id, p.id as pdv_id, p.name as pdv_name,
+                p.client_name as network, p.address, p.city, p.state
+         FROM pdvs p WHERE p.organization_id=$2 ORDER BY p.name`,
+        [req.params.brandId, req.orgId]
+      );
+      return res.json(all.rows);
+    }
     res.json(r.rows);
   } catch (e) {
     logError('merch.brand_pdvs', e);
