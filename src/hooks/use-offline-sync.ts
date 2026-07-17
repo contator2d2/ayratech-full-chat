@@ -240,9 +240,11 @@ export function useOfflineSync() {
         await db.pending_api_calls.update(call.id!, { status: 'failed', error: err.message });
       }
     }
-
-    setIsSyncing(false);
-  }, [isOnline, isSyncing]);
+    } finally {
+      syncingRef.current = false;
+      setIsSyncing(false);
+    }
+  }, [isOnline]);
 
   const queueUpload = useCallback(async (file: File, token: string | null): Promise<string> => {
     const localId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
