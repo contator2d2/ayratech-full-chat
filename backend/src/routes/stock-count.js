@@ -251,6 +251,11 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
     // JS: Sunday=0..Saturday=6. Use same convention on the UI.
     const visitDow = visitDate.getDay();
 
+    const productCols = await getProductCols();
+    const result = [];
+
+
+
     for (const rule of rules) {
       // If rule has specific weekdays configured, only surface on those days
       const wd = Array.isArray(rule.weekdays) ? rule.weekdays : (rule.weekdays ? JSON.parse(rule.weekdays) : null);
