@@ -188,10 +188,11 @@ export function usePdvBrands(pdvId?: string) {
 }
 
 // ===== BRAND PDVs (which PDVs a brand serves) =====
-export function useBrandPdvs(brandId?: string) {
+export function useBrandPdvs(brandId?: string, opts?: { all?: boolean }) {
+  const all = !!opts?.all;
   return useQuery({
-    queryKey: ['merch-brand-pdvs', brandId],
-    queryFn: () => api<any[]>(`/api/merchandising/brand-pdvs/${brandId}`),
+    queryKey: ['merch-brand-pdvs', brandId, all ? 'all' : 'linked'],
+    queryFn: () => api<any[]>(`/api/merchandising/brand-pdvs/${brandId}${all ? '?all=1' : ''}`),
     enabled: !!brandId,
   });
 }
