@@ -32,6 +32,16 @@ const FREQ_OPTIONS = [
   { value: "custom", label: "Personalizado (X dias)" },
 ];
 
+const WEEKDAYS = [
+  { value: 0, label: "Dom" },
+  { value: 1, label: "Seg" },
+  { value: 2, label: "Ter" },
+  { value: 3, label: "Qua" },
+  { value: 4, label: "Qui" },
+  { value: 5, label: "Sex" },
+  { value: 6, label: "Sáb" },
+];
+
 const emptyRule = {
   id: null as string | null,
   brand_id: "",
@@ -39,6 +49,7 @@ const emptyRule = {
   frequency: "weekly",
   frequency_interval: 1,
   custom_days: 30,
+  weekdays: [] as number[],
   require_photo: false,
   require_justification: true,
   allow_postpone: true,
