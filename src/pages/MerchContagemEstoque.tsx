@@ -92,6 +92,9 @@ export default function MerchContagemEstoque() {
           weekdays: Array.isArray(existing.weekdays)
             ? existing.weekdays
             : (existing.weekdays ? JSON.parse(existing.weekdays) : []),
+          pdv_overrides: existing.pdv_overrides
+            ? (typeof existing.pdv_overrides === 'object' ? existing.pdv_overrides : JSON.parse(existing.pdv_overrides))
+            : {},
         }
       : { ...emptyRule, brand_id: brand.id });
     setProdSearch("");
