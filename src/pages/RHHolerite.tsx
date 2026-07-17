@@ -38,7 +38,19 @@ export default function RHHolerite() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bulkInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Bulk import state
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkStep, setBulkStep] = useState<'select' | 'review'>('select');
+  const [bulkReference, setBulkReference] = useState(format(new Date(), 'yyyy-MM'));
+  const [bulkPaymentType, setBulkPaymentType] = useState('mensal');
+  const [bulkSendSignature, setBulkSendSignature] = useState(true);
+  const [bulkFiles, setBulkFiles] = useState<File[]>([]);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
+  const [bulkRows, setBulkRows] = useState<Array<{ filename: string; pdf_url: string; employee_id: string; score: number }>>([]);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   const { data: payslips = [], isLoading } = usePayslips({
     reference_month: monthFilter || undefined,
@@ -47,6 +59,9 @@ export default function RHHolerite() {
   const { data: employees = [] } = useEmployees({ status: "ativo" });
   const createMut = useCreatePayslip();
   const importMut = useImportPayslip();
+  const bulkMatchMut = useBulkMatchPayslips();
+  const bulkImportMut = useBulkImportPayslips();
+
 
   const fmtCurrency = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 
