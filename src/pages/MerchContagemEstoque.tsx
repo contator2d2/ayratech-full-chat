@@ -138,6 +138,21 @@ export default function MerchContagemEstoque() {
     return base;
   };
 
+  const weekdaysLabel = (r: any) => {
+    const wd = Array.isArray(r.weekdays) ? r.weekdays : (r.weekdays ? JSON.parse(r.weekdays) : null);
+    if (!wd || !wd.length) return null;
+    return wd.map((n: number) => WEEKDAYS.find(w => w.value === Number(n))?.label).filter(Boolean).join(", ");
+  };
+
+  const toggleWeekday = (n: number) => {
+    setForm((f: any) => ({
+      ...f,
+      weekdays: f.weekdays.includes(n)
+        ? f.weekdays.filter((x: number) => x !== n)
+        : [...f.weekdays, n].sort((a: number, b: number) => a - b),
+    }));
+  };
+
   return (
     <MainLayout>
       <div className="space-y-4">
