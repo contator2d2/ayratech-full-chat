@@ -456,6 +456,7 @@ app.use('/api/merchandising', merchandisingRoutes);
 app.use('/api/merch', merchRoutesRoutes);
 app.use('/api/access-control', accessControlRoutes);
 app.use('/api/price-research', priceResearchRoutes);
+app.use('/api/stock-count', stockCountRoutes);
 app.use('/api/merch-analytics', merchAnalyticsRoutes);
 app.use('/api/merch/brand-checklists', merchChecklistsRoutes);
 app.use('/api/ayratech-ai', ayratechAiRoutes);
