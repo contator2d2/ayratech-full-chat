@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { usePayslips, useCreatePayslip, useUpdatePayslip, useImportPayslip, useEmployees } from "@/hooks/use-rh";
+import { usePayslips, useCreatePayslip, useUpdatePayslip, useImportPayslip, useEmployees, useBulkMatchPayslips, useBulkImportPayslips } from "@/hooks/use-rh";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
