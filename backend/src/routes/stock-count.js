@@ -17,6 +17,8 @@ async function ensureTables() {
     brand_id UUID NOT NULL,
     enabled BOOLEAN DEFAULT false,
     frequency VARCHAR(20) DEFAULT 'weekly',
+    frequency_interval INTEGER DEFAULT 1,
+    custom_days INTEGER,
     require_photo BOOLEAN DEFAULT false,
     require_justification BOOLEAN DEFAULT true,
     allow_postpone BOOLEAN DEFAULT true,
@@ -26,6 +28,9 @@ async function ensureTables() {
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(organization_id, brand_id))`);
+  // Backfill columns if table pre-existed
+  try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS frequency_interval INTEGER DEFAULT 1`); } catch {}
+  try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS custom_days INTEGER`); } catch {}
 
   await query(`CREATE TABLE IF NOT EXISTS stock_count_executions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -91,6 +96,55 @@ async function getProductCols() {
   return cols;
 }
 
+// Compute the period window (start,end inclusive) that contains `date` for a given rule frequency.
+// Supported: weekly | biweekly | monthly | bimonthly | quarterly | semiannual | annual | custom (uses custom_days)
+function computePeriodWindow(date, frequency = 'weekly', interval = 1, customDays = null) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const fmt = (x) => x.toISOString().slice(0, 10);
+
+  const monthsMap = { monthly: 1, bimonthly: 2, quarterly: 3, semiannual: 6, annual: 12 };
+
+  if (frequency === 'weekly' || frequency === 'biweekly') {
+    const weeks = frequency === 'biweekly' ? 2 : 1;
+    // ISO Monday-based anchor
+    const dow = (d.getDay() + 6) % 7;
+    const monday = new Date(d); monday.setDate(d.getDate() - dow);
+    // Anchor from a fixed reference (epoch Monday 1970-01-05) to keep buckets stable
+    const anchor = new Date(Date.UTC(1970, 0, 5));
+    const diffWeeks = Math.floor((monday - anchor) / (7 * 86400000));
+    const bucketIdx = Math.floor(diffWeeks / (weeks * (interval || 1)));
+    const start = new Date(anchor.getTime() + bucketIdx * weeks * (interval || 1) * 7 * 86400000);
+    const end = new Date(start); end.setDate(start.getDate() + weeks * (interval || 1) * 7 - 1);
+    return { start: fmt(start), end: fmt(end) };
+  }
+  if (monthsMap[frequency]) {
+    const step = monthsMap[frequency] * (interval || 1);
+    // Buckets anchored at month 0 (Jan) of year 1970
+    const monthsSinceAnchor = (d.getFullYear() - 1970) * 12 + d.getMonth();
+    const bucketIdx = Math.floor(monthsSinceAnchor / step);
+    const startMonthAbs = bucketIdx * step;
+    const startYear = 1970 + Math.floor(startMonthAbs / 12);
+    const startMonth = startMonthAbs % 12;
+    const start = new Date(startYear, startMonth, 1);
+    const end = new Date(startYear, startMonth + step, 0); // last day of period
+    return { start: fmt(start), end: fmt(end) };
+  }
+  if (frequency === 'custom' && customDays && customDays > 0) {
+    const anchor = new Date(Date.UTC(1970, 0, 5));
+    const diffDays = Math.floor((d - anchor) / 86400000);
+    const bucketIdx = Math.floor(diffDays / customDays);
+    const start = new Date(anchor.getTime() + bucketIdx * customDays * 86400000);
+    const end = new Date(start.getTime() + (customDays - 1) * 86400000);
+    return { start: fmt(start), end: fmt(end) };
+  }
+  // fallback = weekly
+  const dow = (d.getDay() + 6) % 7;
+  const monday = new Date(d); monday.setDate(d.getDate() - dow);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  return { start: fmt(monday), end: fmt(sunday) };
+}
+
 // ===== RULES =====
 router.get('/rules', authenticate, async (req, res) => {
   try {
@@ -113,13 +167,16 @@ router.post('/rules', authenticate, async (req, res) => {
     const orgId = await getOrgId(req.userId);
     if (!orgId) return res.status(403).json({ error: 'Sem organização' });
     const {
-      id, brand_id, enabled, frequency, require_photo, require_justification,
+      id, brand_id, enabled, frequency, frequency_interval, custom_days,
+      require_photo, require_justification,
       allow_postpone, postpone_limit_type, block_route_completion, selected_products,
     } = req.body;
     const cols = {
       brand_id: brand_id || null,
       enabled: enabled ?? false,
       frequency: frequency ?? 'weekly',
+      frequency_interval: Number.isFinite(Number(frequency_interval)) && Number(frequency_interval) > 0 ? Number(frequency_interval) : 1,
+      custom_days: frequency === 'custom' && Number(custom_days) > 0 ? Number(custom_days) : null,
       require_photo: require_photo ?? false,
       require_justification: require_justification ?? true,
       allow_postpone: allow_postpone ?? true,
@@ -140,6 +197,7 @@ router.post('/rules', authenticate, async (req, res) => {
         `INSERT INTO stock_count_rules (${keys.join(',')}) VALUES (${ph})
          ON CONFLICT (organization_id, brand_id) DO UPDATE SET
            enabled=EXCLUDED.enabled, frequency=EXCLUDED.frequency,
+           frequency_interval=EXCLUDED.frequency_interval, custom_days=EXCLUDED.custom_days,
            require_photo=EXCLUDED.require_photo, require_justification=EXCLUDED.require_justification,
            allow_postpone=EXCLUDED.allow_postpone, postpone_limit_type=EXCLUDED.postpone_limit_type,
            block_route_completion=EXCLUDED.block_route_completion,
@@ -186,18 +244,17 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
     if (rules.length === 0) return res.json([]);
 
     const visitDate = routeRow.visit_date ? new Date(routeRow.visit_date) : new Date();
-    // Week ISO monday..sunday
-    const dow = (visitDate.getDay() + 6) % 7; // 0=Mon
-    const monday = new Date(visitDate); monday.setDate(visitDate.getDate() - dow);
-    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
-    const weekStart = monday.toISOString().slice(0, 10);
-    const weekEnd = sunday.toISOString().slice(0, 10);
 
     const productCols = await getProductCols();
     const result = [];
 
     for (const rule of rules) {
-      // Look for an execution for this brand+pdv+week, prefer the one attached to this route
+      // Per-rule period window based on rule.frequency
+      const { start: weekStart, end: weekEnd } = computePeriodWindow(
+        visitDate, rule.frequency, rule.frequency_interval || 1, rule.custom_days
+      );
+
+      // Look for an execution for this brand+pdv+period, prefer the one attached to this route
       let exec = (await query(
         `SELECT * FROM stock_count_executions
          WHERE organization_id=$1 AND brand_id=$2 AND pdv_id=$3 AND week_start=$4
@@ -282,16 +339,17 @@ router.post('/execute', authenticate, async (req, res) => {
       [route_id, brand_id, pdv_id])).rows[0];
 
     if (!exec) {
-      const today = new Date();
-      const dow = (today.getDay() + 6) % 7;
-      const monday = new Date(today); monday.setDate(today.getDate() - dow);
-      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+      const rule = (await query(
+        `SELECT frequency, frequency_interval, custom_days FROM stock_count_rules WHERE organization_id=$1 AND brand_id=$2 LIMIT 1`,
+        [orgId, brand_id])).rows[0];
+      const { start, end } = computePeriodWindow(
+        new Date(), rule?.frequency || 'weekly', rule?.frequency_interval || 1, rule?.custom_days
+      );
       exec = (await query(
         `INSERT INTO stock_count_executions
          (organization_id, route_id, brand_id, pdv_id, promoter_id, status, week_start, week_end, started_at)
          VALUES ($1,$2,$3,$4,$5,'in_progress',$6,$7,NOW()) RETURNING *`,
-        [orgId, route_id, brand_id, pdv_id, promoter_id,
-         monday.toISOString().slice(0, 10), sunday.toISOString().slice(0, 10)])).rows[0];
+        [orgId, route_id, brand_id, pdv_id, promoter_id, start, end])).rows[0];
     }
 
     let filled = 0;
