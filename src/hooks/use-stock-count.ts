@@ -1,0 +1,62 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+
+export function useStockCountRules(brandId?: string) {
+  const params = brandId ? `?brand_id=${brandId}` : '';
+  return useQuery({
+    queryKey: ['stock-count-rules', brandId],
+    queryFn: () => api<any[]>(`/api/stock-count/rules${params}`),
+  });
+}
+
+export function useUpsertStockCountRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => api<any>('/api/stock-count/rules', { method: 'POST', body: data }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['stock-count-rules'] }),
+  });
+}
+
+export function useDeleteStockCountRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<any>(`/api/stock-count/rules/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['stock-count-rules'] }),
+  });
+}
+
+export function useRouteStockCount(routeId?: string) {
+  return useQuery({
+    queryKey: ['stock-count-route', routeId],
+    queryFn: () => api<any[]>(`/api/stock-count/route/${routeId}`),
+    enabled: !!routeId,
+  });
+}
+
+export function useExecuteStockCount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => api<any>('/api/stock-count/execute', { method: 'POST', body: data }),
+    onSuccess: (_, vars: any) => {
+      qc.invalidateQueries({ queryKey: ['stock-count-route', vars.route_id] });
+    },
+  });
+}
+
+export function usePostponeStockCount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { execution_id: string; reason: string; observation?: string }) =>
+      api<any>('/api/stock-count/postpone', { method: 'POST', body: data }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['stock-count-route'] }),
+  });
+}
+
+export function useJustifyStockCount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { execution_id: string; reason: string; observation?: string }) =>
+      api<any>('/api/stock-count/justify', { method: 'POST', body: data }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['stock-count-route'] }),
+  });
+}

@@ -1,0 +1,394 @@
+import express from 'express';
+import { query } from '../db.js';
+import { authenticate } from '../middleware/auth.js';
+import { logError } from '../logger.js';
+
+const router = express.Router();
+
+async function getOrgId(userId) {
+  const r = await query('SELECT organization_id FROM organization_members WHERE user_id=$1 LIMIT 1', [userId]);
+  return r.rows[0]?.organization_id;
+}
+
+async function ensureTables() {
+  await query(`CREATE TABLE IF NOT EXISTS stock_count_rules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
+    brand_id UUID NOT NULL,
+    enabled BOOLEAN DEFAULT false,
+    frequency VARCHAR(20) DEFAULT 'weekly',
+    require_photo BOOLEAN DEFAULT false,
+    require_justification BOOLEAN DEFAULT true,
+    allow_postpone BOOLEAN DEFAULT true,
+    postpone_limit_type VARCHAR(20) DEFAULT 'week',
+    block_route_completion BOOLEAN DEFAULT false,
+    selected_products JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(organization_id, brand_id))`);
+
+  await query(`CREATE TABLE IF NOT EXISTS stock_count_executions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
+    route_id UUID,
+    brand_id UUID NOT NULL,
+    pdv_id UUID,
+    promoter_id UUID,
+    rule_id UUID,
+    status VARCHAR(30) DEFAULT 'pending',
+    week_start DATE,
+    week_end DATE,
+    is_mandatory BOOLEAN DEFAULT false,
+    total_items INTEGER DEFAULT 0,
+    completed_items INTEGER DEFAULT 0,
+    progress_pct NUMERIC(5,2) DEFAULT 0,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW())`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_stock_exec_route ON stock_count_executions(route_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_stock_exec_brand_pdv ON stock_count_executions(brand_id, pdv_id, week_start)`);
+
+  await query(`CREATE TABLE IF NOT EXISTS stock_count_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execution_id UUID NOT NULL,
+    product_id UUID NOT NULL,
+    quantity NUMERIC(12,2),
+    observation TEXT,
+    collected_at TIMESTAMPTZ,
+    collected_by UUID,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW())`);
+
+  await query(`CREATE TABLE IF NOT EXISTS stock_count_postponements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execution_id UUID NOT NULL,
+    route_id UUID,
+    reason TEXT NOT NULL,
+    observation TEXT,
+    next_route_id UUID,
+    postponed_by UUID,
+    created_at TIMESTAMPTZ DEFAULT NOW())`);
+
+  await query(`CREATE TABLE IF NOT EXISTS stock_count_justifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execution_id UUID,
+    route_id UUID,
+    reason VARCHAR(255) NOT NULL,
+    observation TEXT,
+    justified_by UUID,
+    created_at TIMESTAMPTZ DEFAULT NOW())`);
+}
+
+async function getProductCols() {
+  let cols = 'p.id, p.name, p.sku';
+  try {
+    const r = await query(`SELECT column_name FROM information_schema.columns WHERE table_name='products' AND column_name IN ('photo_url','description','brand_id')`);
+    const ex = r.rows.map(x => x.column_name);
+    if (ex.includes('photo_url')) cols += ', p.photo_url';
+    if (ex.includes('description')) cols += ', p.description';
+  } catch {}
+  return cols;
+}
+
+// ===== RULES =====
+router.get('/rules', authenticate, async (req, res) => {
+  try {
+    await ensureTables();
+    const orgId = await getOrgId(req.userId);
+    if (!orgId) return res.status(403).json({ error: 'Sem organização' });
+    const { brand_id } = req.query;
+    let sql = `SELECT r.*, b.name AS brand_name FROM stock_count_rules r
+               LEFT JOIN merch_brands b ON b.id = r.brand_id WHERE r.organization_id=$1`;
+    const params = [orgId];
+    if (brand_id) { sql += ' AND r.brand_id=$2'; params.push(brand_id); }
+    sql += ' ORDER BY b.name';
+    res.json((await query(sql, params)).rows);
+  } catch (err) { logError('stock-count.rules.list', err); res.status(500).json({ error: 'Erro' }); }
+});
+
+router.post('/rules', authenticate, async (req, res) => {
+  try {
+    await ensureTables();
+    const orgId = await getOrgId(req.userId);
+    if (!orgId) return res.status(403).json({ error: 'Sem organização' });
+    const {
+      id, brand_id, enabled, frequency, require_photo, require_justification,
+      allow_postpone, postpone_limit_type, block_route_completion, selected_products,
+    } = req.body;
+    const cols = {
+      brand_id: brand_id || null,
+      enabled: enabled ?? false,
+      frequency: frequency ?? 'weekly',
+      require_photo: require_photo ?? false,
+      require_justification: require_justification ?? true,
+      allow_postpone: allow_postpone ?? true,
+      postpone_limit_type: postpone_limit_type ?? 'week',
+      block_route_completion: block_route_completion ?? false,
+      selected_products: selected_products ? JSON.stringify(selected_products) : null,
+    };
+    let result;
+    if (id) {
+      const sets = Object.keys(cols).map((k, i) => `${k}=$${i + 1}`).join(',');
+      result = await query(`UPDATE stock_count_rules SET ${sets}, updated_at=NOW() WHERE id=$${Object.keys(cols).length + 1} RETURNING *`,
+        [...Object.values(cols), id]);
+    } else {
+      const keys = ['organization_id', ...Object.keys(cols)];
+      const vals = [orgId, ...Object.values(cols)];
+      const ph = vals.map((_, i) => `$${i + 1}`).join(',');
+      result = await query(
+        `INSERT INTO stock_count_rules (${keys.join(',')}) VALUES (${ph})
+         ON CONFLICT (organization_id, brand_id) DO UPDATE SET
+           enabled=EXCLUDED.enabled, frequency=EXCLUDED.frequency,
+           require_photo=EXCLUDED.require_photo, require_justification=EXCLUDED.require_justification,
+           allow_postpone=EXCLUDED.allow_postpone, postpone_limit_type=EXCLUDED.postpone_limit_type,
+           block_route_completion=EXCLUDED.block_route_completion,
+           selected_products=EXCLUDED.selected_products, updated_at=NOW()
+         RETURNING *`, vals);
+    }
+    res.json(result.rows[0]);
+  } catch (err) { logError('stock-count.rules.upsert', err); res.status(500).json({ error: 'Erro' }); }
+});
+
+router.delete('/rules/:id', authenticate, async (req, res) => {
+  try { await query('DELETE FROM stock_count_rules WHERE id=$1', [req.params.id]); res.json({ ok: true }); }
+  catch (err) { logError('stock-count.rules.delete', err); res.status(500).json({ error: 'Erro' }); }
+});
+
+// ===== ROUTE VIEW (promotor) =====
+// GET /route/:route_id -> list of stock_count executions for that route, one per active brand rule.
+router.get('/route/:route_id', authenticate, async (req, res) => {
+  try {
+    await ensureTables();
+    const orgId = await getOrgId(req.userId);
+    if (!orgId) return res.status(403).json({ error: 'Sem organização' });
+    const routeId = req.params.route_id;
+
+    // Get route info: pdv, promoter, brands (single or multi), visit_date
+    const routeRow = (await query(
+      `SELECT r.id, r.pdv_id, r.employee_id AS promoter_id, r.brand_id, r.visit_date
+       FROM merch_routes r WHERE r.id=$1`, [routeId])).rows[0];
+    if (!routeRow) return res.json([]);
+
+    // Determine brand list (single + multi-brand routes)
+    const brandIds = new Set();
+    if (routeRow.brand_id) brandIds.add(routeRow.brand_id);
+    try {
+      const rb = await query('SELECT brand_id FROM route_brands WHERE route_id=$1', [routeId]);
+      for (const r of rb.rows) if (r.brand_id) brandIds.add(r.brand_id);
+    } catch {}
+    if (brandIds.size === 0) return res.json([]);
+
+    // Rules enabled for those brands
+    const rules = (await query(
+      `SELECT * FROM stock_count_rules WHERE organization_id=$1 AND enabled=true AND brand_id = ANY($2)`,
+      [orgId, Array.from(brandIds)])).rows;
+    if (rules.length === 0) return res.json([]);
+
+    const visitDate = routeRow.visit_date ? new Date(routeRow.visit_date) : new Date();
+    // Week ISO monday..sunday
+    const dow = (visitDate.getDay() + 6) % 7; // 0=Mon
+    const monday = new Date(visitDate); monday.setDate(visitDate.getDate() - dow);
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    const weekStart = monday.toISOString().slice(0, 10);
+    const weekEnd = sunday.toISOString().slice(0, 10);
+
+    const productCols = await getProductCols();
+    const result = [];
+
+    for (const rule of rules) {
+      // Look for an execution for this brand+pdv+week, prefer the one attached to this route
+      let exec = (await query(
+        `SELECT * FROM stock_count_executions
+         WHERE organization_id=$1 AND brand_id=$2 AND pdv_id=$3 AND week_start=$4
+         ORDER BY (route_id=$5) DESC, updated_at DESC LIMIT 1`,
+        [orgId, rule.brand_id, routeRow.pdv_id, weekStart, routeId])).rows[0];
+
+      if (!exec) {
+        exec = (await query(
+          `INSERT INTO stock_count_executions
+           (organization_id, route_id, brand_id, pdv_id, promoter_id, rule_id, status, week_start, week_end)
+           VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8) RETURNING *`,
+          [orgId, routeId, rule.brand_id, routeRow.pdv_id, routeRow.promoter_id, rule.id, weekStart, weekEnd]
+        )).rows[0];
+      } else if (exec.route_id !== routeId && exec.status === 'postponed') {
+        // Reactivate on the new visit within the same week
+        exec = (await query(
+          `UPDATE stock_count_executions SET route_id=$1, status='pending', updated_at=NOW()
+           WHERE id=$2 RETURNING *`, [routeId, exec.id])).rows[0];
+      }
+
+      // Fetch items already saved
+      const savedItems = (await query(
+        `SELECT si.*, ${productCols} FROM stock_count_items si
+         LEFT JOIN products p ON p.id = si.product_id
+         WHERE si.execution_id=$1 ORDER BY p.name`, [exec.id])).rows;
+      const byProduct = new Map(savedItems.map(i => [i.product_id, i]));
+
+      // Product list: from rule.selected_products if set, otherwise all products of the brand
+      let productIds = Array.isArray(rule.selected_products) ? rule.selected_products : null;
+      let products = [];
+      if (productIds && productIds.length) {
+        products = (await query(
+          `SELECT ${productCols} FROM products p WHERE p.id = ANY($1) ORDER BY p.name`, [productIds])).rows;
+      } else {
+        try {
+          products = (await query(
+            `SELECT ${productCols} FROM products p WHERE p.brand_id=$1 ORDER BY p.name`, [rule.brand_id])).rows;
+        } catch {
+          products = savedItems.map(i => ({ id: i.product_id, name: i.name, sku: i.sku, photo_url: i.photo_url }));
+        }
+      }
+
+      const items = products.map(p => {
+        const existing = byProduct.get(p.id);
+        return {
+          product_id: p.id,
+          product_name: p.name,
+          sku: p.sku,
+          photo_url: p.photo_url,
+          description: p.description,
+          quantity: existing?.quantity ?? null,
+          observation: existing?.observation ?? '',
+        };
+      });
+
+      // Brand name
+      const brand = (await query('SELECT name FROM merch_brands WHERE id=$1', [rule.brand_id])).rows[0];
+
+      result.push({
+        ...exec,
+        brand_name: brand?.name,
+        rule,
+        is_mandatory: exec.is_mandatory || false,
+        items,
+      });
+    }
+
+    res.json(result);
+  } catch (err) { logError('stock-count.route.get', err); res.status(500).json({ error: err.message || 'Erro' }); }
+});
+
+// Save execution items
+router.post('/execute', authenticate, async (req, res) => {
+  try {
+    await ensureTables();
+    const orgId = await getOrgId(req.userId);
+    const { route_id, brand_id, pdv_id, promoter_id, items } = req.body;
+
+    // Find existing exec in this route+brand+pdv, else create one for current week
+    let exec = (await query(
+      `SELECT * FROM stock_count_executions WHERE route_id=$1 AND brand_id=$2 AND pdv_id=$3 ORDER BY updated_at DESC LIMIT 1`,
+      [route_id, brand_id, pdv_id])).rows[0];
+
+    if (!exec) {
+      const today = new Date();
+      const dow = (today.getDay() + 6) % 7;
+      const monday = new Date(today); monday.setDate(today.getDate() - dow);
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+      exec = (await query(
+        `INSERT INTO stock_count_executions
+         (organization_id, route_id, brand_id, pdv_id, promoter_id, status, week_start, week_end, started_at)
+         VALUES ($1,$2,$3,$4,$5,'in_progress',$6,$7,NOW()) RETURNING *`,
+        [orgId, route_id, brand_id, pdv_id, promoter_id,
+         monday.toISOString().slice(0, 10), sunday.toISOString().slice(0, 10)])).rows[0];
+    }
+
+    let filled = 0;
+    for (const it of (items || [])) {
+      const hasQty = it.quantity !== null && it.quantity !== undefined && it.quantity !== '';
+      if (hasQty) filled++;
+      const existing = (await query(
+        'SELECT id FROM stock_count_items WHERE execution_id=$1 AND product_id=$2',
+        [exec.id, it.product_id])).rows[0];
+      if (existing) {
+        await query(
+          `UPDATE stock_count_items SET quantity=$1, observation=$2, collected_at=CASE WHEN $1 IS NOT NULL THEN NOW() ELSE collected_at END, collected_by=$3, updated_at=NOW() WHERE id=$4`,
+          [hasQty ? Number(it.quantity) : null, it.observation ?? null, req.userId, existing.id]);
+      } else {
+        await query(
+          `INSERT INTO stock_count_items (execution_id, product_id, quantity, observation, collected_at, collected_by)
+           VALUES ($1,$2,$3,$4,CASE WHEN $3 IS NOT NULL THEN NOW() ELSE NULL END,$5)`,
+          [exec.id, it.product_id, hasQty ? Number(it.quantity) : null, it.observation ?? null, req.userId]);
+      }
+    }
+
+    const total = (items || []).length;
+    const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
+    const status = filled === 0 ? 'pending' : (filled >= total ? 'completed' : 'in_progress');
+    const completedAt = status === 'completed' ? 'NOW()' : 'NULL';
+    await query(
+      `UPDATE stock_count_executions SET total_items=$1, completed_items=$2, progress_pct=$3, status=$4,
+       completed_at=${completedAt}, started_at=COALESCE(started_at, NOW()), updated_at=NOW() WHERE id=$5`,
+      [total, filled, pct, status, exec.id]);
+
+    res.json({ ok: true, execution_id: exec.id, status, progress_pct: pct });
+  } catch (err) { logError('stock-count.execute', err); res.status(500).json({ error: err.message || 'Erro' }); }
+});
+
+// Postpone: "não fiz hoje" -> next visit in same week
+router.post('/postpone', authenticate, async (req, res) => {
+  try {
+    await ensureTables();
+    const { execution_id, reason, observation } = req.body;
+    if (!execution_id || !reason) return res.status(400).json({ error: 'Motivo obrigatório' });
+
+    const exec = (await query('SELECT * FROM stock_count_executions WHERE id=$1', [execution_id])).rows[0];
+    if (!exec) return res.status(404).json({ error: 'Execução não encontrada' });
+
+    // Find next route in same week for same pdv+brand (single or multi-brand)
+    let nextRoute = null;
+    try {
+      const rows = (await query(
+        `SELECT r.id FROM merch_routes r
+         WHERE r.pdv_id=$1 AND r.visit_date > COALESCE((SELECT visit_date FROM merch_routes WHERE id=$2), CURRENT_DATE)
+         AND r.visit_date <= $3
+         AND (r.brand_id=$4 OR EXISTS (SELECT 1 FROM route_brands rb WHERE rb.route_id=r.id AND rb.brand_id=$4))
+         ORDER BY r.visit_date ASC LIMIT 1`,
+        [exec.pdv_id, exec.route_id, exec.week_end, exec.brand_id])).rows;
+      nextRoute = rows[0]?.id || null;
+    } catch {}
+
+    // If no next route in the week -> check rule.block_route_completion to decide mandatory vs justification
+    const rule = (await query('SELECT * FROM stock_count_rules WHERE id=$1', [exec.rule_id])).rows[0];
+    let newStatus = 'postponed';
+    let isMandatory = false;
+    if (!nextRoute) {
+      if (rule?.block_route_completion) {
+        // Last route of the week: mark mandatory to force completion here (do not postpone)
+        return res.status(400).json({ error: 'Última rota da semana — contagem obrigatória, não pode ser adiada.' });
+      }
+      // else: allow postpone as "no next route" -> stays postponed, needs justification when week closes
+      newStatus = 'postponed';
+    }
+
+    await query(
+      `INSERT INTO stock_count_postponements (execution_id, route_id, reason, observation, next_route_id, postponed_by)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [execution_id, exec.route_id, reason, observation ?? null, nextRoute, req.userId]);
+
+    await query(
+      `UPDATE stock_count_executions SET status=$1, is_mandatory=$2, updated_at=NOW() WHERE id=$3`,
+      [newStatus, isMandatory, execution_id]);
+
+    res.json({ ok: true, next_route_id: nextRoute, status: newStatus });
+  } catch (err) { logError('stock-count.postpone', err); res.status(500).json({ error: err.message || 'Erro' }); }
+});
+
+router.post('/justify', authenticate, async (req, res) => {
+  try {
+    await ensureTables();
+    const { execution_id, reason, observation } = req.body;
+    if (!reason) return res.status(400).json({ error: 'Motivo obrigatório' });
+    const exec = (await query('SELECT * FROM stock_count_executions WHERE id=$1', [execution_id])).rows[0];
+    if (!exec) return res.status(404).json({ error: 'Execução não encontrada' });
+    await query(
+      `INSERT INTO stock_count_justifications (execution_id, route_id, reason, observation, justified_by)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [execution_id, exec.route_id, reason, observation ?? null, req.userId]);
+    await query(`UPDATE stock_count_executions SET status='justified', updated_at=NOW() WHERE id=$1`, [execution_id]);
+    res.json({ ok: true });
+  } catch (err) { logError('stock-count.justify', err); res.status(500).json({ error: err.message || 'Erro' }); }
+});
+
+export default router;
