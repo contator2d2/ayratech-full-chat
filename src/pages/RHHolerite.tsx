@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Upload, PenTool } from "lucide-react";
+import { Plus, FileText, Upload, PenTool, Trash2, CheckCircle2, AlertCircle, FolderUp } from "lucide-react";
 import { format } from "date-fns";
-import { api } from "@/lib/api";
+import { api, API_URL, getAuthToken } from "@/lib/api";
 
 const STATUS_COLORS: Record<string, string> = {
   rascunho: "bg-yellow-500/10 text-yellow-700 border-yellow-200",
