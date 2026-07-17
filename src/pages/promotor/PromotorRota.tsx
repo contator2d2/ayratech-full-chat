@@ -31,6 +31,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { logger } from "@/lib/logger";
 import { SyncStatusIndicator } from "@/components/promotor/SyncStatusIndicator";
+import { StockCountCard } from "@/components/promotor/StockCountCard";
+import { useRouteStockCount } from "@/hooks/use-stock-count";
 
 // ===== Photo capture with Approve/Reject preview =====
 function PhotoApprovalCapture({
@@ -764,6 +766,15 @@ export default function PromotorRota() {
   const requireValidityCheck = useMemo(() => (isMultiBrand ? currentBrand?.require_validity_check : route?.require_validity_check) ?? false, [isMultiBrand, currentBrand, route]);
   const canQuickCheck = !requireStockCount && !requireValidityCheck;
 
+  // Stock count executions (Contagem de Saldo) for this route
+  const { data: stockCountExecs = [] } = useRouteStockCount(id);
+  const stockCountBlocking = useMemo(() => {
+    return (stockCountExecs as any[]).filter((e: any) =>
+      e?.rule?.block_route_completion &&
+      e.status !== 'completed' && e.status !== 'justified'
+    );
+  }, [stockCountExecs]);
+
 
 
 
@@ -1063,6 +1074,15 @@ export default function PromotorRota() {
 
   const categoriesBlock = (isActive && (!isMultiBrand || activeBrandId)) ? (
           <div className="space-y-4">
+            {activeBrandId && route?.pdv_id && (
+              <StockCountCard
+                routeId={id!}
+                brandId={activeBrandId}
+                brandName={currentBrand?.brand_name || route.brand_name}
+                pdvId={route.pdv_id}
+                promoterId={route.promotor_id || route.employee_id}
+              />
+            )}
             {Object.entries(groupedExecs).map(([category, { catId, execs, isExtraGroup }]) => {
               const routeBrandId = execs[0]?.route_brand_id;
               const categoryKey = `${catId}_${routeBrandId || 'null'}`;
@@ -1353,7 +1373,8 @@ export default function PromotorRota() {
               const hasMinDurationMet = minDuration === 0 || elapsedMinutes >= minDuration;
               
               // A rota só pode ser concluída se TODOS os produtos, TODAS as fotos e tempo mínimo forem respeitados
-              const canCompleteRoute = allProductsDoneGlobal && allBrandsCompleted && allAfterPhotosDone && hasMinDurationMet;
+              const stockCountPending = stockCountBlocking.length;
+              const canCompleteRoute = allProductsDoneGlobal && allBrandsCompleted && allAfterPhotosDone && hasMinDurationMet && stockCountPending === 0;
               
               return (
                 <>
@@ -1375,6 +1396,10 @@ export default function PromotorRota() {
                       toast.error(`Existem marcas que ainda não foram totalmente concluídas.`);
                       return;
                     }
+                    if (stockCountPending > 0) {
+                      toast.error(`Contagem de estoque obrigatória pendente em ${stockCountPending} marca(s).`);
+                      return;
+                    }
                     if (!hasMinDurationMet) {
                       toast.error(`Tempo mínimo de permanência não atingido. Faltam ${minDuration - elapsedMinutes} minuto(s).`);
                       return;
@@ -1392,7 +1417,9 @@ export default function PromotorRota() {
                             ? 'Tire as fotos obrigatórias (DEPOIS) de todas as categorias concluídas.'
                             : !allBrandsCompleted 
                               ? 'Conclua o checklist de todas as marcas antes de finalizar a rota.'
-                              : `Tempo mínimo: faltam ${minDuration - elapsedMinutes} min.`}
+                              : stockCountPending > 0
+                                ? `Contagem de estoque obrigatória pendente em ${stockCountPending} marca(s).`
+                                : `Tempo mínimo: faltam ${minDuration - elapsedMinutes} min.`}
                       </p>
                       {allProductsDoneGlobal && allBrandsCompleted && allAfterPhotosDone && !hasMinDurationMet && (
                         <p className="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
