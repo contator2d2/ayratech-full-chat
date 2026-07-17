@@ -1209,6 +1209,8 @@ router.post('/payslips/bulk-import', async (req, res) => {
   }
 });
 
+// ===== ABSENCES =====
+
 router.get('/absences', async (req, res) => {
   try {
     const orgId = req.query.org_id || await getUserOrgId(req.userId);
