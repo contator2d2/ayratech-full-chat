@@ -168,7 +168,7 @@ router.post('/rules', authenticate, async (req, res) => {
     const orgId = await getOrgId(req.userId);
     if (!orgId) return res.status(403).json({ error: 'Sem organização' });
     const {
-      id, brand_id, enabled, frequency, frequency_interval, custom_days,
+      id, brand_id, enabled, frequency, frequency_interval, custom_days, weekdays,
       require_photo, require_justification,
       allow_postpone, postpone_limit_type, block_route_completion, selected_products,
     } = req.body;
@@ -178,6 +178,7 @@ router.post('/rules', authenticate, async (req, res) => {
       frequency: frequency ?? 'weekly',
       frequency_interval: Number.isFinite(Number(frequency_interval)) && Number(frequency_interval) > 0 ? Number(frequency_interval) : 1,
       custom_days: frequency === 'custom' && Number(custom_days) > 0 ? Number(custom_days) : null,
+      weekdays: Array.isArray(weekdays) && weekdays.length ? JSON.stringify(weekdays.map((n) => Number(n)).filter((n) => n >= 0 && n <= 6)) : null,
       require_photo: require_photo ?? false,
       require_justification: require_justification ?? true,
       allow_postpone: allow_postpone ?? true,
