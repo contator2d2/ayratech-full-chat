@@ -147,7 +147,8 @@ export default function RHPonto() {
     if (!punchForm.adjustment_reason?.trim()) {
       toast({ title: "Informe o motivo do ajuste", variant: "destructive" }); return;
     }
-    const punched_at = `${punchForm.date}T${punchForm.time}:00`;
+    const hhmm = String(punchForm.time).slice(0, 5);
+    const punched_at = `${punchForm.date}T${hhmm}:00`;
     try {
       if (punchForm.id) {
         await updatePunchMut.mutateAsync({ id: punchForm.id, punched_at, punch_type: punchForm.punch_type, adjustment_reason: punchForm.adjustment_reason });
