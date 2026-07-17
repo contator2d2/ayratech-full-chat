@@ -158,6 +158,25 @@ export default function MerchContagemEstoque() {
     }));
   };
 
+  const togglePdvWeekday = (pdvId: string, n: number) => {
+    setForm((f: any) => {
+      const ov = { ...(f.pdv_overrides || {}) };
+      const cur = ov[pdvId]?.weekdays || [];
+      const next = cur.includes(n) ? cur.filter((x: number) => x !== n) : [...cur, n].sort((a: number, b: number) => a - b);
+      if (next.length === 0) delete ov[pdvId];
+      else ov[pdvId] = { weekdays: next };
+      return { ...f, pdv_overrides: ov };
+    });
+  };
+
+  const clearPdvOverride = (pdvId: string) => {
+    setForm((f: any) => {
+      const ov = { ...(f.pdv_overrides || {}) };
+      delete ov[pdvId];
+      return { ...f, pdv_overrides: ov };
+    });
+  };
+
   return (
     <MainLayout>
       <div className="space-y-4">
