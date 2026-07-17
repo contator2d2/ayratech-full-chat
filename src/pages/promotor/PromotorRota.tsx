@@ -31,6 +31,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { logger } from "@/lib/logger";
 import { SyncStatusIndicator } from "@/components/promotor/SyncStatusIndicator";
+import { StockCountCard } from "@/components/promotor/StockCountCard";
+import { useRouteStockCount } from "@/hooks/use-stock-count";
 
 // ===== Photo capture with Approve/Reject preview =====
 function PhotoApprovalCapture({
