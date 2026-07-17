@@ -766,6 +766,15 @@ export default function PromotorRota() {
   const requireValidityCheck = useMemo(() => (isMultiBrand ? currentBrand?.require_validity_check : route?.require_validity_check) ?? false, [isMultiBrand, currentBrand, route]);
   const canQuickCheck = !requireStockCount && !requireValidityCheck;
 
+  // Stock count executions (Contagem de Saldo) for this route
+  const { data: stockCountExecs = [] } = useRouteStockCount(id);
+  const stockCountBlocking = useMemo(() => {
+    return (stockCountExecs as any[]).filter((e: any) =>
+      e?.rule?.block_route_completion &&
+      e.status !== 'completed' && e.status !== 'justified'
+    );
+  }, [stockCountExecs]);
+
 
 
 
