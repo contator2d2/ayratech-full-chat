@@ -402,6 +402,156 @@ export default function RHHolerite() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Import Dialog */}
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderUp className="h-5 w-5" /> Importar Holerites em Lote
+            </DialogTitle>
+          </DialogHeader>
+
+          {bulkStep === 'select' && (
+            <div className="space-y-4 overflow-y-auto pr-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <Label>Mês Referência *</Label>
+                  <Input type="month" value={bulkReference} onChange={e => setBulkReference(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Tipo</Label>
+                  <Select value={bulkPaymentType} onValueChange={setBulkPaymentType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mensal">Mensal</SelectItem>
+                      <SelectItem value="adiantamento">Adiantamento</SelectItem>
+                      <SelectItem value="13o">13º Salário</SelectItem>
+                      <SelectItem value="ferias">Férias</SelectItem>
+                      <SelectItem value="rescisao">Rescisão</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between border rounded-md p-2">
+                  <div className="flex items-center gap-2">
+                    <PenTool className="h-4 w-4 text-primary" />
+                    <span className="text-sm">Enviar p/ assinatura</span>
+                  </div>
+                  <Switch checked={bulkSendSignature} onCheckedChange={setBulkSendSignature} />
+                </div>
+              </div>
+
+              <div
+                className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => bulkInputRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={e => { e.preventDefault(); e.stopPropagation(); handleBulkFiles(e.dataTransfer.files); }}
+              >
+                <input ref={bulkInputRef} type="file" accept=".pdf" multiple className="hidden" onChange={e => handleBulkFiles(e.target.files)} />
+                <FolderUp className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">Clique ou arraste múltiplos PDFs aqui</p>
+                <p className="text-xs text-muted-foreground mt-1">Dica: use nomes com o CPF, matrícula ou nome do colaborador para melhor mapeamento automático</p>
+              </div>
+
+              {bulkFiles.length > 0 && (
+                <div className="border rounded-lg max-h-64 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Arquivo</TableHead>
+                        <TableHead className="w-24">Tamanho</TableHead>
+                        <TableHead className="w-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bulkFiles.map((f, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-sm">{f.name}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{(f.size / 1024).toFixed(0)} KB</TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" onClick={() => setBulkFiles(prev => prev.filter((_, idx) => idx !== i))}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {bulkProcessing && (
+                <div className="text-sm text-muted-foreground">
+                  Enviando arquivos... {bulkProgress.done}/{bulkProgress.total}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" onClick={() => setBulkOpen(false)}>Cancelar</Button>
+                <Button onClick={handleBulkStart} disabled={bulkProcessing || bulkFiles.length === 0}>
+                  {bulkProcessing ? 'Processando...' : `Processar ${bulkFiles.length} arquivo(s)`}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {bulkStep === 'review' && (
+            <div className="space-y-3 overflow-hidden flex flex-col flex-1">
+              <p className="text-sm text-muted-foreground">
+                Revise o mapeamento automático. Ajuste o colaborador se necessário. Linhas sem colaborador serão ignoradas.
+              </p>
+              <div className="border rounded-lg overflow-y-auto flex-1">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Arquivo</TableHead>
+                      <TableHead>Colaborador</TableHead>
+                      <TableHead className="w-24">Confiança</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bulkRows.map((row, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="text-sm truncate max-w-xs">{row.filename}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={row.employee_id || '__none__'}
+                            onValueChange={v => setBulkRows(prev => prev.map((r, idx) => idx === i ? { ...r, employee_id: v === '__none__' ? '' : v } : r))}
+                          >
+                            <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— Ignorar —</SelectItem>
+                              {employees.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {row.employee_id ? (
+                            row.score >= 100 ? <Badge className="bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" /> Alta</Badge>
+                            : row.score >= 40 ? <Badge className="bg-yellow-500">Média</Badge>
+                            : <Badge variant="outline"><AlertCircle className="h-3 w-3 mr-1" /> Baixa</Badge>
+                          ) : <Badge variant="outline">—</Badge>}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t">
+                <span className="text-sm text-muted-foreground">
+                  {bulkRows.filter(r => r.employee_id).length} de {bulkRows.length} prontos p/ importar
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setBulkStep('select')}>Voltar</Button>
+                  <Button onClick={handleBulkConfirm} disabled={bulkProcessing}>
+                    {bulkProcessing ? 'Importando...' : 'Confirmar e Importar'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }
