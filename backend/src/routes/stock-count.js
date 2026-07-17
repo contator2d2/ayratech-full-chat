@@ -31,6 +31,7 @@ async function ensureTables() {
   // Backfill columns if table pre-existed
   try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS frequency_interval INTEGER DEFAULT 1`); } catch {}
   try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS custom_days INTEGER`); } catch {}
+  try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS weekdays JSONB`); } catch {}
 
   await query(`CREATE TABLE IF NOT EXISTS stock_count_executions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
