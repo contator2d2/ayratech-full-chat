@@ -340,6 +340,60 @@ export default function MerchContagemEstoque() {
               </div>
             </div>
 
+            <div className="border rounded-lg p-3">
+              <Label className="text-sm">Dias específicos por PDV (opcional)</Label>
+              <p className="text-[11px] text-muted-foreground mb-2">
+                Sobrescreve os dias da regra para PDVs específicos. Ex.: PDV A na segunda, PDV B na terça.
+                Deixe sem marcar para o PDV seguir os dias gerais acima.
+              </p>
+              {brandPdvs.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhum PDV vinculado a esta marca.</p>
+              ) : (
+                <ScrollArea className="h-56 pr-2">
+                  <div className="space-y-2">
+                    {(brandPdvs as any[]).map((p: any) => {
+                      const pdvId = p.pdv_id || p.id;
+                      const pdvName = p.pdv_name || p.name || pdvId;
+                      const ov = form.pdv_overrides?.[pdvId]?.weekdays || [];
+                      const hasOv = ov.length > 0;
+                      return (
+                        <div key={pdvId} className="border rounded p-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-xs font-medium">{pdvName}</p>
+                            {hasOv && (
+                              <Button type="button" size="sm" variant="ghost" className="h-6 text-[10px]"
+                                onClick={() => clearPdvOverride(pdvId)}>
+                                Limpar
+                              </Button>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {WEEKDAYS.map(w => {
+                              const active = ov.includes(w.value);
+                              return (
+                                <Button
+                                  key={w.value}
+                                  type="button"
+                                  size="sm"
+                                  variant={active ? "default" : "outline"}
+                                  className="h-7 px-2 text-[11px]"
+                                  onClick={() => togglePdvWeekday(pdvId, w.value)}
+                                >
+                                  {w.label}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
+
+
+
             <div className="grid grid-cols-1 gap-2 border rounded-lg p-3">
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox
