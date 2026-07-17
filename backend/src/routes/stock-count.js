@@ -17,6 +17,8 @@ async function ensureTables() {
     brand_id UUID NOT NULL,
     enabled BOOLEAN DEFAULT false,
     frequency VARCHAR(20) DEFAULT 'weekly',
+    frequency_interval INTEGER DEFAULT 1,
+    custom_days INTEGER,
     require_photo BOOLEAN DEFAULT false,
     require_justification BOOLEAN DEFAULT true,
     allow_postpone BOOLEAN DEFAULT true,
@@ -26,6 +28,9 @@ async function ensureTables() {
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(organization_id, brand_id))`);
+  // Backfill columns if table pre-existed
+  try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS frequency_interval INTEGER DEFAULT 1`); } catch {}
+  try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS custom_days INTEGER`); } catch {}
 
   await query(`CREATE TABLE IF NOT EXISTS stock_count_executions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
