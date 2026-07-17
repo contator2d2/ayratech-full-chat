@@ -57,8 +57,14 @@ export function useOfflineSync() {
   }, []);
 
   const sync = useCallback(async () => {
-    if (!isOnline || isSyncing) return;
+    if (!isOnline) return;
+    // Ref-based lock: state (`isSyncing`) fica desatualizado em closures e
+    // permite execuções paralelas de sync() que duplicam uploads.
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    setIsSyncing(true);
 
+    try {
     const pendingUploads = await db.pending_uploads.where('status').equals('pending').toArray();
     const pendingCalls = await db.pending_api_calls.where('status').equals('pending').toArray();
 
@@ -68,7 +74,6 @@ export function useOfflineSync() {
     const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
     await db.upload_mappings.where('timestamp').below(threeDaysAgo).delete();
 
-    setIsSyncing(true);
     logger.info('[OfflineSync] Iniciando sincronização', { 
       uploads: pendingUploads.length, 
       calls: pendingCalls.length 
@@ -78,14 +83,38 @@ export function useOfflineSync() {
     const UPLOAD_CONCURRENCY = 3;
     const processOneUpload = async (upload: typeof pendingUploads[number]) => {
       try {
-        await db.pending_uploads.update(upload.id!, { status: 'uploading' });
+        // Claim atômico: só processa se ainda estiver 'pending'.
+        // modify() retorna o número de linhas alteradas — se 0, outro
+        // processo já pegou este upload e devemos ignorar.
+        const claimed = await db.pending_uploads
+          .where('id').equals(upload.id!)
+          .and(u => u.status === 'pending')
+          .modify({ status: 'uploading' });
+        if (claimed === 0) {
+          logger.info('[OfflineSync] Upload já reivindicado por outra execução', { id: upload.id });
+          return;
+        }
+
+        // Se já existe mapeamento (upload anterior concluído mas a linha
+        // não foi apagada por qualquer motivo), apenas limpa e sai.
+        const existing = await db.upload_mappings.get(upload.localId);
+        if (existing) {
+          await db.pending_uploads.delete(upload.id!);
+          return;
+        }
 
         const formData = new FormData();
         formData.append('file', upload.file, upload.fileName);
 
         const response = await fetch(`${API_URL}/api/uploads`, {
           method: 'POST',
-          headers: upload.token ? { 'Authorization': `Bearer ${upload.token}` } : {},
+          headers: {
+            ...(upload.token ? { 'Authorization': `Bearer ${upload.token}` } : {}),
+            // Chave de idempotência: mesmo se um retry de rede reenviar,
+            // o cliente reconhece o mesmo upload lógico. Backend pode
+            // opcionalmente honrar para deduplicar server-side.
+            'X-Idempotency-Key': upload.localId,
+          },
           body: formData
         });
 
