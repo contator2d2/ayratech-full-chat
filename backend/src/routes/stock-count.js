@@ -248,10 +248,13 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
 
     const visitDate = routeRow.visit_date ? new Date(routeRow.visit_date) : new Date();
 
-    const productCols = await getProductCols();
-    const result = [];
+    // JS: Sunday=0..Saturday=6. Use same convention on the UI.
+    const visitDow = visitDate.getDay();
 
     for (const rule of rules) {
+      // If rule has specific weekdays configured, only surface on those days
+      const wd = Array.isArray(rule.weekdays) ? rule.weekdays : (rule.weekdays ? JSON.parse(rule.weekdays) : null);
+      if (wd && wd.length && !wd.map(Number).includes(visitDow)) continue;
       // Per-rule period window based on rule.frequency
       const { start: weekStart, end: weekEnd } = computePeriodWindow(
         visitDate, rule.frequency, rule.frequency_interval || 1, rule.custom_days
