@@ -88,6 +88,9 @@ export default function MerchContagemEstoque() {
             ? existing.selected_products : [],
           frequency_interval: existing.frequency_interval || 1,
           custom_days: existing.custom_days || 30,
+          weekdays: Array.isArray(existing.weekdays)
+            ? existing.weekdays
+            : (existing.weekdays ? JSON.parse(existing.weekdays) : []),
         }
       : { ...emptyRule, brand_id: brand.id });
     setProdSearch("");
