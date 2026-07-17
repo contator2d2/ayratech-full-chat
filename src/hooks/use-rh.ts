@@ -119,6 +119,26 @@ export function useImportPayslip() {
   });
 }
 
+export function useBulkMatchPayslips() {
+  return useMutation({
+    mutationFn: (data: { filenames: string[] }) =>
+      api<any>('/api/rh/payslips/bulk-match', { method: 'POST', body: data }),
+  });
+}
+
+export function useBulkImportPayslips() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      reference_month: string;
+      payment_type?: string;
+      send_for_signature?: boolean;
+      items: Array<{ employee_id: string; pdf_url: string; filename?: string; notes?: string }>;
+    }) => api<any>('/api/rh/payslips/bulk-import', { method: 'POST', body: data }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rh-payslips'] }),
+  });
+}
+
 // ===== ABSENCES =====
 export function useAbsences(employeeId?: string) {
   const params = employeeId ? `?employee_id=${employeeId}` : '';
