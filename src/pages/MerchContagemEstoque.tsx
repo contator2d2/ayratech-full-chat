@@ -287,11 +287,33 @@ export default function MerchContagemEstoque() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-sm">Produtos para contagem</Label>
-                <span className="text-[11px] text-muted-foreground">
-                  {form.selected_products.length === 0
-                    ? "Todos os produtos da marca"
-                    : `${form.selected_products.length} selecionados`}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground">
+                    {form.selected_products.length === 0
+                      ? "Todos os produtos da marca"
+                      : `${form.selected_products.length} selecionados`}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      const allIds = filteredProducts.map((p: any) => p.id);
+                      const allSelected = allIds.length > 0 && allIds.every((id: string) => form.selected_products.includes(id));
+                      setForm((f: any) => ({
+                        ...f,
+                        selected_products: allSelected
+                          ? f.selected_products.filter((id: string) => !allIds.includes(id))
+                          : Array.from(new Set([...f.selected_products, ...allIds])),
+                      }));
+                    }}
+                  >
+                    {filteredProducts.length > 0 && filteredProducts.every((p: any) => form.selected_products.includes(p.id))
+                      ? "Desmarcar todos"
+                      : "Marcar todos"}
+                  </Button>
+                </div>
               </div>
               <div className="relative mb-2">
                 <Search className="h-3.5 w-3.5 absolute left-2 top-2.5 text-muted-foreground" />
