@@ -1373,7 +1373,8 @@ export default function PromotorRota() {
               const hasMinDurationMet = minDuration === 0 || elapsedMinutes >= minDuration;
               
               // A rota só pode ser concluída se TODOS os produtos, TODAS as fotos e tempo mínimo forem respeitados
-              const canCompleteRoute = allProductsDoneGlobal && allBrandsCompleted && allAfterPhotosDone && hasMinDurationMet;
+              const stockCountPending = stockCountBlocking.length;
+              const canCompleteRoute = allProductsDoneGlobal && allBrandsCompleted && allAfterPhotosDone && hasMinDurationMet && stockCountPending === 0;
               
               return (
                 <>
@@ -1395,6 +1396,10 @@ export default function PromotorRota() {
                       toast.error(`Existem marcas que ainda não foram totalmente concluídas.`);
                       return;
                     }
+                    if (stockCountPending > 0) {
+                      toast.error(`Contagem de estoque obrigatória pendente em ${stockCountPending} marca(s).`);
+                      return;
+                    }
                     if (!hasMinDurationMet) {
                       toast.error(`Tempo mínimo de permanência não atingido. Faltam ${minDuration - elapsedMinutes} minuto(s).`);
                       return;
@@ -1412,7 +1417,9 @@ export default function PromotorRota() {
                             ? 'Tire as fotos obrigatórias (DEPOIS) de todas as categorias concluídas.'
                             : !allBrandsCompleted 
                               ? 'Conclua o checklist de todas as marcas antes de finalizar a rota.'
-                              : `Tempo mínimo: faltam ${minDuration - elapsedMinutes} min.`}
+                              : stockCountPending > 0
+                                ? `Contagem de estoque obrigatória pendente em ${stockCountPending} marca(s).`
+                                : `Tempo mínimo: faltam ${minDuration - elapsedMinutes} min.`}
                       </p>
                       {allProductsDoneGlobal && allBrandsCompleted && allAfterPhotosDone && !hasMinDurationMet && (
                         <p className="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
