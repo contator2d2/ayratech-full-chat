@@ -260,9 +260,18 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
 
 
     for (const rule of rules) {
-      // If rule has specific weekdays configured, only surface on those days
-      const wd = Array.isArray(rule.weekdays) ? rule.weekdays : (rule.weekdays ? JSON.parse(rule.weekdays) : null);
-      if (wd && wd.length && !wd.map(Number).includes(visitDow)) continue;
+      // Per-PDV override takes precedence over rule.weekdays
+      const overrides = rule.pdv_overrides
+        ? (typeof rule.pdv_overrides === 'object' ? rule.pdv_overrides : JSON.parse(rule.pdv_overrides))
+        : null;
+      const pdvOv = overrides && routeRow.pdv_id ? overrides[routeRow.pdv_id] : null;
+      let effectiveWd = null;
+      if (pdvOv && Array.isArray(pdvOv.weekdays)) {
+        effectiveWd = pdvOv.weekdays;
+      } else {
+        effectiveWd = Array.isArray(rule.weekdays) ? rule.weekdays : (rule.weekdays ? JSON.parse(rule.weekdays) : null);
+      }
+      if (effectiveWd && effectiveWd.length && !effectiveWd.map(Number).includes(visitDow)) continue;
       // Per-rule period window based on rule.frequency
       const { start: weekStart, end: weekEnd } = computePeriodWindow(
         visitDate, rule.frequency, rule.frequency_interval || 1, rule.custom_days
