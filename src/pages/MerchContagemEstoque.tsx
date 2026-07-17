@@ -342,13 +342,26 @@ export default function MerchContagemEstoque() {
             </div>
 
             <div className="border rounded-lg p-3">
-              <Label className="text-sm">Dias específicos por PDV (opcional)</Label>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <Label className="text-sm">Dias específicos por PDV (opcional)</Label>
+                <Button
+                  type="button" size="sm" variant="outline" className="h-7 text-[11px]"
+                  onClick={() => setShowAllPdvs(v => !v)}
+                >
+                  {showAllPdvs ? "Somente PDVs vinculados" : "Mostrar todos os PDVs"}
+                </Button>
+              </div>
               <p className="text-[11px] text-muted-foreground mb-2">
                 Sobrescreve os dias da regra para PDVs específicos. Ex.: PDV A na segunda, PDV B na terça.
                 Deixe sem marcar para o PDV seguir os dias gerais acima.
               </p>
               {brandPdvs.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nenhum PDV vinculado a esta marca.</p>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p>Nenhum PDV {showAllPdvs ? "encontrado na organização" : "vinculado a esta marca"}.</p>
+                  {!showAllPdvs && (
+                    <p>Clique em <strong>"Mostrar todos os PDVs"</strong> para configurar mesmo sem vínculo explícito.</p>
+                  )}
+                </div>
               ) : (
                 <ScrollArea className="h-56 pr-2">
                   <div className="space-y-2">
