@@ -516,6 +516,8 @@ export default function MerchRotas() {
                       )}
                     </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-muted-foreground" />
                     <div>
                       <div className="text-[10px] text-muted-foreground">Marca</div>
                       <div className="font-medium">
