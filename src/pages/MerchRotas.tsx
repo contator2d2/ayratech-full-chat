@@ -628,6 +628,21 @@ export default function MerchRotas() {
                       <AlertTriangle className="h-4 w-4 mr-1" /> Justificar
                     </Button>
                   )}
+                  {viewRoute.status !== 'completed' && viewRoute.status !== 'not_done' && viewRoute.status !== 'cancelled' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-blue-500/40 text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/10"
+                      onClick={() => {
+                        setSupportRoute(viewRoute);
+                        setSupportEmployeeId('');
+                        setSupportReason('');
+                        setViewRoute(null);
+                      }}
+                    >
+                      <UserPlus className="h-4 w-4 mr-1" /> Adicionar apoio
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => {
                     duplicateRoute.mutate({ id: viewRoute.id }, {
                       onSuccess: () => { toast.success('Rota duplicada'); setViewRoute(null); }
