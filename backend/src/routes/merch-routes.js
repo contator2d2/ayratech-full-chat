@@ -126,6 +126,31 @@ router.get('/routes', async (req, res) => {
           }
         }
       } catch (e) { logWarn('routes.list.route_brands_failed', e); }
+
+      // Attach co-executors (route_person_assignments)
+      try {
+        const ids = rows.map(r => r.id);
+        const cpRes = await query(
+          `SELECT rpa.route_id, rpa.employee_id, rpa.role, rpa.assigned_at,
+                  e.full_name as employee_name
+             FROM route_person_assignments rpa
+             LEFT JOIN employees e ON e.id = rpa.employee_id
+            WHERE rpa.route_id = ANY($1::uuid[]) AND COALESCE(rpa.active, true) = true
+            ORDER BY rpa.assigned_at`,
+          [ids]
+        );
+        const cpMap = {};
+        for (const cp of cpRes.rows) {
+          (cpMap[cp.route_id] = cpMap[cp.route_id] || []).push(cp);
+        }
+        for (const r of rows) {
+          const list = (cpMap[r.id] || []).filter(x => x.employee_id !== r.promoter_id);
+          r.co_promoters = list;
+        }
+      } catch (e) {
+        if (e.code !== '42P01') logWarn('routes.list.co_promoters_failed', e);
+        for (const r of rows) r.co_promoters = [];
+      }
     }
 
     res.json(rows);
@@ -2021,18 +2046,37 @@ router.get('/promotor/agenda', promotorAuth, async (req, res) => {
     let sql = `SELECT r.*, p.name as pdv_name, p.address as pdv_address, p.city as pdv_city,
                p.latitude as pdv_lat, p.longitude as pdv_lng,
                b.name as brand_name, b.logo_url as brand_logo,
-               bc.name as checklist_name
+               bc.name as checklist_name,
+               CASE WHEN r.promoter_id = $1 THEN 'titular' ELSE 'apoio' END as promoter_role
                FROM merch_routes r
                LEFT JOIN pdvs p ON p.id = r.pdv_id
                LEFT JOIN merch_brands b ON b.id = r.brand_id
                LEFT JOIN brand_checklists bc ON bc.id = r.checklist_id
-               WHERE r.promoter_id = $1 AND r.organization_id = $2`;
+               WHERE r.organization_id = $2
+                 AND (
+                   r.promoter_id = $1
+                   OR EXISTS (
+                     SELECT 1 FROM route_person_assignments rpa
+                      WHERE rpa.route_id = r.id
+                        AND rpa.employee_id = $1
+                        AND COALESCE(rpa.active, true) = true
+                   )
+                 )`;
     const params = [req.employeeId, req.orgId];
     let idx = 3;
     if (date_from) { sql += ` AND r.visit_date >= $${idx++}`; params.push(date_from); }
     if (date_to) { sql += ` AND r.visit_date <= $${idx++}`; params.push(date_to); }
     sql += ' ORDER BY r.visit_date, r.scheduled_time';
-    const rows = (await query(sql, params)).rows;
+    let rows;
+    try {
+      rows = (await query(sql, params)).rows;
+    } catch (e) {
+      if (e.code === '42P01') {
+        // route_person_assignments missing → fallback to only titular
+        const sql2 = sql.replace(/AND \(\s*r\.promoter_id = \$1[\s\S]*?\)\)/, 'AND r.promoter_id = $1');
+        rows = (await query(sql2, params)).rows;
+      } else { throw e; }
+    }
     // Enrich multi-brand
     try {
       const mbIds = rows.filter(r => !r.brand_id).map(r => r.id);
@@ -2077,23 +2121,36 @@ router.get('/promotor/routes/:id', promotorAuth, async (req, res) => {
        LEFT JOIN merch_brands b ON b.id = r.brand_id
        LEFT JOIN brand_checklists bc ON bc.id = r.checklist_id
        LEFT JOIN brand_checklists bc2 ON bc2.brand_id = r.brand_id AND bc2.active = true
-       WHERE r.id=$1 AND r.promoter_id=$2`, [req.params.id, req.employeeId]
+       WHERE r.id=$1 AND (
+         r.promoter_id=$2
+         OR EXISTS (
+           SELECT 1 FROM route_person_assignments rpa
+            WHERE rpa.route_id = r.id AND rpa.employee_id = $2 AND COALESCE(rpa.active, true) = true
+         )
+       )`, [req.params.id, req.employeeId]
     );
     
     if (!routeRes.rows.length) {
-      // If not found by ID, maybe it's multi-brand and doesn't have a direct brand_id
-      // but let's first check if the organization and promoter match
-      const basicCheck = await query('SELECT organization_id FROM merch_routes WHERE id=$1 AND promoter_id=$2', [req.params.id, req.employeeId]);
+      // Fallback: check by id and promoter_id / assignment separately (in case join failed)
+      const basicCheck = await query(
+        `SELECT organization_id FROM merch_routes r
+          WHERE r.id=$1 AND (
+            r.promoter_id=$2
+            OR EXISTS (SELECT 1 FROM route_person_assignments rpa WHERE rpa.route_id=r.id AND rpa.employee_id=$2 AND COALESCE(rpa.active,true)=true)
+          )`,
+        [req.params.id, req.employeeId]
+      ).catch(async (e) => {
+        if (e.code === '42P01') return await query('SELECT organization_id FROM merch_routes WHERE id=$1 AND promoter_id=$2', [req.params.id, req.employeeId]);
+        throw e;
+      });
       if (!basicCheck.rows.length) return res.status(404).json({ error: 'Rota não encontrada' });
-      
-      // If it exists but the join failed (maybe due to brand_id being null on multi-brand routes),
-      // let's do a simpler query and then enrich.
+
       const simpleRoute = await query(
         `SELECT r.*, p.name as pdv_name, p.address as pdv_address, p.city as pdv_city,
          p.latitude as pdv_lat, p.longitude as pdv_lng, p.radius_meters as pdv_radius
          FROM merch_routes r
          LEFT JOIN pdvs p ON p.id = r.pdv_id
-         WHERE r.id=$1 AND r.promoter_id=$2`, [req.params.id, req.employeeId]
+         WHERE r.id=$1`, [req.params.id]
       );
       if (!simpleRoute.rows.length) return res.status(404).json({ error: 'Rota não encontrada' });
       routeRes.rows = simpleRoute.rows;

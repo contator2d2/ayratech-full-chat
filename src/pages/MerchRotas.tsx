@@ -13,10 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, User, Eye, Copy, Trash2, Edit, Filter, Repeat, Sparkles, Package, RefreshCw, X, CheckCircle2, Activity, Store, Info, ChevronsUpDown, Check, AlertTriangle } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, User, UserPlus, Eye, Copy, Trash2, Edit, Filter, Repeat, Sparkles, Package, RefreshCw, X, CheckCircle2, Activity, Store, Info, ChevronsUpDown, Check, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AIRoutePlanner from "@/components/merch/AIRoutePlanner";
-import { useMerchRoutes, useCreateMerchRoute, useUpdateMerchRoute, useDeleteMerchRoute, useDuplicateMerchRoute, useBulkDeleteMerchRoutes, useBrandChecklists, useBrandPromoters, useRouteMixPreview, useRouteProducts, useAddRouteProduct, useRemoveRouteProduct, useSyncRouteProducts, useJustifyRoute } from "@/hooks/use-merch-routes";
+import { useMerchRoutes, useCreateMerchRoute, useUpdateMerchRoute, useDeleteMerchRoute, useDuplicateMerchRoute, useBulkDeleteMerchRoutes, useBrandChecklists, useBrandPromoters, useRouteMixPreview, useRouteProducts, useAddRouteProduct, useRemoveRouteProduct, useSyncRouteProducts, useJustifyRoute, useAssignPromoter } from "@/hooks/use-merch-routes";
 import { useSuperadmin } from "@/hooks/use-superadmin";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBrands, useBrandPdvs, usePdvBrands } from "@/hooks/use-merchandising";
@@ -59,6 +59,10 @@ export default function MerchRotas() {
   const [justifyRoute, setJustifyRoute] = useState<any>(null);
   const [justifyReason, setJustifyReason] = useState('');
   const justifyMutation = useJustifyRoute();
+  const assignPromoterMutation = useAssignPromoter();
+  const [supportRoute, setSupportRoute] = useState<any>(null);
+  const [supportEmployeeId, setSupportEmployeeId] = useState('');
+  const [supportReason, setSupportReason] = useState('');
 
   // Calculate date range
   const dateRange = useMemo(() => {
@@ -482,9 +486,34 @@ export default function MerchRotas() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-muted-foreground" />
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-[10px] text-muted-foreground">Promotor</div>
-                      <div className="font-medium">{viewRoute.promoter_name || '—'}</div>
+                      <div className="font-medium truncate">{viewRoute.promoter_name || '—'}</div>
+                      {Array.isArray(viewRoute.co_promoters) && viewRoute.co_promoters.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {viewRoute.co_promoters.map((cp: any) => (
+                            <Badge key={cp.employee_id} variant="secondary" className="text-[9px] gap-1 pr-1">
+                              <UserPlus className="h-2.5 w-2.5" />
+                              {cp.employee_name || cp.employee_id}
+                              <button
+                                type="button"
+                                className="ml-0.5 rounded hover:bg-muted-foreground/20 p-0.5"
+                                title="Remover apoio"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!confirm(`Remover ${cp.employee_name} como apoio?`)) return;
+                                  assignPromoterMutation.mutate(
+                                    { routeId: viewRoute.id, employee_id: cp.employee_id, action: 'remove', reason: 'Removido pela supervisão' } as any,
+                                    { onSuccess: () => { toast.success('Apoio removido'); setViewRoute({ ...viewRoute, co_promoters: viewRoute.co_promoters.filter((x: any) => x.employee_id !== cp.employee_id) }); } }
+                                  );
+                                }}
+                              >
+                                <X className="h-2.5 w-2.5" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -599,6 +628,21 @@ export default function MerchRotas() {
                       <AlertTriangle className="h-4 w-4 mr-1" /> Justificar
                     </Button>
                   )}
+                  {viewRoute.status !== 'completed' && viewRoute.status !== 'not_done' && viewRoute.status !== 'cancelled' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-blue-500/40 text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/10"
+                      onClick={() => {
+                        setSupportRoute(viewRoute);
+                        setSupportEmployeeId('');
+                        setSupportReason('');
+                        setViewRoute(null);
+                      }}
+                    >
+                      <UserPlus className="h-4 w-4 mr-1" /> Adicionar apoio
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => {
                     duplicateRoute.mutate({ id: viewRoute.id }, {
                       onSuccess: () => { toast.success('Rota duplicada'); setViewRoute(null); }
@@ -676,6 +720,75 @@ export default function MerchRotas() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Add Support Promoter Dialog */}
+        <Dialog open={!!supportRoute} onOpenChange={(o) => { if (!o) { setSupportRoute(null); setSupportEmployeeId(''); setSupportReason(''); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <UserPlus className="h-5 w-5 text-blue-600" />
+                Adicionar promotor de apoio
+              </DialogTitle>
+              <DialogDescription>
+                O promotor selecionado poderá abrir esta rota no app junto com o titular e executar itens do checklist. Cada ação fica registrada com o autor real.
+              </DialogDescription>
+            </DialogHeader>
+            {supportRoute && (
+              <div className="space-y-3">
+                <div className="text-xs text-muted-foreground bg-muted/30 rounded-md p-2">
+                  <div><b>PDV:</b> {supportRoute.pdv_name}</div>
+                  <div><b>Titular:</b> {supportRoute.promoter_name || '—'}</div>
+                  <div><b>Data:</b> {supportRoute.visit_date ? format(parseISO(supportRoute.visit_date.split('T')[0]), 'dd/MM/yyyy') : '—'}</div>
+                </div>
+                <div>
+                  <Label className="text-xs">Promotor de apoio *</Label>
+                  <Select value={supportEmployeeId} onValueChange={setSupportEmployeeId}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione um promotor" /></SelectTrigger>
+                    <SelectContent>
+                      {employees
+                        .filter((e: any) => e.id !== supportRoute.promoter_id && !(supportRoute.co_promoters || []).some((c: any) => c.employee_id === e.id))
+                        .map((e: any) => (
+                          <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Motivo (opcional)</Label>
+                  <Textarea
+                    value={supportReason}
+                    onChange={(e) => setSupportReason(e.target.value)}
+                    placeholder="Ex.: Apoio para PDV com alto volume; treinamento; cobertura de férias..."
+                    className="mt-1 min-h-[80px]"
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => { setSupportRoute(null); setSupportEmployeeId(''); setSupportReason(''); }}>Cancelar</Button>
+              <Button
+                disabled={assignPromoterMutation.isPending || !supportEmployeeId}
+                onClick={() => {
+                  if (!supportRoute?.id || !supportEmployeeId) return;
+                  assignPromoterMutation.mutate(
+                    { routeId: supportRoute.id, employee_id: supportEmployeeId, action: 'add', reason: supportReason.trim() || 'Apoio adicionado pela supervisão' } as any,
+                    {
+                      onSuccess: () => {
+                        toast.success('Promotor de apoio adicionado');
+                        setSupportRoute(null);
+                        setSupportEmployeeId('');
+                        setSupportReason('');
+                      },
+                      onError: (e: any) => toast.error(e?.message || 'Falha ao adicionar apoio'),
+                    }
+                  );
+                }}
+              >
+                {assignPromoterMutation.isPending ? 'Adicionando...' : 'Adicionar apoio'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Justify Route Dialog */}
         <Dialog open={!!justifyRoute} onOpenChange={(o) => { if (!o) { setJustifyRoute(null); setJustifyReason(''); } }}>
