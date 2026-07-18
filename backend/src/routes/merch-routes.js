@@ -2046,18 +2046,37 @@ router.get('/promotor/agenda', promotorAuth, async (req, res) => {
     let sql = `SELECT r.*, p.name as pdv_name, p.address as pdv_address, p.city as pdv_city,
                p.latitude as pdv_lat, p.longitude as pdv_lng,
                b.name as brand_name, b.logo_url as brand_logo,
-               bc.name as checklist_name
+               bc.name as checklist_name,
+               CASE WHEN r.promoter_id = $1 THEN 'titular' ELSE 'apoio' END as promoter_role
                FROM merch_routes r
                LEFT JOIN pdvs p ON p.id = r.pdv_id
                LEFT JOIN merch_brands b ON b.id = r.brand_id
                LEFT JOIN brand_checklists bc ON bc.id = r.checklist_id
-               WHERE r.promoter_id = $1 AND r.organization_id = $2`;
+               WHERE r.organization_id = $2
+                 AND (
+                   r.promoter_id = $1
+                   OR EXISTS (
+                     SELECT 1 FROM route_person_assignments rpa
+                      WHERE rpa.route_id = r.id
+                        AND rpa.employee_id = $1
+                        AND COALESCE(rpa.active, true) = true
+                   )
+                 )`;
     const params = [req.employeeId, req.orgId];
     let idx = 3;
     if (date_from) { sql += ` AND r.visit_date >= $${idx++}`; params.push(date_from); }
     if (date_to) { sql += ` AND r.visit_date <= $${idx++}`; params.push(date_to); }
     sql += ' ORDER BY r.visit_date, r.scheduled_time';
-    const rows = (await query(sql, params)).rows;
+    let rows;
+    try {
+      rows = (await query(sql, params)).rows;
+    } catch (e) {
+      if (e.code === '42P01') {
+        // route_person_assignments missing → fallback to only titular
+        const sql2 = sql.replace(/AND \(\s*r\.promoter_id = \$1[\s\S]*?\)\)/, 'AND r.promoter_id = $1');
+        rows = (await query(sql2, params)).rows;
+      } else { throw e; }
+    }
     // Enrich multi-brand
     try {
       const mbIds = rows.filter(r => !r.brand_id).map(r => r.id);
