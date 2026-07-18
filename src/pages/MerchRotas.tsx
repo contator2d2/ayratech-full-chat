@@ -721,6 +721,75 @@ export default function MerchRotas() {
           </AlertDialogContent>
         </AlertDialog>
 
+        {/* Add Support Promoter Dialog */}
+        <Dialog open={!!supportRoute} onOpenChange={(o) => { if (!o) { setSupportRoute(null); setSupportEmployeeId(''); setSupportReason(''); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <UserPlus className="h-5 w-5 text-blue-600" />
+                Adicionar promotor de apoio
+              </DialogTitle>
+              <DialogDescription>
+                O promotor selecionado poderá abrir esta rota no app junto com o titular e executar itens do checklist. Cada ação fica registrada com o autor real.
+              </DialogDescription>
+            </DialogHeader>
+            {supportRoute && (
+              <div className="space-y-3">
+                <div className="text-xs text-muted-foreground bg-muted/30 rounded-md p-2">
+                  <div><b>PDV:</b> {supportRoute.pdv_name}</div>
+                  <div><b>Titular:</b> {supportRoute.promoter_name || '—'}</div>
+                  <div><b>Data:</b> {supportRoute.visit_date ? format(parseISO(supportRoute.visit_date.split('T')[0]), 'dd/MM/yyyy') : '—'}</div>
+                </div>
+                <div>
+                  <Label className="text-xs">Promotor de apoio *</Label>
+                  <Select value={supportEmployeeId} onValueChange={setSupportEmployeeId}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione um promotor" /></SelectTrigger>
+                    <SelectContent>
+                      {employees
+                        .filter((e: any) => e.id !== supportRoute.promoter_id && !(supportRoute.co_promoters || []).some((c: any) => c.employee_id === e.id))
+                        .map((e: any) => (
+                          <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Motivo (opcional)</Label>
+                  <Textarea
+                    value={supportReason}
+                    onChange={(e) => setSupportReason(e.target.value)}
+                    placeholder="Ex.: Apoio para PDV com alto volume; treinamento; cobertura de férias..."
+                    className="mt-1 min-h-[80px]"
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => { setSupportRoute(null); setSupportEmployeeId(''); setSupportReason(''); }}>Cancelar</Button>
+              <Button
+                disabled={assignPromoterMutation.isPending || !supportEmployeeId}
+                onClick={() => {
+                  if (!supportRoute?.id || !supportEmployeeId) return;
+                  assignPromoterMutation.mutate(
+                    { routeId: supportRoute.id, employee_id: supportEmployeeId, action: 'add', reason: supportReason.trim() || 'Apoio adicionado pela supervisão' } as any,
+                    {
+                      onSuccess: () => {
+                        toast.success('Promotor de apoio adicionado');
+                        setSupportRoute(null);
+                        setSupportEmployeeId('');
+                        setSupportReason('');
+                      },
+                      onError: (e: any) => toast.error(e?.message || 'Falha ao adicionar apoio'),
+                    }
+                  );
+                }}
+              >
+                {assignPromoterMutation.isPending ? 'Adicionando...' : 'Adicionar apoio'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Justify Route Dialog */}
         <Dialog open={!!justifyRoute} onOpenChange={(o) => { if (!o) { setJustifyRoute(null); setJustifyReason(''); } }}>
           <DialogContent className="max-w-md">
