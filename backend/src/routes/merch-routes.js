@@ -126,6 +126,31 @@ router.get('/routes', async (req, res) => {
           }
         }
       } catch (e) { logWarn('routes.list.route_brands_failed', e); }
+
+      // Attach co-executors (route_person_assignments)
+      try {
+        const ids = rows.map(r => r.id);
+        const cpRes = await query(
+          `SELECT rpa.route_id, rpa.employee_id, rpa.role, rpa.assigned_at,
+                  e.full_name as employee_name
+             FROM route_person_assignments rpa
+             LEFT JOIN employees e ON e.id = rpa.employee_id
+            WHERE rpa.route_id = ANY($1::uuid[]) AND COALESCE(rpa.active, true) = true
+            ORDER BY rpa.assigned_at`,
+          [ids]
+        );
+        const cpMap = {};
+        for (const cp of cpRes.rows) {
+          (cpMap[cp.route_id] = cpMap[cp.route_id] || []).push(cp);
+        }
+        for (const r of rows) {
+          const list = (cpMap[r.id] || []).filter(x => x.employee_id !== r.promoter_id);
+          r.co_promoters = list;
+        }
+      } catch (e) {
+        if (e.code !== '42P01') logWarn('routes.list.co_promoters_failed', e);
+        for (const r of rows) r.co_promoters = [];
+      }
     }
 
     res.json(rows);
