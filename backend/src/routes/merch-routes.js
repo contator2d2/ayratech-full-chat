@@ -2121,23 +2121,36 @@ router.get('/promotor/routes/:id', promotorAuth, async (req, res) => {
        LEFT JOIN merch_brands b ON b.id = r.brand_id
        LEFT JOIN brand_checklists bc ON bc.id = r.checklist_id
        LEFT JOIN brand_checklists bc2 ON bc2.brand_id = r.brand_id AND bc2.active = true
-       WHERE r.id=$1 AND r.promoter_id=$2`, [req.params.id, req.employeeId]
+       WHERE r.id=$1 AND (
+         r.promoter_id=$2
+         OR EXISTS (
+           SELECT 1 FROM route_person_assignments rpa
+            WHERE rpa.route_id = r.id AND rpa.employee_id = $2 AND COALESCE(rpa.active, true) = true
+         )
+       )`, [req.params.id, req.employeeId]
     );
     
     if (!routeRes.rows.length) {
-      // If not found by ID, maybe it's multi-brand and doesn't have a direct brand_id
-      // but let's first check if the organization and promoter match
-      const basicCheck = await query('SELECT organization_id FROM merch_routes WHERE id=$1 AND promoter_id=$2', [req.params.id, req.employeeId]);
+      // Fallback: check by id and promoter_id / assignment separately (in case join failed)
+      const basicCheck = await query(
+        `SELECT organization_id FROM merch_routes r
+          WHERE r.id=$1 AND (
+            r.promoter_id=$2
+            OR EXISTS (SELECT 1 FROM route_person_assignments rpa WHERE rpa.route_id=r.id AND rpa.employee_id=$2 AND COALESCE(rpa.active,true)=true)
+          )`,
+        [req.params.id, req.employeeId]
+      ).catch(async (e) => {
+        if (e.code === '42P01') return await query('SELECT organization_id FROM merch_routes WHERE id=$1 AND promoter_id=$2', [req.params.id, req.employeeId]);
+        throw e;
+      });
       if (!basicCheck.rows.length) return res.status(404).json({ error: 'Rota não encontrada' });
-      
-      // If it exists but the join failed (maybe due to brand_id being null on multi-brand routes),
-      // let's do a simpler query and then enrich.
+
       const simpleRoute = await query(
         `SELECT r.*, p.name as pdv_name, p.address as pdv_address, p.city as pdv_city,
          p.latitude as pdv_lat, p.longitude as pdv_lng, p.radius_meters as pdv_radius
          FROM merch_routes r
          LEFT JOIN pdvs p ON p.id = r.pdv_id
-         WHERE r.id=$1 AND r.promoter_id=$2`, [req.params.id, req.employeeId]
+         WHERE r.id=$1`, [req.params.id]
       );
       if (!simpleRoute.rows.length) return res.status(404).json({ error: 'Rota não encontrada' });
       routeRes.rows = simpleRoute.rows;
