@@ -486,13 +486,36 @@ export default function MerchRotas() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-muted-foreground" />
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-[10px] text-muted-foreground">Promotor</div>
-                      <div className="font-medium">{viewRoute.promoter_name || '—'}</div>
+                      <div className="font-medium truncate">{viewRoute.promoter_name || '—'}</div>
+                      {Array.isArray(viewRoute.co_promoters) && viewRoute.co_promoters.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {viewRoute.co_promoters.map((cp: any) => (
+                            <Badge key={cp.employee_id} variant="secondary" className="text-[9px] gap-1 pr-1">
+                              <UserPlus className="h-2.5 w-2.5" />
+                              {cp.employee_name || cp.employee_id}
+                              <button
+                                type="button"
+                                className="ml-0.5 rounded hover:bg-muted-foreground/20 p-0.5"
+                                title="Remover apoio"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!confirm(`Remover ${cp.employee_name} como apoio?`)) return;
+                                  assignPromoterMutation.mutate(
+                                    { routeId: viewRoute.id, employee_id: cp.employee_id, action: 'remove', reason: 'Removido pela supervisão' } as any,
+                                    { onSuccess: () => { toast.success('Apoio removido'); setViewRoute({ ...viewRoute, co_promoters: viewRoute.co_promoters.filter((x: any) => x.employee_id !== cp.employee_id) }); } }
+                                  );
+                                }}
+                              >
+                                <X className="h-2.5 w-2.5" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-muted-foreground" />
                     <div>
                       <div className="text-[10px] text-muted-foreground">Marca</div>
                       <div className="font-medium">
