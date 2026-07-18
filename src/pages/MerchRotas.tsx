@@ -59,6 +59,10 @@ export default function MerchRotas() {
   const [justifyRoute, setJustifyRoute] = useState<any>(null);
   const [justifyReason, setJustifyReason] = useState('');
   const justifyMutation = useJustifyRoute();
+  const assignPromoterMutation = useAssignPromoter();
+  const [supportRoute, setSupportRoute] = useState<any>(null);
+  const [supportEmployeeId, setSupportEmployeeId] = useState('');
+  const [supportReason, setSupportReason] = useState('');
 
   // Calculate date range
   const dateRange = useMemo(() => {
