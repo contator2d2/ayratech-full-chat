@@ -1354,7 +1354,8 @@ export default function PromotorRota() {
                 const pMode = (rbConfig || route as any)?.category_photo_mode || 'both';
                 
                 const needsAfter = reqPhotos && (pMode === 'both' || pMode === 'after');
-                const hasAfter = !!catStatus?.category_after_photo || !!catStatus?.completed || !!optimisticAfterPhoto[`${catId}_${routeBrandId || 'null'}`];
+                const hasAfterPhotoInRoute = (route?.photos || []).some((p: any) => (p.category_id || null) === (catId || null) && (!routeBrandId || (p.route_brand_id || null) === routeBrandId) && p.photo_type === 'category_after');
+                const hasAfter = !!catStatus?.category_after_photo || hasAfterPhotoInRoute || !!optimisticAfterPhoto[`${catId}_${routeBrandId || 'null'}`];
                 
                 // Uma categoria só exige foto do depois se todos os seus produtos foram executados
                 return allDone && needsAfter && !hasAfter;
