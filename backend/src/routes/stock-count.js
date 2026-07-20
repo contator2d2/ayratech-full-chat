@@ -410,12 +410,12 @@ router.post('/execute', authenticate, async (req, res) => {
       if (existing) {
         await query(
           `UPDATE stock_count_items SET quantity=$1, observation=$2, collected_at=CASE WHEN $1 IS NOT NULL THEN NOW() ELSE collected_at END, collected_by=$3, updated_at=NOW() WHERE id=$4`,
-          [hasQty ? Number(it.quantity) : null, it.observation ?? null, req.userId, existing.id]);
+          [hasQty ? Number(it.quantity) : null, it.observation ?? null, (req.userId || req.employeeId), existing.id]);
       } else {
         await query(
           `INSERT INTO stock_count_items (execution_id, product_id, quantity, observation, collected_at, collected_by)
            VALUES ($1,$2,$3,$4,CASE WHEN $3 IS NOT NULL THEN NOW() ELSE NULL END,$5)`,
-          [exec.id, it.product_id, hasQty ? Number(it.quantity) : null, it.observation ?? null, req.userId]);
+          [exec.id, it.product_id, hasQty ? Number(it.quantity) : null, it.observation ?? null, (req.userId || req.employeeId)]);
       }
     }
 
@@ -471,7 +471,7 @@ router.post('/postpone', authenticate, async (req, res) => {
     await query(
       `INSERT INTO stock_count_postponements (execution_id, route_id, reason, observation, next_route_id, postponed_by)
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [execution_id, exec.route_id, reason, observation ?? null, nextRoute, req.userId]);
+      [execution_id, exec.route_id, reason, observation ?? null, nextRoute, (req.userId || req.employeeId)]);
 
     await query(
       `UPDATE stock_count_executions SET status=$1, is_mandatory=$2, updated_at=NOW() WHERE id=$3`,
@@ -491,7 +491,7 @@ router.post('/justify', authenticate, async (req, res) => {
     await query(
       `INSERT INTO stock_count_justifications (execution_id, route_id, reason, observation, justified_by)
        VALUES ($1,$2,$3,$4,$5)`,
-      [execution_id, exec.route_id, reason, observation ?? null, req.userId]);
+      [execution_id, exec.route_id, reason, observation ?? null, (req.userId || req.employeeId)]);
     await query(`UPDATE stock_count_executions SET status='justified', updated_at=NOW() WHERE id=$1`, [execution_id]);
     res.json({ ok: true });
   } catch (err) { logError('stock-count.justify', err); res.status(500).json({ error: err.message || 'Erro' }); }
