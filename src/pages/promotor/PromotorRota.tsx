@@ -1343,6 +1343,22 @@ export default function PromotorRota() {
                 return acc;
               }, {});
 
+              const globalMissingBeforePhotos = Object.entries(allExecutionsGroupedGlobal).filter(([key, data]: [string, any]) => {
+                const { catId, routeBrandId, execs } = data;
+                const catStatus = categoryStatusMap[key] || categoryStatusMap[catId];
+                const rbConfig = isMultiBrand ? routeBrands.find((b: any) => b.id === routeBrandId) : null;
+                const reqPhotos = (rbConfig || route as any)?.require_category_photos !== false;
+                const pMode = (rbConfig || route as any)?.category_photo_mode || 'both';
+                const needsBefore = reqPhotos && (pMode === 'both' || pMode === 'before');
+                if (!needsBefore) return false;
+                // Ponto extra usa foto do próprio ponto, não a foto de categoria "antes"
+                const isExtra = execs.every((e: any) => e.exposure_point === 'extra');
+                if (isExtra) return false;
+                const hasBeforePhotoInRoute = (route?.photos || []).some((p: any) => (p.category_id || null) === (catId || null) && (!routeBrandId || (p.route_brand_id || null) === routeBrandId) && p.photo_type === 'category_before');
+                const hasBefore = !!catStatus?.category_before_photo || !!catStatus?.products_unlocked || hasBeforePhotoInRoute || !!optimisticBeforeUnlock[`${catId}_${routeBrandId || 'null'}`];
+                return !hasBefore;
+              });
+
               const globalMissingAfterPhotos = Object.entries(allExecutionsGroupedGlobal).filter(([key, data]: [string, any]) => {
                 const { catId, routeBrandId, execs } = data;
                 const catStatus = categoryStatusMap[key] || categoryStatusMap[catId];
@@ -1361,6 +1377,7 @@ export default function PromotorRota() {
                 return allDone && needsAfter && !hasAfter;
               });
 
+              const allBeforePhotosDone = globalMissingBeforePhotos.length === 0;
               const allAfterPhotosDone = globalMissingAfterPhotos.length === 0;
               
               // Também checamos se todas as marcas estão concluídas (para garantir que o checklist foi processado)
@@ -1373,9 +1390,9 @@ export default function PromotorRota() {
               const elapsedMinutes = checkinAt ? Math.floor((currentTime.getTime() - checkinAt.getTime()) / 60000) : 0;
               const hasMinDurationMet = minDuration === 0 || elapsedMinutes >= minDuration;
               
-              // A rota só pode ser concluída se TODOS os produtos, TODAS as fotos e tempo mínimo forem respeitados
+              // A rota só pode ser concluída se TODOS os produtos, TODAS as fotos (antes+depois) e tempo mínimo forem respeitados
               const stockCountPending = stockCountBlocking.length;
-              const canCompleteRoute = allProductsDoneGlobal && allBrandsCompleted && allAfterPhotosDone && hasMinDurationMet && stockCountPending === 0;
+              const canCompleteRoute = allProductsDoneGlobal && allBrandsCompleted && allBeforePhotosDone && allAfterPhotosDone && hasMinDurationMet && stockCountPending === 0;
               
               return (
                 <>
