@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { usePromotorAgenda } from "@/hooks/use-promotor-routes";
-import { Calendar, MapPin, Clock, ChevronLeft, ChevronRight, Navigation } from "lucide-react";
+import { Calendar, MapPin, Clock, ChevronLeft, ChevronRight, Navigation, Boxes } from "lucide-react";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, addWeeks, addMonths, subDays, subWeeks, subMonths, eachDayOfInterval, isSameDay, isToday as isTodayFn } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
@@ -109,6 +109,11 @@ export default function PromotorAgenda() {
                       </div>
                       <Badge className={STATUS_COLORS[r.status] || 'bg-muted'}>{STATUS_LABELS[r.status] || r.status}</Badge>
                     </div>
+                    {r.has_stock_count && (
+                      <Badge variant="outline" className="mb-2 border-amber-500/50 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 gap-1">
+                        <Boxes className="h-3 w-3" /> Contagem de estoque
+                      </Badge>
+                    )}
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{r.scheduled_time?.slice(0, 5) || '--:--'}</span>
                       {r.estimated_duration_min && <span>{r.estimated_duration_min}min</span>}
@@ -149,9 +154,10 @@ export default function PromotorAgenda() {
                     {dayRoutes.length > 0 && <Badge variant="secondary" className="text-[10px]">{dayRoutes.length} rota(s)</Badge>}
                   </div>
                   {dayRoutes.map((r: any) => (
-                    <div key={r.id} className={`text-xs p-1.5 rounded mt-1 ${STATUS_COLORS[r.status] || 'bg-muted'}`}
+                    <div key={r.id} className={`text-xs p-1.5 rounded mt-1 flex items-center gap-1 ${STATUS_COLORS[r.status] || 'bg-muted'}`}
                       onClick={() => { if (canOpenRoute(r)) navigate(`/promotor/rota/${r.id}`); }}>
-                      {r.scheduled_time?.slice(0, 5)} • {r.pdv_name} • {r.brand_name}
+                      <span className="flex-1">{r.scheduled_time?.slice(0, 5)} • {r.pdv_name} • {r.brand_name}</span>
+                      {r.has_stock_count && <Boxes className="h-3 w-3 text-amber-600" />}
                     </div>
                   ))}
                   {dayRoutes.length === 0 && <p className="text-[10px] text-muted-foreground">Sem rotas</p>}
