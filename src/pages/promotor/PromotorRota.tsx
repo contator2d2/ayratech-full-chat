@@ -686,7 +686,7 @@ export default function PromotorRota() {
 
   // Load photo quality config
   useEffect(() => {
-    api<any>('/api/merchandising/photo-quality-config')
+    api<any>('/api/merch/photo-quality-config')
       .then(d => { if (d?.config) setPhotoQualityConfig(d.config); })
       .catch(() => { /* use defaults */ });
   }, []);

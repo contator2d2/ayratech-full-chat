@@ -176,7 +176,7 @@ function computePeriodWindow(date, frequency = 'weekly', interval = 1, customDay
 router.get('/rules', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getOrgId(req.userId);
+    const orgId = await getOrgId(req);
     if (!orgId) return res.status(403).json({ error: 'Sem organização' });
     const { brand_id } = req.query;
     let sql = `SELECT r.*, b.name AS brand_name FROM stock_count_rules r
@@ -191,7 +191,7 @@ router.get('/rules', authenticate, async (req, res) => {
 router.post('/rules', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getOrgId(req.userId);
+    const orgId = await getOrgId(req);
     if (!orgId) return res.status(403).json({ error: 'Sem organização' });
     const {
       id, brand_id, enabled, frequency, frequency_interval, custom_days, weekdays, pdv_overrides,
@@ -249,7 +249,7 @@ router.delete('/rules/:id', authenticate, async (req, res) => {
 router.get('/route/:route_id', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getOrgId(req.userId);
+    const orgId = await getOrgId(req);
     if (!orgId) return res.status(403).json({ error: 'Sem organização' });
     const routeId = req.params.route_id;
 
@@ -378,7 +378,7 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
 router.post('/execute', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getOrgId(req.userId);
+    const orgId = await getOrgId(req);
     const { route_id, brand_id, pdv_id, promoter_id, items } = req.body;
 
     // Find existing exec in this route+brand+pdv, else create one for current week
