@@ -153,7 +153,12 @@ const getScopedAuthToken = (endpoint: string) => {
   }
 
   // Shared merchandising config endpoints — fall back to promotor token when no main token
-  if (endpoint.startsWith('/api/merchandising/')) {
+  if (endpoint.startsWith('/api/merchandising/') || endpoint.startsWith('/api/merch/photo-quality-config')) {
+    return localStorage.getItem('auth_token') || localStorage.getItem('promotor_token');
+  }
+
+  // Stock count endpoints are consumed by both admin and promotor app
+  if (endpoint.startsWith('/api/stock-count/')) {
     return localStorage.getItem('auth_token') || localStorage.getItem('promotor_token');
   }
 
