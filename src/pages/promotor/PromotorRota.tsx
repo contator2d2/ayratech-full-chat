@@ -1435,10 +1435,12 @@ export default function PromotorRota() {
                       <p className="text-[10px] text-center text-destructive">
                         ⚠️ {!allProductsDoneGlobal 
                           ? 'Todos os produtos de TODAS as marcas devem estar executados (100%) para concluir a rota.'
-                          : !allAfterPhotosDone
-                            ? 'Tire as fotos obrigatórias (DEPOIS) de todas as categorias concluídas.'
-                            : !allBrandsCompleted 
-                              ? 'Conclua o checklist de todas as marcas antes de finalizar a rota.'
+                          : !allBeforePhotosDone
+                            ? 'Tire as fotos obrigatórias (ANTES) de todas as categorias.'
+                            : !allAfterPhotosDone
+                              ? 'Tire as fotos obrigatórias (DEPOIS) de todas as categorias concluídas.'
+                              : !allBrandsCompleted 
+                                ? 'Conclua o checklist de todas as marcas antes de finalizar a rota.'
                               : stockCountPending > 0
                                 ? `Contagem de estoque obrigatória pendente em ${stockCountPending} marca(s).`
                                 : `Tempo mínimo: faltam ${minDuration - elapsedMinutes} min.`}
