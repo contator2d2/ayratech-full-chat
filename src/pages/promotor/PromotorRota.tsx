@@ -1351,9 +1351,7 @@ export default function PromotorRota() {
                 const pMode = (rbConfig || route as any)?.category_photo_mode || 'both';
                 const needsBefore = reqPhotos && (pMode === 'both' || pMode === 'before');
                 if (!needsBefore) return false;
-                // Ponto extra usa foto do próprio ponto, não a foto de categoria "antes"
-                const isExtra = execs.every((e: any) => e.exposure_point === 'extra');
-                if (isExtra) return false;
+                // Pontos extras seguem o mesmo checklist da marca (antes/depois obrigatórios conforme configuração)
                 const hasBeforePhotoInRoute = (route?.photos || []).some((p: any) => (p.category_id || null) === (catId || null) && (!routeBrandId || (p.route_brand_id || null) === routeBrandId) && p.photo_type === 'category_before');
                 const hasBefore = !!catStatus?.category_before_photo || !!catStatus?.products_unlocked || hasBeforePhotoInRoute || !!optimisticBeforeUnlock[`${catId}_${routeBrandId || 'null'}`];
                 return !hasBefore;
