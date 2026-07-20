@@ -1406,6 +1406,10 @@ export default function PromotorRota() {
                       }
                       return;
                     }
+                    if (!allBeforePhotosDone) {
+                      toast.error(`Existem fotos da categoria (ANTES) obrigatórias pendentes. Verifique as categorias.`);
+                      return;
+                    }
                     if (!allAfterPhotosDone) {
                       toast.error(`Existem fotos da categoria (DEPOIS) obrigatórias pendentes. Verifique as categorias.`);
                       return;
