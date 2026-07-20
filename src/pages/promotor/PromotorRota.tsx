@@ -810,10 +810,14 @@ export default function PromotorRota() {
   // Stock count executions (Contagem de Saldo) for this route
   const { data: stockCountExecs = [] } = useRouteStockCount(id);
   const stockCountBlocking = useMemo(() => {
-    return (stockCountExecs as any[]).filter((e: any) =>
-      e?.rule?.block_route_completion &&
-      e.status !== 'completed' && e.status !== 'justified'
-    );
+    // Bloqueia conclusão quando a regra exige (block_route_completion)
+    // OU quando prorrogação não é permitida (allow_postpone === false).
+    // Nesses casos o promotor DEVE preencher saldo antes de fechar a rota.
+    return (stockCountExecs as any[]).filter((e: any) => {
+      const rule = e?.rule || {};
+      const mustBlock = rule.block_route_completion === true || rule.allow_postpone === false;
+      return mustBlock && e.status !== 'completed' && e.status !== 'justified';
+    });
   }, [stockCountExecs]);
 
 
