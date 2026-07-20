@@ -1441,9 +1441,9 @@ export default function PromotorRota() {
                               ? 'Tire as fotos obrigatórias (DEPOIS) de todas as categorias concluídas.'
                               : !allBrandsCompleted 
                                 ? 'Conclua o checklist de todas as marcas antes de finalizar a rota.'
-                              : stockCountPending > 0
-                                ? `Contagem de estoque obrigatória pendente em ${stockCountPending} marca(s).`
-                                : `Tempo mínimo: faltam ${minDuration - elapsedMinutes} min.`}
+                                : stockCountPending > 0
+                                  ? `Contagem de estoque obrigatória pendente em ${stockCountPending} marca(s).`
+                                  : `Tempo mínimo: faltam ${minDuration - elapsedMinutes} min.`}
                       </p>
                       {allProductsDoneGlobal && allBrandsCompleted && allAfterPhotosDone && !hasMinDurationMet && (
                         <p className="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
