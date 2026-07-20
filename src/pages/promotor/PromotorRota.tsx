@@ -515,10 +515,12 @@ function CategoryAfterPhotoGate({ catId, routeBrandId, categoryName, routeId, pd
 // ===== Painel de fotos extras da categoria (visualizar + adicionar mais) =====
 function CategoryExtraPhotosPanel({
   routeId, catId, routeBrandId, photos, hasAnyAfter, hasAnyBefore, completed,
+  unlockBeforeUrl, unlockAfterUrl,
   pdvName, brandName, promotorName, qualityConfig, onUploaded,
 }: {
   routeId: string; catId: string; routeBrandId?: string;
   photos: any[]; hasAnyAfter: boolean; hasAnyBefore: boolean; completed: boolean;
+  unlockBeforeUrl?: string | null; unlockAfterUrl?: string | null;
   pdvName: string; brandName: string; promotorName?: string;
   qualityConfig?: PhotoQualityConfig;
   onUploaded: () => void;
@@ -528,20 +530,44 @@ function CategoryExtraPhotosPanel({
   const [newPhotos, setNewPhotos] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
 
-  const beforePhotos = photos.filter((p: any) => p.photo_type === 'category_before');
-  const afterPhotos = photos.filter((p: any) => p.photo_type === 'category_after');
+  // Dedupe photos by photo_url (offline retries podem ter gerado duplicatas
+  // no passado; aqui garantimos que a mesma URL nunca renderize duas vezes).
+  const dedupeByUrl = (list: any[]) => {
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const p of list) {
+      const key = p?.photo_url;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+    return out;
+  };
+  const beforePhotosRaw = dedupeByUrl(photos.filter((p: any) => p.photo_type === 'category_before'));
+  const afterPhotosRaw = dedupeByUrl(photos.filter((p: any) => p.photo_type === 'category_after'));
+
+  // Separa a foto de "desbloqueio" da categoria (a primeira, exibida como
+  // "Foto da Categoria") das fotos ANTES/DEPOIS adicionais.
+  const beforePrimary =
+    beforePhotosRaw.find((p: any) => p.photo_url === unlockBeforeUrl) ||
+    beforePhotosRaw[0] || null;
+  const afterPrimary =
+    afterPhotosRaw.find((p: any) => p.photo_url === unlockAfterUrl) ||
+    afterPhotosRaw[0] || null;
+  const beforePhotos = beforePhotosRaw.filter((p) => p !== beforePrimary);
+  const afterPhotos = afterPhotosRaw.filter((p) => p !== afterPrimary);
 
   // Regra: só pode adicionar mais ANTES se ainda NÃO começou fotos DEPOIS
   const canAddBefore = !hasAnyAfter;
-  // Adicionar mais DEPOIS: sempre permitido (mesmo após 100%, o promotor pode
-  // querer registrar fotos adicionais da execução)
+  // Adicionar mais DEPOIS: sempre permitido
   const canAddAfter = true;
 
   const handleRemove = (i: number) => setNewPhotos((prev) => prev.filter((_, idx) => idx !== i));
 
   const handleCapture = async (url: string) => {
     if (!mode) return;
-    setNewPhotos((prev) => [...prev, url]);
+    // Guard contra duplicidade se o CameraCapture disparar onCapture duas vezes.
+    setNewPhotos((prev) => (prev.includes(url) ? prev : [...prev, url]));
     setSending(true);
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
@@ -571,10 +597,9 @@ function CategoryExtraPhotosPanel({
   };
 
 
-  // Mescla as fotos confirmadas pelo servidor com as recém-tiradas (otimista)
-  // evitando duplicar caso o refetch já tenha trazido a mesma URL.
-  const serverBeforeUrls = new Set(beforePhotos.map((p: any) => p.photo_url));
-  const serverAfterUrls = new Set(afterPhotos.map((p: any) => p.photo_url));
+  // Mescla otimista com URLs do servidor, sem duplicar.
+  const serverBeforeUrls = new Set(beforePhotosRaw.map((p: any) => p.photo_url));
+  const serverAfterUrls = new Set(afterPhotosRaw.map((p: any) => p.photo_url));
   const optimisticBefore = mode === 'before' ? newPhotos.filter((u) => !serverBeforeUrls.has(u)) : [];
   const optimisticAfter = mode === 'after' ? newPhotos.filter((u) => !serverAfterUrls.has(u)) : [];
   const totalBefore = beforePhotos.length + optimisticBefore.length;
@@ -583,16 +608,32 @@ function CategoryExtraPhotosPanel({
   return (
     <div className="mt-2 p-3 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 space-y-3">
       <div className="space-y-2">
+        {beforePrimary && (
+          <div>
+            <div className="text-[10px] font-semibold uppercase text-primary mb-1">🏷️ Foto da Categoria</div>
+            <div className="grid grid-cols-4 gap-1.5">
+              <LocalImage src={beforePrimary.photo_url} alt="Foto da categoria" className="w-full h-16 rounded border-2 border-primary/50 object-cover" />
+            </div>
+          </div>
+        )}
         {totalBefore > 0 && (
           <div>
             <div className="text-[10px] font-semibold uppercase text-muted-foreground mb-1">📷 Antes ({totalBefore})</div>
             <div className="grid grid-cols-4 gap-1.5">
               {beforePhotos.map((p: any, i: number) => (
-                <LocalImage key={p.id || `b-${i}`} src={p.photo_url} alt={`Antes ${i+1}`} className="w-full h-16 rounded border object-cover" />
+                <LocalImage key={p.id || `b-${p.photo_url}`} src={p.photo_url} alt={`Antes ${i+1}`} className="w-full h-16 rounded border object-cover" />
               ))}
               {optimisticBefore.map((u, i) => (
-                <LocalImage key={`ob-${i}`} src={u} alt={`Antes nova ${i+1}`} className="w-full h-16 rounded border border-primary/40 object-cover ring-1 ring-primary/30" />
+                <LocalImage key={`ob-${u}`} src={u} alt={`Antes nova ${i+1}`} className="w-full h-16 rounded border border-primary/40 object-cover ring-1 ring-primary/30" />
               ))}
+            </div>
+          </div>
+        )}
+        {afterPrimary && (
+          <div>
+            <div className="text-[10px] font-semibold uppercase text-green-700 mb-1">🏁 Foto Final da Categoria</div>
+            <div className="grid grid-cols-4 gap-1.5">
+              <LocalImage src={afterPrimary.photo_url} alt="Foto final da categoria" className="w-full h-16 rounded border-2 border-green-500/60 object-cover" />
             </div>
           </div>
         )}
@@ -601,15 +642,15 @@ function CategoryExtraPhotosPanel({
             <div className="text-[10px] font-semibold uppercase text-green-700 mb-1">✅ Depois ({totalAfter})</div>
             <div className="grid grid-cols-4 gap-1.5">
               {afterPhotos.map((p: any, i: number) => (
-                <LocalImage key={p.id || `a-${i}`} src={p.photo_url} alt={`Depois ${i+1}`} className="w-full h-16 rounded border border-green-500/40 object-cover" />
+                <LocalImage key={p.id || `a-${p.photo_url}`} src={p.photo_url} alt={`Depois ${i+1}`} className="w-full h-16 rounded border border-green-500/40 object-cover" />
               ))}
               {optimisticAfter.map((u, i) => (
-                <LocalImage key={`oa-${i}`} src={u} alt={`Depois nova ${i+1}`} className="w-full h-16 rounded border border-green-500/60 object-cover ring-1 ring-green-500/40" />
+                <LocalImage key={`oa-${u}`} src={u} alt={`Depois nova ${i+1}`} className="w-full h-16 rounded border border-green-500/60 object-cover ring-1 ring-green-500/40" />
               ))}
             </div>
           </div>
         )}
-        {totalBefore === 0 && totalAfter === 0 && (
+        {!beforePrimary && !afterPrimary && totalBefore === 0 && totalAfter === 0 && (
           <p className="text-xs text-muted-foreground text-center">Nenhuma foto registrada ainda.</p>
         )}
       </div>
@@ -1226,6 +1267,8 @@ export default function PromotorRota() {
                       hasAnyBefore={!!catStatus?.category_before_photo || (route?.photos || []).some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_before')}
                       hasAnyAfter={!!catStatus?.category_after_photo || (route?.photos || []).some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_after')}
                       completed={isCompletedCategory}
+                      unlockBeforeUrl={catStatus?.category_before_photo || null}
+                      unlockAfterUrl={catStatus?.category_after_photo || null}
                       pdvName={route.pdv_name}
                       brandName={currentBrand?.brand_name || route.brand_name}
                       promotorName={route.promotor_name}
