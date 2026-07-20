@@ -210,7 +210,7 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
           )}
 
           <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            {status !== 'completed' && status !== 'justified' && !isMandatory && (
+            {status !== 'completed' && status !== 'justified' && !isMandatory && allowPostpone && (
               <Button variant="outline" onClick={() => { setOpen(false); setPostponeOpen(true); }} className="sm:mr-auto">
                 <CalendarClock className="h-4 w-4 mr-1" />
                 Não fiz hoje
