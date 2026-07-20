@@ -1267,6 +1267,8 @@ export default function PromotorRota() {
                       hasAnyBefore={!!catStatus?.category_before_photo || (route?.photos || []).some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_before')}
                       hasAnyAfter={!!catStatus?.category_after_photo || (route?.photos || []).some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_after')}
                       completed={isCompletedCategory}
+                      unlockBeforeUrl={catStatus?.category_before_photo || null}
+                      unlockAfterUrl={catStatus?.category_after_photo || null}
                       pdvName={route.pdv_name}
                       brandName={currentBrand?.brand_name || route.brand_name}
                       promotorName={route.promotor_name}
