@@ -1,14 +1,39 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
-import { authenticate } from '../middleware/auth.js';
 import { logError } from '../logger.js';
 
 const router = express.Router();
 
-async function getOrgId(userId) {
-  const r = await query('SELECT organization_id FROM organization_members WHERE user_id=$1 LIMIT 1', [userId]);
-  return r.rows[0]?.organization_id;
+// Auth middleware that accepts BOTH main-app tokens (userId) and promotor-app tokens (employeeId).
+const authenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'Token não fornecido' });
+  try {
+    const decoded = jwt.verify(authHeader.replace('Bearer ', ''), process.env.JWT_SECRET);
+    req.userId = decoded.userId || null;
+    req.employeeId = decoded.employeeId || decoded.employee_id || null;
+    req.organizationIdFromToken = decoded.organizationId || decoded.organization_id || null;
+    if (!req.userId && !req.employeeId) return res.status(401).json({ error: 'Token inválido' });
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Token inválido' });
+  }
+};
+
+async function getOrgId(req) {
+  if (req.organizationIdFromToken) return req.organizationIdFromToken;
+  if (req.userId) {
+    const r = await query('SELECT organization_id FROM organization_members WHERE user_id=$1 LIMIT 1', [req.userId]);
+    if (r.rows[0]?.organization_id) return r.rows[0].organization_id;
+  }
+  if (req.employeeId) {
+    const r = await query('SELECT organization_id FROM employees WHERE id=$1 LIMIT 1', [req.employeeId]);
+    if (r.rows[0]?.organization_id) return r.rows[0].organization_id;
+  }
+  return null;
 }
+
 
 async function ensureTables() {
   await query(`CREATE TABLE IF NOT EXISTS stock_count_rules (
