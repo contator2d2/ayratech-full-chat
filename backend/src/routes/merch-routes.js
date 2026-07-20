@@ -2090,7 +2090,37 @@ router.get('/promotor/agenda', promotorAuth, async (req, res) => {
         for (const r of rows) { if (rbMap[r.id]) { r.route_brands = rbMap[r.id]; r.is_multi_brand = true; r.brand_name = rbMap[r.id].map(b => b.brand_name).join(' + '); } }
       }
     } catch {}
+    // Enrich with stock-count flag (has active rule for the brand+weekday+pdv)
+    try {
+      const rulesRes = await query(
+        `SELECT brand_id, weekdays, pdv_overrides FROM stock_count_rules WHERE organization_id=$1 AND enabled=true`,
+        [req.orgId]
+      );
+      const rulesByBrand = new Map();
+      for (const rule of rulesRes.rows) {
+        const wd = Array.isArray(rule.weekdays) ? rule.weekdays : (rule.weekdays ? (typeof rule.weekdays === 'string' ? JSON.parse(rule.weekdays) : rule.weekdays) : null);
+        const pov = rule.pdv_overrides ? (typeof rule.pdv_overrides === 'object' ? rule.pdv_overrides : JSON.parse(rule.pdv_overrides)) : null;
+        rulesByBrand.set(rule.brand_id, { weekdays: wd, pdv_overrides: pov });
+      }
+      for (const r of rows) {
+        if (!r.visit_date) { r.has_stock_count = false; continue; }
+        const dow = new Date(r.visit_date).getDay();
+        const brandIds = [];
+        if (r.brand_id) brandIds.push(r.brand_id);
+        if (Array.isArray(r.route_brands)) for (const rb of r.route_brands) if (rb.brand_id) brandIds.push(rb.brand_id);
+        let has = false;
+        for (const bid of brandIds) {
+          const rule = rulesByBrand.get(bid);
+          if (!rule) continue;
+          const pdvOv = rule.pdv_overrides && r.pdv_id ? rule.pdv_overrides[r.pdv_id] : null;
+          const eff = (pdvOv && Array.isArray(pdvOv.weekdays)) ? pdvOv.weekdays : rule.weekdays;
+          if (!eff || !eff.length || eff.map(Number).includes(dow)) { has = true; break; }
+        }
+        r.has_stock_count = has;
+      }
+    } catch {}
     res.json(rows);
+
   } catch (err) {
     logError('promotor.agenda', err);
     if (err.code === '42P01') return res.json([]);
