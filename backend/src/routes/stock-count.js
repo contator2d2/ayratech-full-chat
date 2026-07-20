@@ -1,14 +1,39 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
-import { authenticate } from '../middleware/auth.js';
 import { logError } from '../logger.js';
 
 const router = express.Router();
 
-async function getOrgId(userId) {
-  const r = await query('SELECT organization_id FROM organization_members WHERE user_id=$1 LIMIT 1', [userId]);
-  return r.rows[0]?.organization_id;
+// Auth middleware that accepts BOTH main-app tokens (userId) and promotor-app tokens (employeeId).
+const authenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'Token não fornecido' });
+  try {
+    const decoded = jwt.verify(authHeader.replace('Bearer ', ''), process.env.JWT_SECRET);
+    req.userId = decoded.userId || null;
+    req.employeeId = decoded.employeeId || decoded.employee_id || null;
+    req.organizationIdFromToken = decoded.organizationId || decoded.organization_id || null;
+    if (!req.userId && !req.employeeId) return res.status(401).json({ error: 'Token inválido' });
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Token inválido' });
+  }
+};
+
+async function getOrgId(req) {
+  if (req.organizationIdFromToken) return req.organizationIdFromToken;
+  if (req.userId) {
+    const r = await query('SELECT organization_id FROM organization_members WHERE user_id=$1 LIMIT 1', [req.userId]);
+    if (r.rows[0]?.organization_id) return r.rows[0].organization_id;
+  }
+  if (req.employeeId) {
+    const r = await query('SELECT organization_id FROM employees WHERE id=$1 LIMIT 1', [req.employeeId]);
+    if (r.rows[0]?.organization_id) return r.rows[0].organization_id;
+  }
+  return null;
 }
+
 
 async function ensureTables() {
   await query(`CREATE TABLE IF NOT EXISTS stock_count_rules (
@@ -151,7 +176,7 @@ function computePeriodWindow(date, frequency = 'weekly', interval = 1, customDay
 router.get('/rules', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getOrgId(req.userId);
+    const orgId = await getOrgId(req);
     if (!orgId) return res.status(403).json({ error: 'Sem organização' });
     const { brand_id } = req.query;
     let sql = `SELECT r.*, b.name AS brand_name FROM stock_count_rules r
@@ -166,7 +191,7 @@ router.get('/rules', authenticate, async (req, res) => {
 router.post('/rules', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getOrgId(req.userId);
+    const orgId = await getOrgId(req);
     if (!orgId) return res.status(403).json({ error: 'Sem organização' });
     const {
       id, brand_id, enabled, frequency, frequency_interval, custom_days, weekdays, pdv_overrides,
@@ -224,7 +249,7 @@ router.delete('/rules/:id', authenticate, async (req, res) => {
 router.get('/route/:route_id', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getOrgId(req.userId);
+    const orgId = await getOrgId(req);
     if (!orgId) return res.status(403).json({ error: 'Sem organização' });
     const routeId = req.params.route_id;
 
@@ -353,7 +378,7 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
 router.post('/execute', authenticate, async (req, res) => {
   try {
     await ensureTables();
-    const orgId = await getOrgId(req.userId);
+    const orgId = await getOrgId(req);
     const { route_id, brand_id, pdv_id, promoter_id, items } = req.body;
 
     // Find existing exec in this route+brand+pdv, else create one for current week
@@ -385,12 +410,12 @@ router.post('/execute', authenticate, async (req, res) => {
       if (existing) {
         await query(
           `UPDATE stock_count_items SET quantity=$1, observation=$2, collected_at=CASE WHEN $1 IS NOT NULL THEN NOW() ELSE collected_at END, collected_by=$3, updated_at=NOW() WHERE id=$4`,
-          [hasQty ? Number(it.quantity) : null, it.observation ?? null, req.userId, existing.id]);
+          [hasQty ? Number(it.quantity) : null, it.observation ?? null, (req.userId || req.employeeId), existing.id]);
       } else {
         await query(
           `INSERT INTO stock_count_items (execution_id, product_id, quantity, observation, collected_at, collected_by)
            VALUES ($1,$2,$3,$4,CASE WHEN $3 IS NOT NULL THEN NOW() ELSE NULL END,$5)`,
-          [exec.id, it.product_id, hasQty ? Number(it.quantity) : null, it.observation ?? null, req.userId]);
+          [exec.id, it.product_id, hasQty ? Number(it.quantity) : null, it.observation ?? null, (req.userId || req.employeeId)]);
       }
     }
 
@@ -446,7 +471,7 @@ router.post('/postpone', authenticate, async (req, res) => {
     await query(
       `INSERT INTO stock_count_postponements (execution_id, route_id, reason, observation, next_route_id, postponed_by)
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [execution_id, exec.route_id, reason, observation ?? null, nextRoute, req.userId]);
+      [execution_id, exec.route_id, reason, observation ?? null, nextRoute, (req.userId || req.employeeId)]);
 
     await query(
       `UPDATE stock_count_executions SET status=$1, is_mandatory=$2, updated_at=NOW() WHERE id=$3`,
@@ -466,7 +491,7 @@ router.post('/justify', authenticate, async (req, res) => {
     await query(
       `INSERT INTO stock_count_justifications (execution_id, route_id, reason, observation, justified_by)
        VALUES ($1,$2,$3,$4,$5)`,
-      [execution_id, exec.route_id, reason, observation ?? null, req.userId]);
+      [execution_id, exec.route_id, reason, observation ?? null, (req.userId || req.employeeId)]);
     await query(`UPDATE stock_count_executions SET status='justified', updated_at=NOW() WHERE id=$1`, [execution_id]);
     res.json({ ok: true });
   } catch (err) { logError('stock-count.justify', err); res.status(500).json({ error: err.message || 'Erro' }); }
