@@ -49,9 +49,10 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
   if (!exec) return null;
 
   const status = exec.status || 'pending';
-  const isMandatory = exec.is_mandatory || (exec.rule?.block_route_completion && status !== 'completed' && status !== 'justified');
   const allowPostpone = exec.rule?.allow_postpone ?? true;
   const blockCompletion = exec.rule?.block_route_completion ?? false;
+  // Se prorrogação não é permitida OU regra bloqueia conclusão → obrigatória nesta visita.
+  const isMandatory = (!allowPostpone || blockCompletion || exec.is_mandatory) && status !== 'completed' && status !== 'justified';
 
   const filled = items.filter(i => i.quantity !== null && i.quantity !== undefined && i.quantity !== '').length;
   const total = items.length;
@@ -209,7 +210,7 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
           )}
 
           <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            {status !== 'completed' && status !== 'justified' && !isMandatory && (
+            {status !== 'completed' && status !== 'justified' && !isMandatory && allowPostpone && (
               <Button variant="outline" onClick={() => { setOpen(false); setPostponeOpen(true); }} className="sm:mr-auto">
                 <CalendarClock className="h-4 w-4 mr-1" />
                 Não fiz hoje
