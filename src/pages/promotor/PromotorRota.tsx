@@ -573,7 +573,7 @@ function CategoryExtraPhotosPanel({
     (async () => {
       try {
         // Geolocalização cacheada com timeout curto (não trava a fila).
-        const { lat, lng } = await getCachedGeolocation({ timeoutMs: 1500 }).catch(() => ({ lat: undefined, lng: undefined }));
+        const { lat, lng } = await import('@/lib/photo-perf').then(m => m.getCachedGeolocation({ timeoutMs: 1500 })).catch(() => ({ lat: undefined, lng: undefined }));
         const endpoint = mode === 'before' ? 'photo' : 'after-photo';
         await queueApiCall({
           url: `/api/merch/promotor/routes/${routeId}/categories/${catId}/${endpoint}`,
