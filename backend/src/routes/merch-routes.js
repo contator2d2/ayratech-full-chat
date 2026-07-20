@@ -2801,8 +2801,13 @@ router.post('/promotor/routes/:routeId/categories/:catId/photo', promotorAuth, a
       [req.params.routeId, catId, primaryPhoto, latitude, longitude, req.employeeId, unlocks, route_brand_id || null]
     );
 
-    // Persist every photo
+    // Persist every photo (dedupe: skip if same URL already stored for this category/type)
     for (const pUrl of photoList) {
+      const dup = await query(
+        `SELECT 1 FROM route_photos WHERE route_id=$1 AND category_id IS NOT DISTINCT FROM $2 AND photo_type='category_before' AND photo_url=$3 LIMIT 1`,
+        [req.params.routeId, catId, pUrl]
+      );
+      if (dup.rows.length) continue;
       await query(
         `INSERT INTO route_photos (route_id, photo_type, category_id, photo_url, latitude, longitude, upload_source, uploaded_by)
          VALUES ($1,'category_before',$2,$3,$4,$5,'app',$6)`,
@@ -2820,6 +2825,7 @@ router.post('/promotor/routes/:routeId/categories/:catId/photo', promotorAuth, a
         }
       } catch {}
     }
+
 
     await query(
       `INSERT INTO route_execution_logs (route_id, action, details, performed_by, source)
