@@ -564,36 +564,36 @@ function CategoryExtraPhotosPanel({
 
   const handleRemove = (i: number) => setNewPhotos((prev) => prev.filter((_, idx) => idx !== i));
 
-  const handleCapture = async (url: string) => {
+  const handleCapture = (url: string) => {
     if (!mode) return;
     // Guard contra duplicidade se o CameraCapture disparar onCapture duas vezes.
     setNewPhotos((prev) => (prev.includes(url) ? prev : [...prev, url]));
-    setSending(true);
-    try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 5000 })
-      ).catch(() => null);
-      const endpoint = mode === 'before' ? 'photo' : 'after-photo';
-      await queueApiCall({
-        url: `/api/merch/promotor/routes/${routeId}/categories/${catId}/${endpoint}`,
-        method: 'POST',
-        body: {
-          route_brand_id: routeBrandId,
-          photo_url: url,
-          photos: [url],
-          latitude: pos?.coords.latitude,
-          longitude: pos?.coords.longitude,
-          routeId, catId,
-        },
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('promotor_token') || localStorage.getItem('auth_token')}` },
-      });
-      toast.success('Foto adicionada');
-      onUploaded();
-    } catch {
-      toast.error('Erro ao enviar foto');
-    } finally {
-      setSending(false);
-    }
+    // Enfileira em background — NÃO bloqueia a UI. O promotor pode continuar
+    // tirando fotos imediatamente; o upload segue pelo useOfflineSync.
+    (async () => {
+      try {
+        // Geolocalização cacheada com timeout curto (não trava a fila).
+        const { lat, lng } = await getCachedGeolocation({ timeoutMs: 1500 }).catch(() => ({ lat: undefined, lng: undefined }));
+        const endpoint = mode === 'before' ? 'photo' : 'after-photo';
+        await queueApiCall({
+          url: `/api/merch/promotor/routes/${routeId}/categories/${catId}/${endpoint}`,
+          method: 'POST',
+          body: {
+            route_brand_id: routeBrandId,
+            photo_url: url,
+            photos: [url],
+            latitude: lat,
+            longitude: lng,
+            routeId, catId,
+          },
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('promotor_token') || localStorage.getItem('auth_token')}` },
+        });
+        toast.success('Foto adicionada');
+        onUploaded();
+      } catch {
+        toast.error('Erro ao enviar foto');
+      }
+    })();
   };
 
 
