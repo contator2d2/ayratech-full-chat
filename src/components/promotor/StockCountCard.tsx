@@ -83,7 +83,11 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
   const status = exec.status || 'pending';
   const allowPostpone = exec.rule?.allow_postpone ?? true;
   const blockCompletion = exec.rule?.block_route_completion ?? false;
-  const isMandatory = (!allowPostpone || blockCompletion || exec.is_mandatory) && !allDone && status !== 'justified';
+  const requireJustification = exec.rule?.require_justification ?? false;
+  const mustBlock = !allowPostpone || blockCompletion;
+  const isMandatory = (mustBlock || exec.is_mandatory) && !allDone && status !== 'justified';
+  // Promoter can defer: either postpone (moves to next visit) OR justify (closes as justified)
+  const canDefer = !allDone && status !== 'justified';
 
   const updateField = (idx: number, field: keyof ItemState, v: any) => {
     setItems(prev => {
@@ -189,12 +193,18 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
             {allDone ? 'Revisar contagem' : 'Contar agora'}
             <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
-          {!allDone && status !== 'justified' && allowPostpone && !blockCompletion && (
+          {canDefer && (
             <Button size="sm" variant="outline" onClick={() => setPostponeOpen(true)}>
-              <CalendarClock className="h-4 w-4 mr-1" />Adiar
+              <CalendarClock className="h-4 w-4 mr-1" />
+              {mustBlock ? 'Não fiz hoje' : 'Adiar'}
             </Button>
           )}
         </div>
+        {mustBlock && !allDone && status !== 'justified' && (
+          <p className="text-[11px] text-muted-foreground mt-2">
+            Esta contagem é obrigatória para concluir a rota. Se não puder fazer, use <b>“Não fiz hoje”</b> e justifique.
+          </p>
+        )}
       </div>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -310,9 +320,10 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
           </div>
 
           <div className="p-3 border-t sticky bottom-0 bg-background flex gap-2">
-            {!allDone && status !== 'justified' && allowPostpone && !blockCompletion && (
+            {canDefer && (
               <Button variant="outline" className="flex-1" onClick={() => { setSheetOpen(false); setPostponeOpen(true); }}>
-                <CalendarClock className="h-4 w-4 mr-1" />Adiar
+                <CalendarClock className="h-4 w-4 mr-1" />
+                {mustBlock ? 'Não fiz hoje' : 'Adiar'}
               </Button>
             )}
             <Button className="flex-1" onClick={() => setSheetOpen(false)}>
@@ -325,19 +336,21 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
       <Dialog open={postponeOpen} onOpenChange={setPostponeOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Adiar contagem</DialogTitle>
+            <DialogTitle>{mustBlock ? 'Justificar não realização' : 'Adiar contagem'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
               <Label className="text-xs">Motivo *</Label>
-              <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex.: PDV sem tempo hábil" />
+              <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex.: PDV sem tempo hábil, gerente ausente..." />
             </div>
             <div>
               <Label className="text-xs">Observação</Label>
               <Textarea value={obs} onChange={e => setObs(e.target.value)} placeholder="Detalhes (opcional)" rows={3} />
             </div>
             <p className="text-xs text-muted-foreground">
-              A contagem reaparecerá na próxima visita desta marca dentro da mesma semana. Se não houver outra visita, será registrada como justificada.
+              {mustBlock
+                ? 'Esta contagem é obrigatória. Ao justificar, ela será fechada como “justificada” e a rota poderá ser concluída — mas ficará registrada para o gestor.'
+                : 'A contagem reaparecerá na próxima visita desta marca dentro da mesma semana. Se não houver outra visita, será registrada como justificada.'}
             </p>
           </div>
           <DialogFooter>
