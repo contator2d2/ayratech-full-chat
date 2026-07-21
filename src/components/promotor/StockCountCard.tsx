@@ -86,8 +86,8 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
   const requireJustification = exec.rule?.require_justification ?? false;
   const mustBlock = !allowPostpone || blockCompletion;
   const isMandatory = (mustBlock || exec.is_mandatory) && !allDone && status !== 'justified';
-  // Promoter can defer: either postpone (moves to next visit) OR justify (closes as justified)
-  const canDefer = !allDone && status !== 'justified';
+  // Se adiar não é permitido, a contagem é 100% obrigatória — nenhum botão de justificar/adiar.
+  const canDefer = !allDone && status !== 'justified' && allowPostpone;
 
   const updateField = (idx: number, field: keyof ItemState, v: any) => {
     setItems(prev => {
