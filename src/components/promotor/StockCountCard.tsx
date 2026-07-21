@@ -336,19 +336,21 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
       <Dialog open={postponeOpen} onOpenChange={setPostponeOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Adiar contagem</DialogTitle>
+            <DialogTitle>{mustBlock ? 'Justificar não realização' : 'Adiar contagem'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
               <Label className="text-xs">Motivo *</Label>
-              <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex.: PDV sem tempo hábil" />
+              <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex.: PDV sem tempo hábil, gerente ausente..." />
             </div>
             <div>
               <Label className="text-xs">Observação</Label>
               <Textarea value={obs} onChange={e => setObs(e.target.value)} placeholder="Detalhes (opcional)" rows={3} />
             </div>
             <p className="text-xs text-muted-foreground">
-              A contagem reaparecerá na próxima visita desta marca dentro da mesma semana. Se não houver outra visita, será registrada como justificada.
+              {mustBlock
+                ? 'Esta contagem é obrigatória. Ao justificar, ela será fechada como “justificada” e a rota poderá ser concluída — mas ficará registrada para o gestor.'
+                : 'A contagem reaparecerá na próxima visita desta marca dentro da mesma semana. Se não houver outra visita, será registrada como justificada.'}
             </p>
           </div>
           <DialogFooter>
