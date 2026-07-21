@@ -439,29 +439,28 @@ router.post('/execute', authenticate, async (req, res) => {
 
     let filled = 0;
     for (const it of (items || [])) {
-      const initialStore = normalizeQty(it.initial_store);
-      const initialStock = normalizeQty(it.initial_stock);
-      const finalStore = normalizeQty(it.final_store);
-      const finalStock = normalizeQty(it.final_stock);
-      const hasCompleteBalance = [initialStore, initialStock, finalStore, finalStock].every((v) => v !== null);
+      // Simplified: current balance only — Frente (store) + Estoque (stock)
+      const storeQty = normalizeQty(it.store_qty ?? it.final_store);
+      const stockQty = normalizeQty(it.stock_qty ?? it.final_stock);
+      const hasCompleteBalance = storeQty !== null && stockQty !== null;
       if (hasCompleteBalance) filled++;
-      const finalQuantity = hasCompleteBalance ? finalStore + finalStock : normalizeQty(it.quantity);
+      const totalQuantity = hasCompleteBalance ? storeQty + stockQty : normalizeQty(it.quantity);
       const existing = (await query(
         'SELECT id FROM stock_count_items WHERE execution_id=$1 AND product_id=$2',
         [exec.id, it.product_id])).rows[0];
       if (existing) {
         await query(
           `UPDATE stock_count_items
-           SET quantity=$1, observation=$2, initial_store=$3, initial_stock=$4, final_store=$5, final_stock=$6,
-               collected_at=CASE WHEN $7 THEN NOW() ELSE collected_at END, collected_by=$8, updated_at=NOW()
-           WHERE id=$9`,
-          [finalQuantity, it.observation ?? null, initialStore, initialStock, finalStore, finalStock, hasCompleteBalance, (req.userId || req.employeeId), existing.id]);
+           SET quantity=$1, observation=$2, initial_store=NULL, initial_stock=NULL, final_store=$3, final_stock=$4,
+               collected_at=CASE WHEN $5 THEN NOW() ELSE collected_at END, collected_by=$6, updated_at=NOW()
+           WHERE id=$7`,
+          [totalQuantity, it.observation ?? null, storeQty, stockQty, hasCompleteBalance, (req.userId || req.employeeId), existing.id]);
       } else {
         await query(
           `INSERT INTO stock_count_items
            (execution_id, product_id, quantity, observation, initial_store, initial_stock, final_store, final_stock, collected_at, collected_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $9 THEN NOW() ELSE NULL END,$10)`,
-          [exec.id, it.product_id, finalQuantity, it.observation ?? null, initialStore, initialStock, finalStore, finalStock, hasCompleteBalance, (req.userId || req.employeeId)]);
+           VALUES ($1,$2,$3,$4,NULL,NULL,$5,$6,CASE WHEN $7 THEN NOW() ELSE NULL END,$8)`,
+          [exec.id, it.product_id, totalQuantity, it.observation ?? null, storeQty, stockQty, hasCompleteBalance, (req.userId || req.employeeId)]);
       }
     }
 
