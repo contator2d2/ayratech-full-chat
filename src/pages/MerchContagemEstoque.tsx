@@ -57,7 +57,10 @@ const emptyRule = {
   postpone_limit_type: "week",
   block_route_completion: false,
   selected_products: [] as string[],
+  notify_on_complete: true,
+  notification_emails: "",
 };
+
 
 export default function MerchContagemEstoque() {
   const { data: brands = [] } = useBrands();
