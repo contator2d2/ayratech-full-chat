@@ -1,7 +1,9 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
-import { logError } from '../logger.js';
+import { logError, logInfo, logWarn } from '../logger.js';
+import { sendEmailImmediately } from '../email-scheduler.js';
+
 
 const router = express.Router();
 
