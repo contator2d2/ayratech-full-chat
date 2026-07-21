@@ -84,8 +84,10 @@ export default function MerchContagemDashboard() {
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [extraEmails, setExtraEmails] = useState("");
+  const [pdfOpen, setPdfOpen] = useState(false);
   const { data: detail } = useStockCountExecutionDetail(detailId || undefined);
   const resend = useResendStockCountEmail();
+
 
   const handleExportCsv = () => {
     const header = ["Data", "Marca", "PDV", "Promotor", "Status", "Itens", "Progresso %"];
