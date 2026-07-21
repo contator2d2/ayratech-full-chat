@@ -132,10 +132,10 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
   };
 
   const handlePostpone = async () => {
+    if (!allowPostpone) { toast.error('Esta contagem é obrigatória e não pode ser adiada'); return; }
     if (!reason.trim()) { toast.error('Informe o motivo'); return; }
     try {
-      const isLast = !allowPostpone || blockCompletion;
-      if (isLast || exec.rule?.require_justification) {
+      if (blockCompletion || requireJustification) {
         await justify.mutateAsync({ execution_id: exec.id, reason, observation: obs });
         toast.success('Justificativa registrada');
       } else {
