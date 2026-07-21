@@ -320,9 +320,10 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
           </div>
 
           <div className="p-3 border-t sticky bottom-0 bg-background flex gap-2">
-            {!allDone && status !== 'justified' && allowPostpone && !blockCompletion && (
+            {canDefer && (
               <Button variant="outline" className="flex-1" onClick={() => { setSheetOpen(false); setPostponeOpen(true); }}>
-                <CalendarClock className="h-4 w-4 mr-1" />Adiar
+                <CalendarClock className="h-4 w-4 mr-1" />
+                {mustBlock ? 'Não fiz hoje' : 'Adiar'}
               </Button>
             )}
             <Button className="flex-1" onClick={() => setSheetOpen(false)}>
