@@ -458,7 +458,7 @@ router.get('/indicators', async (req, res) => {
         WHERE organization_id=$1 AND status='ativo' AND admission_date IS NOT NULL
           AND admission_date >= CURRENT_DATE - INTERVAL '95 days'
           AND (admission_date + INTERVAL '90 days')::date >= CURRENT_DATE
-        ORDER BY admission_date ASC`, [orgId]);
+        ORDER BY admission_date ASC`, [orgId]).catch(() => ({ rows: [] }));
 
     // ASOs
     const exams = await query(
