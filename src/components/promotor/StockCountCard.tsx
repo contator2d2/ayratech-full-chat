@@ -86,8 +86,8 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
   const requireJustification = exec.rule?.require_justification ?? false;
   const mustBlock = !allowPostpone || blockCompletion;
   const isMandatory = (mustBlock || exec.is_mandatory) && !allDone && status !== 'justified';
-  // Promoter can defer: either postpone (moves to next visit) OR justify (closes as justified)
-  const canDefer = !allDone && status !== 'justified';
+  // Se adiar não é permitido, a contagem é 100% obrigatória — nenhum botão de justificar/adiar.
+  const canDefer = !allDone && status !== 'justified' && allowPostpone;
 
   const updateField = (idx: number, field: keyof ItemState, v: any) => {
     setItems(prev => {
@@ -132,10 +132,10 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
   };
 
   const handlePostpone = async () => {
+    if (!allowPostpone) { toast.error('Esta contagem é obrigatória e não pode ser adiada'); return; }
     if (!reason.trim()) { toast.error('Informe o motivo'); return; }
     try {
-      const isLast = !allowPostpone || blockCompletion;
-      if (isLast || exec.rule?.require_justification) {
+      if (blockCompletion || requireJustification) {
         await justify.mutateAsync({ execution_id: exec.id, reason, observation: obs });
         toast.success('Justificativa registrada');
       } else {
@@ -196,13 +196,15 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
           {canDefer && (
             <Button size="sm" variant="outline" onClick={() => setPostponeOpen(true)}>
               <CalendarClock className="h-4 w-4 mr-1" />
-              {mustBlock ? 'Não fiz hoje' : 'Adiar'}
+              {blockCompletion ? 'Não fiz hoje' : 'Adiar'}
             </Button>
           )}
         </div>
-        {mustBlock && !allDone && status !== 'justified' && (
+        {!allDone && status !== 'justified' && (!allowPostpone || blockCompletion) && (
           <p className="text-[11px] text-muted-foreground mt-2">
-            Esta contagem é obrigatória para concluir a rota. Se não puder fazer, use <b>“Não fiz hoje”</b> e justifique.
+            {!allowPostpone
+              ? 'Esta contagem é obrigatória e não pode ser adiada — é necessário concluir para finalizar a rota.'
+              : 'Esta contagem é obrigatória para concluir a rota. Se não puder fazer, use “Não fiz hoje” e justifique.'}
           </p>
         )}
       </div>
@@ -323,7 +325,7 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
             {canDefer && (
               <Button variant="outline" className="flex-1" onClick={() => { setSheetOpen(false); setPostponeOpen(true); }}>
                 <CalendarClock className="h-4 w-4 mr-1" />
-                {mustBlock ? 'Não fiz hoje' : 'Adiar'}
+                {blockCompletion ? 'Não fiz hoje' : 'Adiar'}
               </Button>
             )}
             <Button className="flex-1" onClick={() => setSheetOpen(false)}>
