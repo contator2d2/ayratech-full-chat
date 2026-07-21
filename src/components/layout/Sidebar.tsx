@@ -177,6 +177,8 @@ const getNavSections = (hasConnections: boolean): NavSection[] => [
       { name: "Auditoria", href: "/merch/auditoria", icon: Shield, pageKey: 'merch_auditoria' },
       { name: "Perdas (Conferência)", href: "/merch/perdas", icon: AlertTriangle, pageKey: 'merch_perdas' },
       { name: "Contagem Estoque", href: "/merch/contagem-estoque", icon: Boxes, pageKey: 'merch_contagem_estoque' },
+      { name: "Dashboard Contagem", href: "/merch/contagem-dashboard", icon: BarChart3, pageKey: 'merch_contagem_dashboard' },
+
       { name: "Pesq. Preços", href: "/merch/pesquisa-precos", icon: DollarSign, pageKey: 'merch_pesquisa_precos' },
       { name: "Dashboard Preços", href: "/merch/pesquisa-dashboard", icon: BarChart3, pageKey: 'merch_pesquisa_dashboard' },
       { name: "Contratos", href: "/merch/contratos", icon: FileText, pageKey: 'merch_contratos' },

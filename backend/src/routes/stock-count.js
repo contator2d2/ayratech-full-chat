@@ -1,7 +1,9 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
-import { logError } from '../logger.js';
+import { logError, logInfo, logWarn } from '../logger.js';
+import { sendEmailImmediately } from '../email-scheduler.js';
+
 
 const router = express.Router();
 
@@ -98,6 +100,9 @@ async function ensureTables() {
   try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS custom_days INTEGER`); } catch {}
   try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS weekdays JSONB`); } catch {}
   try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS pdv_overrides JSONB`); } catch {}
+  try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS notify_on_complete BOOLEAN DEFAULT true`); } catch {}
+  try { await query(`ALTER TABLE stock_count_rules ADD COLUMN IF NOT EXISTS notification_emails TEXT`); } catch {}
+
 
   await query(`CREATE TABLE IF NOT EXISTS stock_count_executions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -229,6 +234,7 @@ router.post('/rules', authenticate, async (req, res) => {
       id, brand_id, enabled, frequency, frequency_interval, custom_days, weekdays, pdv_overrides,
       require_photo, require_justification,
       allow_postpone, postpone_limit_type, block_route_completion, selected_products,
+      notify_on_complete, notification_emails,
     } = req.body;
     const cols = {
       brand_id: brand_id || null,
@@ -244,7 +250,10 @@ router.post('/rules', authenticate, async (req, res) => {
       postpone_limit_type: postpone_limit_type ?? 'week',
       block_route_completion: block_route_completion ?? false,
       selected_products: selected_products ? JSON.stringify(selected_products) : null,
+      notify_on_complete: notify_on_complete ?? true,
+      notification_emails: typeof notification_emails === 'string' ? notification_emails.trim() || null : null,
     };
+
     let result;
     if (id) {
       const sets = Object.keys(cols).map((k, i) => `${k}=$${i + 1}`).join(',');
@@ -264,12 +273,16 @@ router.post('/rules', authenticate, async (req, res) => {
            require_photo=EXCLUDED.require_photo, require_justification=EXCLUDED.require_justification,
            allow_postpone=EXCLUDED.allow_postpone, postpone_limit_type=EXCLUDED.postpone_limit_type,
            block_route_completion=EXCLUDED.block_route_completion,
-           selected_products=EXCLUDED.selected_products, updated_at=NOW()
+           selected_products=EXCLUDED.selected_products,
+           notify_on_complete=EXCLUDED.notify_on_complete,
+           notification_emails=EXCLUDED.notification_emails,
+           updated_at=NOW()
          RETURNING *`, vals);
     }
     res.json(result.rows[0]);
   } catch (err) { logError('stock-count.rules.upsert', err); res.status(500).json({ error: 'Erro' }); }
 });
+
 
 router.delete('/rules/:id', authenticate, async (req, res) => {
   try { await query('DELETE FROM stock_count_rules WHERE id=$1', [req.params.id]); res.json({ ok: true }); }
@@ -540,4 +553,214 @@ router.post('/justify', authenticate, async (req, res) => {
   } catch (err) { logError('stock-count.justify', err); res.status(500).json({ error: err.message || 'Erro' }); }
 });
 
+// ===== DASHBOARD: listar execuções concluídas com filtros =====
+router.get('/executions', authenticate, async (req, res) => {
+  try {
+    await ensureTables();
+    const orgId = await getOrgId(req);
+    if (!orgId) return res.status(403).json({ error: 'Sem organização' });
+    const { from, to, brand_id, pdv_id, promoter_id, status } = req.query;
+    const params = [orgId];
+    let sql = `
+      SELECT e.*, b.name AS brand_name,
+             COALESCE(p.name, sp.name) AS pdv_name,
+             COALESCE(emp.name, u.name) AS promoter_name
+      FROM stock_count_executions e
+      LEFT JOIN merch_brands b ON b.id = e.brand_id
+      LEFT JOIN pdvs p ON p.id = e.pdv_id
+      LEFT JOIN supermarket_units sp ON sp.id = e.pdv_id
+      LEFT JOIN employees emp ON emp.id = e.promoter_id
+      LEFT JOIN users u ON u.id = e.promoter_id
+      WHERE e.organization_id = $1`;
+    if (from) { params.push(from); sql += ` AND e.week_start >= $${params.length}`; }
+    if (to) { params.push(to); sql += ` AND e.week_start <= $${params.length}`; }
+    if (brand_id) { params.push(brand_id); sql += ` AND e.brand_id = $${params.length}`; }
+    if (pdv_id) { params.push(pdv_id); sql += ` AND e.pdv_id = $${params.length}`; }
+    if (promoter_id) { params.push(promoter_id); sql += ` AND e.promoter_id = $${params.length}`; }
+    if (status) { params.push(status); sql += ` AND e.status = $${params.length}`; }
+    sql += ` ORDER BY COALESCE(e.completed_at, e.updated_at) DESC LIMIT 500`;
+    res.json((await query(sql, params)).rows);
+  } catch (err) { logError('stock-count.executions.list', err); res.status(500).json({ error: 'Erro' }); }
+});
+
+router.get('/executions/:id', authenticate, async (req, res) => {
+  try {
+    await ensureTables();
+    const orgId = await getOrgId(req);
+    if (!orgId) return res.status(403).json({ error: 'Sem organização' });
+    const exec = (await query(
+      `SELECT e.*, b.name AS brand_name, b.email AS brand_email,
+              COALESCE(p.name, sp.name) AS pdv_name,
+              COALESCE(emp.name, u.name) AS promoter_name
+       FROM stock_count_executions e
+       LEFT JOIN merch_brands b ON b.id = e.brand_id
+       LEFT JOIN pdvs p ON p.id = e.pdv_id
+       LEFT JOIN supermarket_units sp ON sp.id = e.pdv_id
+       LEFT JOIN employees emp ON emp.id = e.promoter_id
+       LEFT JOIN users u ON u.id = e.promoter_id
+       WHERE e.id=$1 AND e.organization_id=$2`,
+      [req.params.id, orgId])).rows[0];
+    if (!exec) return res.status(404).json({ error: 'Não encontrado' });
+    const items = (await query(
+      `SELECT i.*, pr.name AS product_name, pr.sku
+       FROM stock_count_items i
+       LEFT JOIN merch_products pr ON pr.id = i.product_id
+       WHERE i.execution_id=$1 ORDER BY pr.name`,
+      [req.params.id])).rows;
+    res.json({ ...exec, items });
+  } catch (err) { logError('stock-count.executions.get', err); res.status(500).json({ error: 'Erro' }); }
+});
+
+// Reenvia o resumo por e-mail (manual, do dashboard)
+router.post('/executions/:id/resend-email', authenticate, async (req, res) => {
+  try {
+    const orgId = await getOrgId(req);
+    if (!orgId) return res.status(403).json({ error: 'Sem organização' });
+    const { extra_emails } = req.body || {};
+    const result = await sendStockCountSummaryEmail({
+      executionId: req.params.id,
+      organizationId: orgId,
+      senderUserId: req.userId || null,
+      extraEmails: extra_emails,
+      force: true,
+    });
+    res.json(result);
+  } catch (err) { logError('stock-count.resend-email', err); res.status(500).json({ error: err.message || 'Erro' }); }
+});
+
+// ============= EMAIL SUMMARY HELPER =============
+function fmtNum(v) {
+  if (v === null || v === undefined) return '-';
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '-';
+}
+
+function fmtDateBR(d) {
+  if (!d) return '';
+  try {
+    return new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  } catch { return String(d); }
+}
+
+// Envia resumo de UMA execução por e-mail (usado no reenvio manual e como base do resumo por rota).
+export async function sendStockCountSummaryEmail({ executionId, organizationId, senderUserId, extraEmails, force }) {
+  const exec = (await query(
+    `SELECT e.*, b.name AS brand_name, b.email AS brand_email,
+            COALESCE(p.name, sp.name) AS pdv_name,
+            COALESCE(emp.name, u.name) AS promoter_name,
+            r.notify_on_complete, r.notification_emails
+     FROM stock_count_executions e
+     LEFT JOIN merch_brands b ON b.id = e.brand_id
+     LEFT JOIN pdvs p ON p.id = e.pdv_id
+     LEFT JOIN supermarket_units sp ON sp.id = e.pdv_id
+     LEFT JOIN employees emp ON emp.id = e.promoter_id
+     LEFT JOIN users u ON u.id = e.promoter_id
+     LEFT JOIN stock_count_rules r ON r.organization_id = e.organization_id AND r.brand_id = e.brand_id
+     WHERE e.id=$1 AND e.organization_id=$2`,
+    [executionId, organizationId])).rows[0];
+  if (!exec) return { skipped: 'not_found' };
+  if (!force && exec.notify_on_complete === false) return { skipped: 'notify_disabled' };
+
+  const emails = new Set();
+  if (exec.brand_email) emails.add(String(exec.brand_email).trim().toLowerCase());
+  const csvList = [exec.notification_emails, extraEmails].filter(Boolean).join(',');
+  for (const raw of csvList.split(/[,;\s]+/)) {
+    const s = raw.trim().toLowerCase();
+    if (s && /.+@.+\..+/.test(s)) emails.add(s);
+  }
+  if (emails.size === 0) return { skipped: 'no_recipients' };
+
+  const items = (await query(
+    `SELECT i.*, pr.name AS product_name, pr.sku
+     FROM stock_count_items i
+     LEFT JOIN merch_products pr ON pr.id = i.product_id
+     WHERE i.execution_id=$1 ORDER BY pr.name`,
+    [executionId])).rows;
+
+  const rowsHtml = items.map((it) => `
+    <tr>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee">${(it.product_name || '-')}${it.sku ? ` <span style="color:#888">(${it.sku})</span>` : ''}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">${fmtNum(it.final_store)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">${fmtNum(it.final_stock)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right"><strong>${fmtNum(it.quantity)}</strong></td>
+    </tr>`).join('');
+
+  const totalGeral = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+
+  const subject = `Contagem de Estoque — ${exec.brand_name || 'Marca'} @ ${exec.pdv_name || 'PDV'} (${fmtDateBR(exec.completed_at || exec.updated_at)})`;
+  const bodyHtml = `
+    <div style="font-family:Arial,sans-serif;color:#222;max-width:720px;margin:0 auto">
+      <h2 style="color:#111">Resumo de Contagem de Estoque</h2>
+      <table style="font-size:14px;margin-bottom:12px">
+        <tr><td style="padding:2px 8px"><strong>Marca:</strong></td><td>${exec.brand_name || '-'}</td></tr>
+        <tr><td style="padding:2px 8px"><strong>PDV:</strong></td><td>${exec.pdv_name || '-'}</td></tr>
+        <tr><td style="padding:2px 8px"><strong>Promotor:</strong></td><td>${exec.promoter_name || '-'}</td></tr>
+        <tr><td style="padding:2px 8px"><strong>Conclusão:</strong></td><td>${fmtDateBR(exec.completed_at || exec.updated_at)}</td></tr>
+        <tr><td style="padding:2px 8px"><strong>Progresso:</strong></td><td>${exec.completed_items || 0}/${exec.total_items || 0} itens (${fmtNum(exec.progress_pct)}%)</td></tr>
+      </table>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #eee">
+        <thead>
+          <tr style="background:#f5f5f7;text-align:left">
+            <th style="padding:8px">Produto</th>
+            <th style="padding:8px;text-align:right">Frente/Gôndola</th>
+            <th style="padding:8px;text-align:right">Estoque</th>
+            <th style="padding:8px;text-align:right">Total</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml || '<tr><td colspan="4" style="padding:12px;text-align:center;color:#888">Sem itens</td></tr>'}</tbody>
+        <tfoot>
+          <tr style="background:#fafafa">
+            <td colspan="3" style="padding:8px;text-align:right"><strong>Total geral</strong></td>
+            <td style="padding:8px;text-align:right"><strong>${fmtNum(totalGeral)}</strong></td>
+          </tr>
+        </tfoot>
+      </table>
+      <p style="color:#888;font-size:12px;margin-top:16px">E-mail automático — enviado após a conclusão da rota do promotor.</p>
+    </div>`;
+
+  const sent = [];
+  const failed = [];
+  for (const to of emails) {
+    try {
+      await sendEmailImmediately({
+        organizationId,
+        senderUserId,
+        toEmail: to,
+        subject,
+        bodyHtml,
+        contextType: 'stock_count',
+        contextId: executionId,
+      });
+      sent.push(to);
+    } catch (e) {
+      failed.push({ to, error: e?.message });
+      logWarn('stock-count.email.send_failed', { to, error: e?.message });
+    }
+  }
+  return { sent, failed };
+}
+
+// Envia resumo de TODAS as execuções concluídas de uma rota. Chamado pelo checkout.
+export async function sendStockCountSummaryForRoute({ routeId, organizationId, senderUserId }) {
+  try {
+    const rows = (await query(
+      `SELECT id FROM stock_count_executions
+       WHERE route_id=$1 AND organization_id=$2 AND status='completed'`,
+      [routeId, organizationId])).rows;
+    const results = [];
+    for (const r of rows) {
+      const out = await sendStockCountSummaryEmail({
+        executionId: r.id, organizationId, senderUserId, force: false,
+      });
+      results.push({ execution_id: r.id, ...out });
+    }
+    if (results.length) logInfo('stock-count.route_email_summary', { routeId, count: results.length });
+    return results;
+  } catch (err) {
+    logWarn('stock-count.route_email_summary_failed', err);
+    return [];
+  }
+}
+
 export default router;
+

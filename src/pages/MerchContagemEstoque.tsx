@@ -57,7 +57,10 @@ const emptyRule = {
   postpone_limit_type: "week",
   block_route_completion: false,
   selected_products: [] as string[],
+  notify_on_complete: true,
+  notification_emails: "",
 };
+
 
 export default function MerchContagemEstoque() {
   const { data: brands = [] } = useBrands();
@@ -431,6 +434,32 @@ export default function MerchContagemEstoque() {
                 Bloquear conclusão da rota até fazer/justificar
               </label>
             </div>
+
+            <div className="border rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm">Notificar por e-mail ao concluir</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Envia um resumo automático (produtos e saldos) após o checkout da rota.
+                    O e-mail da marca é sempre incluído; você pode adicionar outros abaixo.
+                  </p>
+                </div>
+                <Switch
+                  checked={!!form.notify_on_complete}
+                  onCheckedChange={(v) => setForm({ ...form, notify_on_complete: v })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">E-mails adicionais (separados por vírgula)</Label>
+                <Input
+                  placeholder="responsavel@marca.com, kam@marca.com"
+                  value={form.notification_emails || ""}
+                  onChange={(e) => setForm({ ...form, notification_emails: e.target.value })}
+                  disabled={!form.notify_on_complete}
+                />
+              </div>
+            </div>
+
 
             <div>
               <div className="flex items-center justify-between mb-2">
