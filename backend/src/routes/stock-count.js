@@ -234,6 +234,7 @@ router.post('/rules', authenticate, async (req, res) => {
       id, brand_id, enabled, frequency, frequency_interval, custom_days, weekdays, pdv_overrides,
       require_photo, require_justification,
       allow_postpone, postpone_limit_type, block_route_completion, selected_products,
+      notify_on_complete, notification_emails,
     } = req.body;
     const cols = {
       brand_id: brand_id || null,
@@ -249,7 +250,10 @@ router.post('/rules', authenticate, async (req, res) => {
       postpone_limit_type: postpone_limit_type ?? 'week',
       block_route_completion: block_route_completion ?? false,
       selected_products: selected_products ? JSON.stringify(selected_products) : null,
+      notify_on_complete: notify_on_complete ?? true,
+      notification_emails: typeof notification_emails === 'string' ? notification_emails.trim() || null : null,
     };
+
     let result;
     if (id) {
       const sets = Object.keys(cols).map((k, i) => `${k}=$${i + 1}`).join(',');
