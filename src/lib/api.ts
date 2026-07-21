@@ -157,8 +157,17 @@ const getScopedAuthToken = (endpoint: string) => {
     return localStorage.getItem('auth_token') || localStorage.getItem('promotor_token');
   }
 
-  // Stock count endpoints are consumed by both admin and promotor app
+  // Stock count route/execution endpoints are used inside the promotor app.
+  // Prefer promotor_token to avoid a stale admin auth_token causing 401.
   if (endpoint.startsWith('/api/stock-count/')) {
+    if (
+      endpoint.startsWith('/api/stock-count/route/') ||
+      endpoint.startsWith('/api/stock-count/execute') ||
+      endpoint.startsWith('/api/stock-count/postpone') ||
+      endpoint.startsWith('/api/stock-count/justify')
+    ) {
+      return localStorage.getItem('promotor_token') || localStorage.getItem('auth_token');
+    }
     return localStorage.getItem('auth_token') || localStorage.getItem('promotor_token');
   }
 
@@ -190,6 +199,15 @@ const clearScopedAuthTokens = (endpoint?: string) => {
     localStorage.removeItem('promotor_token');
     return;
   }
+  if (
+    endpoint?.startsWith('/api/stock-count/route/') ||
+    endpoint?.startsWith('/api/stock-count/execute') ||
+    endpoint?.startsWith('/api/stock-count/postpone') ||
+    endpoint?.startsWith('/api/stock-count/justify')
+  ) {
+    localStorage.removeItem('promotor_token');
+    return;
+  }
   if (endpoint?.startsWith('/api/promoter-app')) {
     localStorage.removeItem('promoter_app_token');
     return;
@@ -210,6 +228,10 @@ const notifyAuthInvalid = (endpoint?: string) => {
     !endpoint ||
     (!endpoint.startsWith('/api/access-control/') &&
       !endpoint.startsWith('/api/promotor') &&
+      !endpoint.startsWith('/api/stock-count/route/') &&
+      !endpoint.startsWith('/api/stock-count/execute') &&
+      !endpoint.startsWith('/api/stock-count/postpone') &&
+      !endpoint.startsWith('/api/stock-count/justify') &&
       !endpoint.includes('/merch/promotor/'));
   if (isMainAuth) {
     window.dispatchEvent(new CustomEvent(AUTH_INVALID_EVENT));

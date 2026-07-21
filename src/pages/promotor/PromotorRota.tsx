@@ -1119,15 +1119,19 @@ export default function PromotorRota() {
 
   const categoriesBlock = (isActive && (!isMultiBrand || activeBrandId)) ? (
           <div className="space-y-4">
-            {activeBrandId && route?.pdv_id && (
-              <StockCountCard
-                routeId={id!}
-                brandId={activeBrandId}
-                brandName={currentBrand?.brand_name || route.brand_name}
-                pdvId={route.pdv_id}
-                promoterId={route.promotor_id || route.employee_id}
-              />
-            )}
+            {(() => {
+              const stockBrandId = isMultiBrand ? activeBrandId : route?.brand_id;
+              const stockBrandName = isMultiBrand ? (currentBrand?.brand_name || route.brand_name) : route?.brand_name;
+              return stockBrandId && route?.pdv_id ? (
+                <StockCountCard
+                  routeId={id!}
+                  brandId={stockBrandId}
+                  brandName={stockBrandName}
+                  pdvId={route.pdv_id}
+                  promoterId={route.promoter_id || route.promotor_id || route.employee_id || ''}
+                />
+              ) : null;
+            })()}
             {Object.entries(groupedExecs).map(([category, { catId, execs, isExtraGroup }]) => {
               const routeBrandId = execs[0]?.route_brand_id;
               const categoryKey = `${catId}_${routeBrandId || 'null'}`;

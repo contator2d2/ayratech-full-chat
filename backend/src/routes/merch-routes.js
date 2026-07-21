@@ -23,6 +23,116 @@ async function hasTable(tableName) {
   return Boolean(result.rows[0]?.table_ref);
 }
 
+function getDatePart(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.slice(0, 10);
+  if (value instanceof Date) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(value.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(value).slice(0, 10);
+}
+
+function parseDateAtNoon(value) {
+  const part = getDatePart(value);
+  const match = part.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return new Date();
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
+}
+
+function formatLocalDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function computeStockPeriodWindow(date, frequency = 'weekly', interval = 1, customDays = null) {
+  const d = parseDateAtNoon(date);
+  const monthsMap = { monthly: 1, bimonthly: 2, quarterly: 3, semiannual: 6, annual: 12 };
+  if (frequency === 'weekly' || frequency === 'biweekly') {
+    const weeks = frequency === 'biweekly' ? 2 : 1;
+    const dow = (d.getDay() + 6) % 7;
+    const monday = new Date(d); monday.setDate(d.getDate() - dow);
+    const anchor = new Date(1970, 0, 5, 12, 0, 0, 0);
+    const diffWeeks = Math.floor((monday - anchor) / (7 * 86400000));
+    const bucketIdx = Math.floor(diffWeeks / (weeks * (interval || 1)));
+    const start = new Date(anchor.getTime() + bucketIdx * weeks * (interval || 1) * 7 * 86400000);
+    const end = new Date(start); end.setDate(start.getDate() + weeks * (interval || 1) * 7 - 1);
+    return { start: formatLocalDate(start), end: formatLocalDate(end) };
+  }
+  if (monthsMap[frequency]) {
+    const step = monthsMap[frequency] * (interval || 1);
+    const monthsSinceAnchor = (d.getFullYear() - 1970) * 12 + d.getMonth();
+    const bucketIdx = Math.floor(monthsSinceAnchor / step);
+    const startMonthAbs = bucketIdx * step;
+    const startYear = 1970 + Math.floor(startMonthAbs / 12);
+    const startMonth = startMonthAbs % 12;
+    const start = new Date(startYear, startMonth, 1, 12);
+    const end = new Date(startYear, startMonth + step, 0, 12);
+    return { start: formatLocalDate(start), end: formatLocalDate(end) };
+  }
+  if (frequency === 'custom' && customDays && customDays > 0) {
+    const anchor = new Date(1970, 0, 5, 12, 0, 0, 0);
+    const diffDays = Math.floor((d - anchor) / 86400000);
+    const bucketIdx = Math.floor(diffDays / customDays);
+    const start = new Date(anchor.getTime() + bucketIdx * customDays * 86400000);
+    const end = new Date(start.getTime() + (customDays - 1) * 86400000);
+    return { start: formatLocalDate(start), end: formatLocalDate(end) };
+  }
+  const dow = (d.getDay() + 6) % 7;
+  const monday = new Date(d); monday.setDate(d.getDate() - dow);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  return { start: formatLocalDate(monday), end: formatLocalDate(sunday) };
+}
+
+function parseJsonMaybe(value, fallback = null) {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
+async function getMissingMandatoryStockCountsForRoute(route) {
+  try {
+    if (!(await hasTable('stock_count_rules')) || !(await hasTable('stock_count_executions'))) return [];
+    const brandIds = new Set();
+    if (route.brand_id) brandIds.add(route.brand_id);
+    try {
+      const rb = await query('SELECT brand_id FROM route_brands WHERE route_id=$1', [route.id]);
+      for (const row of rb.rows) if (row.brand_id) brandIds.add(row.brand_id);
+    } catch {}
+    if (!brandIds.size) return [];
+
+    const rules = (await query(
+      `SELECT * FROM stock_count_rules WHERE organization_id=$1 AND enabled=true AND brand_id = ANY($2::uuid[])`,
+      [route.organization_id, Array.from(brandIds)]
+    )).rows;
+    const visitDow = parseDateAtNoon(route.visit_date).getDay();
+    const missing = [];
+    for (const rule of rules) {
+      const mustBlock = rule.block_route_completion === true || rule.allow_postpone === false;
+      if (!mustBlock) continue;
+      const overrides = parseJsonMaybe(rule.pdv_overrides, null);
+      const pdvOv = overrides && route.pdv_id ? overrides[route.pdv_id] : null;
+      const effectiveWd = pdvOv && Array.isArray(pdvOv.weekdays)
+        ? pdvOv.weekdays
+        : parseJsonMaybe(rule.weekdays, Array.isArray(rule.weekdays) ? rule.weekdays : null);
+      if (effectiveWd && effectiveWd.length && !effectiveWd.map(Number).includes(visitDow)) continue;
+      const { start } = computeStockPeriodWindow(route.visit_date, rule.frequency, rule.frequency_interval || 1, rule.custom_days);
+      const exec = (await query(
+        `SELECT status FROM stock_count_executions
+         WHERE organization_id=$1 AND brand_id=$2 AND pdv_id=$3 AND week_start=$4
+         ORDER BY (route_id=$5) DESC, updated_at DESC LIMIT 1`,
+        [route.organization_id, rule.brand_id, route.pdv_id, start, route.id]
+      )).rows[0];
+      if (!exec || !['completed', 'justified'].includes(exec.status)) missing.push(rule.brand_id);
+    }
+    return missing;
+  } catch (err) {
+    logWarn('stock_count.mandatory_check_failed', err);
+    return [];
+  }
+}
+
 // ===== ADMIN ROUTES =====
 
 // List routes with filters
@@ -2104,7 +2214,7 @@ router.get('/promotor/agenda', promotorAuth, async (req, res) => {
       }
       for (const r of rows) {
         if (!r.visit_date) { r.has_stock_count = false; continue; }
-        const dow = new Date(r.visit_date).getDay();
+        const dow = parseDateAtNoon(r.visit_date).getDay();
         const brandIds = [];
         if (r.brand_id) brandIds.push(r.brand_id);
         if (Array.isArray(r.route_brands)) for (const rb of r.route_brands) if (rb.brand_id) brandIds.push(rb.brand_id);
@@ -2978,6 +3088,14 @@ router.post('/promotor/routes/:id/checkout', promotorAuth, async (req, res) => {
     const routeRes = await query('SELECT * FROM merch_routes WHERE id=$1 AND promoter_id=$2', [req.params.id, req.employeeId]);
     if (!routeRes.rows.length) return res.status(404).json({ error: 'Rota não encontrada' });
     const route = routeRes.rows[0];
+
+    const missingStockCounts = await getMissingMandatoryStockCountsForRoute(route);
+    if (missingStockCounts.length > 0) {
+      return res.status(409).json({
+        error: 'stock_count_pending',
+        message: `Contagem de estoque obrigatória pendente em ${missingStockCounts.length} marca(s).`,
+      });
+    }
 
     // Check pending items
     const pending = await query(

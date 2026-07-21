@@ -34,6 +34,46 @@ async function getOrgId(req) {
   return null;
 }
 
+function getDatePart(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.slice(0, 10);
+  if (value instanceof Date) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(value.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(value).slice(0, 10);
+}
+
+function parseDateAtNoon(value) {
+  const part = getDatePart(value);
+  const match = part.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return new Date();
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
+}
+
+function formatLocalDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function parseJsonArray(value) {
+  if (Array.isArray(value)) return value;
+  if (!value) return null;
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeQty(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 
 async function ensureTables() {
   await query(`CREATE TABLE IF NOT EXISTS stock_count_rules (
@@ -91,6 +131,10 @@ async function ensureTables() {
     collected_by UUID,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW())`);
+  try { await query(`ALTER TABLE stock_count_items ADD COLUMN IF NOT EXISTS initial_store NUMERIC(12,2)`); } catch {}
+  try { await query(`ALTER TABLE stock_count_items ADD COLUMN IF NOT EXISTS initial_stock NUMERIC(12,2)`); } catch {}
+  try { await query(`ALTER TABLE stock_count_items ADD COLUMN IF NOT EXISTS final_store NUMERIC(12,2)`); } catch {}
+  try { await query(`ALTER TABLE stock_count_items ADD COLUMN IF NOT EXISTS final_stock NUMERIC(12,2)`); } catch {}
 
   await query(`CREATE TABLE IF NOT EXISTS stock_count_postponements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -112,23 +156,11 @@ async function ensureTables() {
     created_at TIMESTAMPTZ DEFAULT NOW())`);
 }
 
-async function getProductCols() {
-  let cols = 'p.id, p.name, p.sku';
-  try {
-    const r = await query(`SELECT column_name FROM information_schema.columns WHERE table_name='products' AND column_name IN ('photo_url','description','brand_id')`);
-    const ex = r.rows.map(x => x.column_name);
-    if (ex.includes('photo_url')) cols += ', p.photo_url';
-    if (ex.includes('description')) cols += ', p.description';
-  } catch {}
-  return cols;
-}
-
 // Compute the period window (start,end inclusive) that contains `date` for a given rule frequency.
 // Supported: weekly | biweekly | monthly | bimonthly | quarterly | semiannual | annual | custom (uses custom_days)
 function computePeriodWindow(date, frequency = 'weekly', interval = 1, customDays = null) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const fmt = (x) => x.toISOString().slice(0, 10);
+  const d = parseDateAtNoon(date);
+  const fmt = formatLocalDate;
 
   const monthsMap = { monthly: 1, bimonthly: 2, quarterly: 3, semiannual: 6, annual: 12 };
 
@@ -138,7 +170,7 @@ function computePeriodWindow(date, frequency = 'weekly', interval = 1, customDay
     const dow = (d.getDay() + 6) % 7;
     const monday = new Date(d); monday.setDate(d.getDate() - dow);
     // Anchor from a fixed reference (epoch Monday 1970-01-05) to keep buckets stable
-    const anchor = new Date(Date.UTC(1970, 0, 5));
+    const anchor = new Date(1970, 0, 5, 12, 0, 0, 0);
     const diffWeeks = Math.floor((monday - anchor) / (7 * 86400000));
     const bucketIdx = Math.floor(diffWeeks / (weeks * (interval || 1)));
     const start = new Date(anchor.getTime() + bucketIdx * weeks * (interval || 1) * 7 * 86400000);
@@ -158,7 +190,7 @@ function computePeriodWindow(date, frequency = 'weekly', interval = 1, customDay
     return { start: fmt(start), end: fmt(end) };
   }
   if (frequency === 'custom' && customDays && customDays > 0) {
-    const anchor = new Date(Date.UTC(1970, 0, 5));
+    const anchor = new Date(1970, 0, 5, 12, 0, 0, 0);
     const diffDays = Math.floor((d - anchor) / 86400000);
     const bucketIdx = Math.floor(diffDays / customDays);
     const start = new Date(anchor.getTime() + bucketIdx * customDays * 86400000);
@@ -255,8 +287,8 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
 
     // Get route info: pdv, promoter, brands (single or multi), visit_date
     const routeRow = (await query(
-      `SELECT r.id, r.pdv_id, r.employee_id AS promoter_id, r.brand_id, r.visit_date
-       FROM merch_routes r WHERE r.id=$1`, [routeId])).rows[0];
+      `SELECT r.id, r.pdv_id, r.promoter_id, r.brand_id, r.visit_date
+       FROM merch_routes r WHERE r.id=$1 AND r.organization_id=$2`, [routeId, orgId])).rows[0];
     if (!routeRow) return res.json([]);
 
     // Determine brand list (single + multi-brand routes)
@@ -274,12 +306,13 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
       [orgId, Array.from(brandIds)])).rows;
     if (rules.length === 0) return res.json([]);
 
-    const visitDate = routeRow.visit_date ? new Date(routeRow.visit_date) : new Date();
+    const visitDate = routeRow.visit_date ? getDatePart(routeRow.visit_date) : formatLocalDate(new Date());
 
     // JS: Sunday=0..Saturday=6. Use same convention on the UI.
-    const visitDow = visitDate.getDay();
+    const visitDow = parseDateAtNoon(visitDate).getDay();
 
-    const productCols = await getProductCols();
+    const productCols = 'p.id, p.name, p.sku, p.image_url AS photo_url, p.description';
+    const savedProductCols = 'p.name, p.sku, p.image_url AS photo_url, p.description';
     const result = [];
 
 
@@ -325,21 +358,21 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
 
       // Fetch items already saved
       const savedItems = (await query(
-        `SELECT si.*, ${productCols} FROM stock_count_items si
-         LEFT JOIN products p ON p.id = si.product_id
+        `SELECT si.*, ${savedProductCols} FROM stock_count_items si
+         LEFT JOIN merch_products p ON p.id = si.product_id
          WHERE si.execution_id=$1 ORDER BY p.name`, [exec.id])).rows;
       const byProduct = new Map(savedItems.map(i => [i.product_id, i]));
 
       // Product list: from rule.selected_products if set, otherwise all products of the brand
-      let productIds = Array.isArray(rule.selected_products) ? rule.selected_products : null;
+      let productIds = parseJsonArray(rule.selected_products);
       let products = [];
       if (productIds && productIds.length) {
         products = (await query(
-          `SELECT ${productCols} FROM products p WHERE p.id = ANY($1) ORDER BY p.name`, [productIds])).rows;
+          `SELECT ${productCols} FROM merch_products p WHERE p.id = ANY($1::uuid[]) ORDER BY p.name`, [productIds])).rows;
       } else {
         try {
           products = (await query(
-            `SELECT ${productCols} FROM products p WHERE p.brand_id=$1 ORDER BY p.name`, [rule.brand_id])).rows;
+            `SELECT ${productCols} FROM merch_products p WHERE p.brand_id=$1 ORDER BY p.name`, [rule.brand_id])).rows;
         } catch {
           products = savedItems.map(i => ({ id: i.product_id, name: i.name, sku: i.sku, photo_url: i.photo_url }));
         }
@@ -353,6 +386,10 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
           sku: p.sku,
           photo_url: p.photo_url,
           description: p.description,
+          initial_store: existing?.initial_store ?? null,
+          initial_stock: existing?.initial_stock ?? null,
+          final_store: existing?.final_store ?? null,
+          final_stock: existing?.final_stock ?? null,
           quantity: existing?.quantity ?? null,
           observation: existing?.observation ?? '',
         };
@@ -402,20 +439,29 @@ router.post('/execute', authenticate, async (req, res) => {
 
     let filled = 0;
     for (const it of (items || [])) {
-      const hasQty = it.quantity !== null && it.quantity !== undefined && it.quantity !== '';
-      if (hasQty) filled++;
+      const initialStore = normalizeQty(it.initial_store);
+      const initialStock = normalizeQty(it.initial_stock);
+      const finalStore = normalizeQty(it.final_store);
+      const finalStock = normalizeQty(it.final_stock);
+      const hasCompleteBalance = [initialStore, initialStock, finalStore, finalStock].every((v) => v !== null);
+      if (hasCompleteBalance) filled++;
+      const finalQuantity = hasCompleteBalance ? finalStore + finalStock : normalizeQty(it.quantity);
       const existing = (await query(
         'SELECT id FROM stock_count_items WHERE execution_id=$1 AND product_id=$2',
         [exec.id, it.product_id])).rows[0];
       if (existing) {
         await query(
-          `UPDATE stock_count_items SET quantity=$1, observation=$2, collected_at=CASE WHEN $1 IS NOT NULL THEN NOW() ELSE collected_at END, collected_by=$3, updated_at=NOW() WHERE id=$4`,
-          [hasQty ? Number(it.quantity) : null, it.observation ?? null, (req.userId || req.employeeId), existing.id]);
+          `UPDATE stock_count_items
+           SET quantity=$1, observation=$2, initial_store=$3, initial_stock=$4, final_store=$5, final_stock=$6,
+               collected_at=CASE WHEN $7 THEN NOW() ELSE collected_at END, collected_by=$8, updated_at=NOW()
+           WHERE id=$9`,
+          [finalQuantity, it.observation ?? null, initialStore, initialStock, finalStore, finalStock, hasCompleteBalance, (req.userId || req.employeeId), existing.id]);
       } else {
         await query(
-          `INSERT INTO stock_count_items (execution_id, product_id, quantity, observation, collected_at, collected_by)
-           VALUES ($1,$2,$3,$4,CASE WHEN $3 IS NOT NULL THEN NOW() ELSE NULL END,$5)`,
-          [exec.id, it.product_id, hasQty ? Number(it.quantity) : null, it.observation ?? null, (req.userId || req.employeeId)]);
+          `INSERT INTO stock_count_items
+           (execution_id, product_id, quantity, observation, initial_store, initial_stock, final_store, final_stock, collected_at, collected_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CASE WHEN $9 THEN NOW() ELSE NULL END,$10)`,
+          [exec.id, it.product_id, finalQuantity, it.observation ?? null, initialStore, initialStock, finalStore, finalStock, hasCompleteBalance, (req.userId || req.employeeId)]);
       }
     }
 

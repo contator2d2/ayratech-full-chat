@@ -54,13 +54,15 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
   // Se prorrogação não é permitida OU regra bloqueia conclusão → obrigatória nesta visita.
   const isMandatory = (!allowPostpone || blockCompletion || exec.is_mandatory) && status !== 'completed' && status !== 'justified';
 
-  const filled = items.filter(i => i.quantity !== null && i.quantity !== undefined && i.quantity !== '').length;
+  const hasValue = (v: any) => v !== null && v !== undefined && v !== '';
+  const isCompleteItem = (i: any) => [i.initial_store, i.initial_stock, i.final_store, i.final_stock].every(hasValue);
+  const filled = items.filter(isCompleteItem).length;
   const total = items.length;
   const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
 
-  const updateQty = (idx: number, q: string) => {
+  const updateBalance = (idx: number, field: 'initial_store' | 'initial_stock' | 'final_store' | 'final_stock', q: string) => {
     const u = [...items];
-    u[idx] = { ...u[idx], quantity: q === '' ? null : parseFloat(q) };
+    u[idx] = { ...u[idx], [field]: q === '' ? null : parseFloat(q) };
     setItems(u);
   };
 
@@ -73,7 +75,14 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
     try {
       await executeSC.mutateAsync({
         route_id: routeId, brand_id: brandId, pdv_id: pdvId, promoter_id: promoterId,
-        items: items.map(i => ({ product_id: i.product_id, quantity: i.quantity, observation: i.observation })),
+        items: items.map(i => ({
+          product_id: i.product_id,
+          initial_store: i.initial_store,
+          initial_stock: i.initial_stock,
+          final_store: i.final_store,
+          final_stock: i.final_stock,
+          observation: i.observation,
+        })),
       });
       toast.success('Contagem salva!');
       setOpen(false);
@@ -185,16 +194,49 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <Label className="text-xs">Quantidade</Label>
+                      <Label className="text-xs">Inicial frente</Label>
                       <Input
                         type="number" min="0" step="1" inputMode="numeric"
                         placeholder="0"
-                        value={item.quantity ?? ''}
-                        onChange={e => updateQty(idx, e.target.value)}
+                        value={item.initial_store ?? ''}
+                        onChange={e => updateBalance(idx, 'initial_store', e.target.value)}
                         className="h-9"
                       />
                     </div>
                     <div>
+                      <Label className="text-xs">Inicial estoque</Label>
+                      <Input
+                        type="number" min="0" step="1" inputMode="numeric"
+                        placeholder="0"
+                        value={item.initial_stock ?? ''}
+                        onChange={e => updateBalance(idx, 'initial_stock', e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Final frente</Label>
+                      <Input
+                        type="number" min="0" step="1" inputMode="numeric"
+                        placeholder="0"
+                        value={item.final_store ?? ''}
+                        onChange={e => updateBalance(idx, 'final_store', e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Final estoque</Label>
+                      <Input
+                        type="number" min="0" step="1" inputMode="numeric"
+                        placeholder="0"
+                        value={item.final_stock ?? ''}
+                        onChange={e => updateBalance(idx, 'final_stock', e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="col-span-2 text-xs text-muted-foreground">
+                      Total final: <span className="font-medium text-foreground">{(Number(item.final_store) || 0) + (Number(item.final_stock) || 0)}</span>
+                    </div>
+                    <div className="col-span-2">
                       <Label className="text-xs">Obs</Label>
                       <Input
                         placeholder="opcional"
