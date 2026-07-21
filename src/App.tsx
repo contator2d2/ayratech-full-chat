@@ -80,6 +80,7 @@ import RHEPIs from "./pages/RHEPIs";
 import RHAdvertencias from "./pages/RHAdvertencias";
 import RHTreinamentos from "./pages/RHTreinamentos";
 import RHAdmissao from "./pages/RHAdmissao";
+import RHCargos from "./pages/RHCargos";
 import RHDemissao from "./pages/RHDemissao";
 import RHESocial from "./pages/RHESocial";
 import RHEscalas from "./pages/RHEscalas";
