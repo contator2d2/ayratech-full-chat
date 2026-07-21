@@ -308,14 +308,20 @@ export default function MerchContagemDashboard() {
               </div>
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setDetailId(null)}>Fechar</Button>
+            <Button variant="outline" onClick={() => setPdfOpen(true)} disabled={!detail}>
+              <FileText className="h-4 w-4 mr-2" /> Gerar PDF / CSV
+            </Button>
             <Button onClick={handleResend} disabled={resend.isPending || !detailId}>
               <Mail className="h-4 w-4 mr-2" /> {resend.isPending ? "Enviando..." : "Enviar e-mail"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StockCountPdfDialog open={pdfOpen} onOpenChange={setPdfOpen} detail={detail as any} />
     </MainLayout>
   );
 }
+
