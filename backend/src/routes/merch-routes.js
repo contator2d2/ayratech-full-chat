@@ -91,6 +91,50 @@ function parseJsonMaybe(value, fallback = null) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
+// Fallback: create stock_count_executions on-demand for any matching rule that
+// doesn't have one yet (covers routes scheduled before the rule was created).
+async function ensureStockCountExecutionsForRoute(route) {
+  try {
+    if (!(await hasTable('stock_count_rules')) || !(await hasTable('stock_count_executions'))) return;
+    const brandIds = new Set();
+    if (route.brand_id) brandIds.add(route.brand_id);
+    try {
+      const rb = await query('SELECT brand_id FROM route_brands WHERE route_id=$1', [route.id]);
+      for (const row of rb.rows) if (row.brand_id) brandIds.add(row.brand_id);
+    } catch {}
+    if (!brandIds.size) return;
+
+    const rules = (await query(
+      `SELECT * FROM stock_count_rules WHERE organization_id=$1 AND enabled=true AND brand_id = ANY($2::uuid[])`,
+      [route.organization_id, Array.from(brandIds)]
+    )).rows;
+    const visitDow = parseDateAtNoon(route.visit_date).getDay();
+    for (const rule of rules) {
+      const overrides = parseJsonMaybe(rule.pdv_overrides, null);
+      const pdvOv = overrides && route.pdv_id ? overrides[route.pdv_id] : null;
+      const effectiveWd = pdvOv && Array.isArray(pdvOv.weekdays)
+        ? pdvOv.weekdays
+        : parseJsonMaybe(rule.weekdays, Array.isArray(rule.weekdays) ? rule.weekdays : null);
+      if (effectiveWd && effectiveWd.length && !effectiveWd.map(Number).includes(visitDow)) continue;
+      const { start, end } = computeStockPeriodWindow(route.visit_date, rule.frequency, rule.frequency_interval || 1, rule.custom_days);
+      const existing = (await query(
+        `SELECT id FROM stock_count_executions
+         WHERE organization_id=$1 AND brand_id=$2 AND pdv_id=$3 AND week_start=$4 LIMIT 1`,
+        [route.organization_id, rule.brand_id, route.pdv_id, start]
+      )).rows[0];
+      if (existing) continue;
+      await query(
+        `INSERT INTO stock_count_executions
+         (organization_id, route_id, brand_id, pdv_id, promoter_id, rule_id, status, week_start, week_end)
+         VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8)`,
+        [route.organization_id, route.id, rule.brand_id, route.pdv_id, route.promoter_id, rule.id, start, end]
+      );
+    }
+  } catch (err) {
+    logWarn('stock_count.ensure_executions_failed', err);
+  }
+}
+
 async function getMissingMandatoryStockCountsForRoute(route) {
   try {
     if (!(await hasTable('stock_count_rules')) || !(await hasTable('stock_count_executions'))) return [];
@@ -3088,6 +3132,9 @@ router.post('/promotor/routes/:id/checkout', promotorAuth, async (req, res) => {
     const routeRes = await query('SELECT * FROM merch_routes WHERE id=$1 AND promoter_id=$2', [req.params.id, req.employeeId]);
     if (!routeRes.rows.length) return res.status(404).json({ error: 'Rota não encontrada' });
     const route = routeRes.rows[0];
+
+    // Fallback: materialize executions for rules that didn't exist when route was scheduled
+    await ensureStockCountExecutionsForRoute(route);
 
     const missingStockCounts = await getMissingMandatoryStockCountsForRoute(route);
     if (missingStockCounts.length > 0) {
