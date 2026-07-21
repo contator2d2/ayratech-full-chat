@@ -83,7 +83,11 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
   const status = exec.status || 'pending';
   const allowPostpone = exec.rule?.allow_postpone ?? true;
   const blockCompletion = exec.rule?.block_route_completion ?? false;
-  const isMandatory = (!allowPostpone || blockCompletion || exec.is_mandatory) && !allDone && status !== 'justified';
+  const requireJustification = exec.rule?.require_justification ?? false;
+  const mustBlock = !allowPostpone || blockCompletion;
+  const isMandatory = (mustBlock || exec.is_mandatory) && !allDone && status !== 'justified';
+  // Promoter can defer: either postpone (moves to next visit) OR justify (closes as justified)
+  const canDefer = !allDone && status !== 'justified';
 
   const updateField = (idx: number, field: keyof ItemState, v: any) => {
     setItems(prev => {
