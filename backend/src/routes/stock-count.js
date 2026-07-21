@@ -273,12 +273,16 @@ router.post('/rules', authenticate, async (req, res) => {
            require_photo=EXCLUDED.require_photo, require_justification=EXCLUDED.require_justification,
            allow_postpone=EXCLUDED.allow_postpone, postpone_limit_type=EXCLUDED.postpone_limit_type,
            block_route_completion=EXCLUDED.block_route_completion,
-           selected_products=EXCLUDED.selected_products, updated_at=NOW()
+           selected_products=EXCLUDED.selected_products,
+           notify_on_complete=EXCLUDED.notify_on_complete,
+           notification_emails=EXCLUDED.notification_emails,
+           updated_at=NOW()
          RETURNING *`, vals);
     }
     res.json(result.rows[0]);
   } catch (err) { logError('stock-count.rules.upsert', err); res.status(500).json({ error: 'Erro' }); }
 });
+
 
 router.delete('/rules/:id', authenticate, async (req, res) => {
   try { await query('DELETE FROM stock_count_rules WHERE id=$1', [req.params.id]); res.json({ ok: true }); }
