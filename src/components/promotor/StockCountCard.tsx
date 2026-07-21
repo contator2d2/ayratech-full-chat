@@ -196,13 +196,15 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
           {canDefer && (
             <Button size="sm" variant="outline" onClick={() => setPostponeOpen(true)}>
               <CalendarClock className="h-4 w-4 mr-1" />
-              {mustBlock ? 'Não fiz hoje' : 'Adiar'}
+              {blockCompletion ? 'Não fiz hoje' : 'Adiar'}
             </Button>
           )}
         </div>
-        {mustBlock && !allDone && status !== 'justified' && (
+        {!allDone && status !== 'justified' && (!allowPostpone || blockCompletion) && (
           <p className="text-[11px] text-muted-foreground mt-2">
-            Esta contagem é obrigatória para concluir a rota. Se não puder fazer, use <b>“Não fiz hoje”</b> e justifique.
+            {!allowPostpone
+              ? 'Esta contagem é obrigatória e não pode ser adiada — é necessário concluir para finalizar a rota.'
+              : 'Esta contagem é obrigatória para concluir a rota. Se não puder fazer, use “Não fiz hoje” e justifique.'}
           </p>
         )}
       </div>
