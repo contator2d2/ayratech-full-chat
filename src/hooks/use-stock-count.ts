@@ -60,3 +60,32 @@ export function useJustifyStockCount() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['stock-count-route'] }),
   });
 }
+
+export function useStockCountExecutions(filters: {
+  from?: string; to?: string; brand_id?: string; pdv_id?: string; promoter_id?: string; status?: string;
+} = {}) {
+  const params = new URLSearchParams(
+    Object.entries(filters).filter(([, v]) => !!v) as [string, string][]
+  ).toString();
+  return useQuery({
+    queryKey: ['stock-count-executions', filters],
+    queryFn: () => api<any[]>(`/api/stock-count/executions${params ? `?${params}` : ''}`),
+  });
+}
+
+export function useStockCountExecutionDetail(id?: string) {
+  return useQuery({
+    queryKey: ['stock-count-execution', id],
+    queryFn: () => api<any>(`/api/stock-count/executions/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useResendStockCountEmail() {
+  return useMutation({
+    mutationFn: (data: { execution_id: string; extra_emails?: string }) =>
+      api<any>(`/api/stock-count/executions/${data.execution_id}/resend-email`, {
+        method: 'POST', body: { extra_emails: data.extra_emails },
+      }),
+  });
+}
