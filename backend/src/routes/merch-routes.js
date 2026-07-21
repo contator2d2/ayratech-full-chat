@@ -3133,6 +3133,9 @@ router.post('/promotor/routes/:id/checkout', promotorAuth, async (req, res) => {
     if (!routeRes.rows.length) return res.status(404).json({ error: 'Rota não encontrada' });
     const route = routeRes.rows[0];
 
+    // Fallback: materialize executions for rules that didn't exist when route was scheduled
+    await ensureStockCountExecutionsForRoute(route);
+
     const missingStockCounts = await getMissingMandatoryStockCountsForRoute(route);
     if (missingStockCounts.length > 0) {
       return res.status(409).json({
