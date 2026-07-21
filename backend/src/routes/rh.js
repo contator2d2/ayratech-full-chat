@@ -2355,6 +2355,17 @@ router.delete('/facial-recognition/enroll/:employeeId', async (req, res) => {
   }
 });
 
+// Placeholder: alerts about employees with facial recognition disabled.
+// Returns an empty array by default; may be enriched in the future.
+router.get('/facial-recognition/disabled-alerts', async (_req, res) => {
+  try {
+    res.json([]);
+  } catch (e) {
+    logError('rh.facial.disabled-alerts', e);
+    res.json([]);
+  }
+});
+
 // Get face descriptor for testing verification
 router.get('/facial-recognition/descriptor/:employeeId', async (req, res) => {
   try {

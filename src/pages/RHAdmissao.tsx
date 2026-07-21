@@ -134,8 +134,12 @@ export default function RHAdmissao() {
   const [step, setStep] = useState(1);
   const { data: departments = [] } = useRhDepartments();
   const { data: schedules = [] } = useSchedules();
-  const [positions, setPositions] = useState<string[]>([]);
-  useEffect(() => { api<string[]>("/api/rh/positions").then(setPositions).catch(() => setPositions([])); }, []);
+  const [positions, setPositions] = useState<any[]>([]);
+  useEffect(() => {
+    api<any[]>("/api/rh/positions")
+      .then(rows => setPositions(Array.isArray(rows) ? rows.map((r: any) => (typeof r === 'string' ? { name: r } : r)) : []))
+      .catch(() => setPositions([]));
+  }, []);
 
   const createEmployee = useCreateEmployee();
   const finalize = useFinalizeAdmission();
@@ -372,7 +376,7 @@ export default function RHAdmissao() {
               <Label>Cargo *</Label>
               <Input list="positions-list" value={form.position} onChange={e => setField("position", e.target.value)} placeholder="Digite ou selecione" />
               <datalist id="positions-list">
-                {positions.map(p => <option key={p} value={p} />)}
+                {positions.map((p: any, i) => <option key={p.id || p.name || i} value={p.name || ''} />)}
               </datalist>
               <p className="text-xs text-muted-foreground mt-1">Selecione um cargo já cadastrado ou digite um novo.</p>
             </div>

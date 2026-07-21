@@ -415,7 +415,7 @@ router.get('/indicators', async (req, res) => {
          COUNT(*) FILTER (WHERE status='afastado')::int AS on_leave,
          COUNT(*) FILTER (WHERE status='ferias')::int AS on_vacation,
          COUNT(*) FILTER (WHERE status='desligado')::int AS terminated
-       FROM employees WHERE organization_id=$1`, [orgId]);
+       FROM employees WHERE organization_id=$1`, [orgId]).catch(() => ({ rows: [{}] }));
 
     // Turnover — last 12 months
     const turnover = await query(
@@ -458,7 +458,7 @@ router.get('/indicators', async (req, res) => {
         WHERE organization_id=$1 AND status='ativo' AND admission_date IS NOT NULL
           AND admission_date >= CURRENT_DATE - INTERVAL '95 days'
           AND (admission_date + INTERVAL '90 days')::date >= CURRENT_DATE
-        ORDER BY admission_date ASC`, [orgId]);
+        ORDER BY admission_date ASC`, [orgId]).catch(() => ({ rows: [] }));
 
     // ASOs
     const exams = await query(
@@ -541,12 +541,12 @@ router.get('/indicators', async (req, res) => {
          FROM employees
         WHERE organization_id=$1 AND status='ativo' AND birth_date IS NOT NULL
           AND EXTRACT(MONTH FROM birth_date) = EXTRACT(MONTH FROM CURRENT_DATE)
-        ORDER BY EXTRACT(DAY FROM birth_date)`, [orgId]);
+        ORDER BY EXTRACT(DAY FROM birth_date)`, [orgId]).catch(() => ({ rows: [] }));
 
     // Average tenure
     const tenure = await query(
       `SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE(termination_date, CURRENT_DATE) - admission_date)))/86400/365, 0)::numeric(5,2) AS years
-         FROM employees WHERE organization_id=$1 AND admission_date IS NOT NULL`, [orgId]);
+         FROM employees WHERE organization_id=$1 AND admission_date IS NOT NULL`, [orgId]).catch(() => ({ rows: [{ years: 0 }] }));
 
     // Documentos pendentes em admissões recentes (últimos 30 dias)
     const REQUIRED_DOCS = ['rg','cpf','ctps','comprovante_residencia','foto_3x4','aso_admissional'];
