@@ -17,7 +17,7 @@ import {
 } from '@/hooks/use-stock-count';
 import { LocalImage } from '@/components/promotor/LocalImage';
 import {
-  Boxes, CheckCircle2, Clock, AlertTriangle, Package,
+  Boxes, CheckCircle2, AlertTriangle, Package,
   CalendarClock, ChevronRight, Save,
 } from 'lucide-react';
 
@@ -34,20 +34,16 @@ type ItemState = {
   product_name?: string;
   sku?: string;
   photo_url?: string;
-  initial_store: number | null;
-  initial_stock: number | null;
-  final_store: number | null;
-  final_stock: number | null;
+  store_qty: number | null;
+  stock_qty: number | null;
   observation?: string;
-  _savingInit?: boolean;
-  _savingFinal?: boolean;
+  _saving?: boolean;
   _expanded?: boolean;
 };
 
 const hasVal = (v: any) => v !== null && v !== undefined && v !== '';
-const isInitDone = (i: ItemState) => hasVal(i.initial_store) && hasVal(i.initial_stock);
-const isFinalDone = (i: ItemState) => hasVal(i.final_store) && hasVal(i.final_stock);
-const isComplete = (i: ItemState) => isInitDone(i) && isFinalDone(i);
+const isComplete = (i: ItemState) => hasVal(i.store_qty) && hasVal(i.stock_qty);
+const totalOf = (i: ItemState) => (Number(i.store_qty) || 0) + (Number(i.stock_qty) || 0);
 
 export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId }: StockCountCardProps) {
   const { data: execs = [] } = useRouteStockCount(routeId);
@@ -64,7 +60,17 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
   const exec: any = (execs as any[]).find((e: any) => e.brand_id === brandId);
 
   useEffect(() => {
-    if (exec?.items) setItems(exec.items.map((i: any) => ({ ...i })));
+    if (exec?.items) {
+      setItems(exec.items.map((i: any) => ({
+        product_id: i.product_id,
+        product_name: i.product_name,
+        sku: i.sku,
+        photo_url: i.photo_url,
+        store_qty: i.store_qty ?? null,
+        stock_qty: i.stock_qty ?? null,
+        observation: i.observation ?? '',
+      })));
+    }
   }, [exec]);
 
   const total = items.length;
@@ -87,50 +93,38 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
     });
   };
 
-  const updateQty = (idx: number, field: 'initial_store' | 'initial_stock' | 'final_store' | 'final_stock', q: string) => {
+  const updateQty = (idx: number, field: 'store_qty' | 'stock_qty', q: string) => {
     updateField(idx, field, q === '' ? null : parseFloat(q));
   };
 
   const toggleExpand = (idx: number) => updateField(idx, '_expanded', !items[idx]._expanded);
 
-  const savePartial = async (idx: number, phase: 'init' | 'final') => {
+  const saveItem = async (idx: number) => {
     const it = items[idx];
-    if (phase === 'init' && !isInitDone(it)) { toast.error('Preencha Frente e Estoque iniciais'); return; }
-    if (phase === 'final' && !isFinalDone(it)) { toast.error('Preencha Frente e Estoque finais'); return; }
-    updateField(idx, phase === 'init' ? '_savingInit' : '_savingFinal', true);
+    if (!isComplete(it)) { toast.error('Preencha Frente e Estoque'); return; }
+    updateField(idx, '_saving', true);
     try {
       await executeSC.mutateAsync({
         route_id: routeId, brand_id: brandId, pdv_id: pdvId, promoter_id: promoterId,
         items: [{
           product_id: it.product_id,
-          initial_store: it.initial_store,
-          initial_stock: it.initial_stock,
-          final_store: it.final_store,
-          final_stock: it.final_stock,
+          store_qty: it.store_qty,
+          stock_qty: it.stock_qty,
           observation: it.observation ?? null,
         }],
       });
-      if (phase === 'init') {
-        toast.success('Início salvo. Volte quando fizer a frente.');
-      } else {
-        toast.success('Produto concluído ✓');
-        updateField(idx, '_expanded', false);
-      }
+      toast.success('Produto contado ✓');
+      updateField(idx, '_expanded', false);
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao salvar');
     } finally {
-      updateField(idx, phase === 'init' ? '_savingInit' : '_savingFinal', false);
+      updateField(idx, '_saving', false);
     }
   };
 
-  const setZeros = (idx: number, phase: 'init' | 'final') => {
-    if (phase === 'init') {
-      updateField(idx, 'initial_store', 0);
-      setTimeout(() => updateField(idx, 'initial_stock', 0), 0);
-    } else {
-      updateField(idx, 'final_store', 0);
-      setTimeout(() => updateField(idx, 'final_stock', 0), 0);
-    }
+  const setZeros = (idx: number) => {
+    updateField(idx, 'store_qty', 0);
+    setTimeout(() => updateField(idx, 'stock_qty', 0), 0);
   };
 
   const handlePostpone = async () => {
@@ -151,7 +145,6 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
     }
   };
 
-  // Banner variants
   const bannerClass = allDone
     ? 'border-green-500/60 bg-green-500/10'
     : isMandatory
@@ -161,7 +154,6 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
 
   return (
     <>
-      {/* Notification banner (top of route) */}
       <div className={`rounded-lg border ${bannerClass} p-3`}>
         <div className="flex items-center gap-3">
           <div className={`h-9 w-9 rounded-full bg-background/60 flex items-center justify-center ${iconClass}`}>
@@ -169,7 +161,7 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-semibold text-sm">Contagem de Estoque — {brandName}</p>
+              <p className="font-semibold text-sm">Contagem de Saldo — {brandName}</p>
               {isMandatory && !allDone && (
                 <Badge variant="destructive" className="h-5 text-[10px]">
                   <AlertTriangle className="h-3 w-3 mr-1" />Obrigatória
@@ -205,14 +197,16 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
         </div>
       </div>
 
-      {/* Product-by-product sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto p-0">
           <SheetHeader className="p-4 border-b sticky top-0 bg-background z-10">
             <SheetTitle className="flex items-center gap-2 text-base">
               <Boxes className="h-5 w-5 text-primary" />
-              Contagem — {brandName}
+              Saldo — {brandName}
             </SheetTitle>
+            <p className="text-xs text-muted-foreground">
+              Informe o saldo atual: quanto tem na frente/gôndola e quanto tem no estoque. O total é a soma dos dois.
+            </p>
             <div className="pt-1">
               <div className="flex justify-between text-xs text-muted-foreground mb-1">
                 <span>{filled}/{total} produtos concluídos</span>
@@ -229,8 +223,6 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
               </p>
             ) : items.map((item, idx) => {
               const complete = isComplete(item);
-              const initReady = isInitDone(item);
-              const finReady = isFinalDone(item);
               return (
                 <div
                   key={item.product_id || idx}
@@ -253,11 +245,7 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {complete ? (
                           <Badge className="h-5 text-[10px] bg-green-600 hover:bg-green-600">
-                            <CheckCircle2 className="h-3 w-3 mr-0.5" />Concluído: {(Number(item.final_store) || 0) + (Number(item.final_stock) || 0)}
-                          </Badge>
-                        ) : initReady ? (
-                          <Badge variant="secondary" className="h-5 text-[10px]">
-                            <Clock className="h-3 w-3 mr-0.5" />Início salvo — falta fim
+                            <CheckCircle2 className="h-3 w-3 mr-0.5" />Total: {totalOf(item)}
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="h-5 text-[10px]">Pendente</Badge>
@@ -269,85 +257,34 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
                   </button>
 
                   {item._expanded && (
-                    <div className="border-t p-3 space-y-4">
-                      {/* Início */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <Label className="text-xs font-semibold">Início da visita</Label>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setZeros(idx, 'init')}>
-                              Zerar
-                            </Button>
-                            <Button
-                              size="sm" className="h-7 text-xs"
-                              disabled={item._savingInit || !initReady}
-                              onClick={() => savePartial(idx, 'init')}
-                            >
-                              <Save className="h-3 w-3 mr-1" />
-                              {item._savingInit ? 'Salvando...' : 'Salvar início'}
-                            </Button>
-                          </div>
+                    <div className="border-t p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-semibold">Saldo atual</Label>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setZeros(idx)}>
+                          Zerar
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">Frente / gôndola</Label>
+                          <Input type="number" min="0" inputMode="numeric" placeholder="0"
+                            value={item.store_qty ?? ''}
+                            onChange={e => updateQty(idx, 'store_qty', e.target.value)}
+                            className="h-9" />
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-[10px] text-muted-foreground">Frente inicial</Label>
-                            <Input type="number" min="0" inputMode="numeric" placeholder="0"
-                              value={item.initial_store ?? ''}
-                              onChange={e => updateQty(idx, 'initial_store', e.target.value)}
-                              className="h-9" />
-                          </div>
-                          <div>
-                            <Label className="text-[10px] text-muted-foreground">Estoque inicial</Label>
-                            <Input type="number" min="0" inputMode="numeric" placeholder="0"
-                              value={item.initial_stock ?? ''}
-                              onChange={e => updateQty(idx, 'initial_stock', e.target.value)}
-                              className="h-9" />
-                          </div>
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">Estoque</Label>
+                          <Input type="number" min="0" inputMode="numeric" placeholder="0"
+                            value={item.stock_qty ?? ''}
+                            onChange={e => updateQty(idx, 'stock_qty', e.target.value)}
+                            className="h-9" />
                         </div>
                       </div>
-
-                      {/* Fim */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <Label className="text-xs font-semibold">Fim da visita</Label>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setZeros(idx, 'final')}>
-                              Zerar
-                            </Button>
-                            <Button
-                              size="sm" className="h-7 text-xs"
-                              disabled={item._savingFinal || !finReady}
-                              onClick={() => savePartial(idx, 'final')}
-                            >
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              {item._savingFinal ? 'Salvando...' : 'Concluir produto'}
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-[10px] text-muted-foreground">Frente final</Label>
-                            <Input type="number" min="0" inputMode="numeric" placeholder="0"
-                              value={item.final_store ?? ''}
-                              onChange={e => updateQty(idx, 'final_store', e.target.value)}
-                              className="h-9" />
-                          </div>
-                          <div>
-                            <Label className="text-[10px] text-muted-foreground">Estoque final</Label>
-                            <Input type="number" min="0" inputMode="numeric" placeholder="0"
-                              value={item.final_stock ?? ''}
-                              onChange={e => updateQty(idx, 'final_stock', e.target.value)}
-                              className="h-9" />
-                          </div>
-                        </div>
-                        {finReady && (
-                          <p className="text-[11px] text-muted-foreground mt-1">
-                            Total final: <span className="font-medium text-foreground">
-                              {(Number(item.final_store) || 0) + (Number(item.final_stock) || 0)}
-                            </span>
-                          </p>
-                        )}
-                      </div>
+                      {isComplete(item) && (
+                        <p className="text-[11px] text-muted-foreground">
+                          Total: <span className="font-medium text-foreground">{totalOf(item)}</span>
+                        </p>
+                      )}
 
                       <div>
                         <Label className="text-[10px] text-muted-foreground">Observação</Label>
@@ -356,6 +293,15 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
                           onChange={e => updateField(idx, 'observation', e.target.value)}
                           className="h-9" />
                       </div>
+
+                      <Button
+                        size="sm" className="w-full h-9"
+                        disabled={item._saving || !isComplete(item)}
+                        onClick={() => saveItem(idx)}
+                      >
+                        <Save className="h-3 w-3 mr-1" />
+                        {item._saving ? 'Salvando...' : 'Salvar produto'}
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -376,7 +322,6 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
         </SheetContent>
       </Sheet>
 
-      {/* Postpone dialog */}
       <Dialog open={postponeOpen} onOpenChange={setPostponeOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
