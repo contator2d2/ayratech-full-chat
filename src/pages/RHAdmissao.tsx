@@ -376,7 +376,7 @@ export default function RHAdmissao() {
               <Label>Cargo *</Label>
               <Input list="positions-list" value={form.position} onChange={e => setField("position", e.target.value)} placeholder="Digite ou selecione" />
               <datalist id="positions-list">
-                {positions.map(p => <option key={p} value={p} />)}
+                {positions.map((p: any, i) => <option key={p.id || p.name || i} value={p.name || ''} />)}
               </datalist>
               <p className="text-xs text-muted-foreground mt-1">Selecione um cargo já cadastrado ou digite um novo.</p>
             </div>
