@@ -107,6 +107,8 @@ import MerchEquipe from "./pages/MerchEquipe";
 import MerchPesquisaPrecos from "./pages/MerchPesquisaPrecos";
 import MerchPesquisaDashboard from "./pages/MerchPesquisaDashboard";
 import MerchContagemEstoque from "./pages/MerchContagemEstoque";
+import MerchContagemDashboard from "./pages/MerchContagemDashboard";
+
 import PromotorLogin from "./pages/promotor/PromotorLogin";
 import PromotorHome from "./pages/promotor/PromotorHome";
 import PromotorAgenda from "./pages/promotor/PromotorAgenda";
