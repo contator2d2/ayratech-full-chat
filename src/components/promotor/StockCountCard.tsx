@@ -193,12 +193,18 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
             {allDone ? 'Revisar contagem' : 'Contar agora'}
             <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
-          {!allDone && status !== 'justified' && allowPostpone && !blockCompletion && (
+          {canDefer && (
             <Button size="sm" variant="outline" onClick={() => setPostponeOpen(true)}>
-              <CalendarClock className="h-4 w-4 mr-1" />Adiar
+              <CalendarClock className="h-4 w-4 mr-1" />
+              {mustBlock ? 'Não fiz hoje' : 'Adiar'}
             </Button>
           )}
         </div>
+        {mustBlock && !allDone && status !== 'justified' && (
+          <p className="text-[11px] text-muted-foreground mt-2">
+            Esta contagem é obrigatória para concluir a rota. Se não puder fazer, use <b>“Não fiz hoje”</b> e justifique.
+          </p>
+        )}
       </div>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
