@@ -2,6 +2,8 @@ import express from 'express';
 import { query } from '../db.js';
 import { authenticate } from '../middleware/auth.js';
 import { logInfo, logError, logWarn } from '../logger.js';
+import { sendStockCountSummaryForRoute } from './stock-count.js';
+
 
 const router = express.Router();
 router.use((req, res, next) => {
