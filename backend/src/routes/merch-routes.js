@@ -3196,6 +3196,16 @@ router.post('/promotor/routes/:id/checkout', promotorAuth, async (req, res) => {
       [req.params.id, JSON.stringify({ latitude, longitude, pending: pending.rows[0].cnt, remaining_at_pdv: remainingRoutesAtPdv }), req.employeeId]
     );
 
+    // Fire-and-forget: envia resumo por e-mail para contatos da marca
+    try {
+      const orgRow = await query('SELECT organization_id FROM employees WHERE id=$1', [req.employeeId]);
+      const orgId = orgRow.rows[0]?.organization_id || route.organization_id;
+      if (orgId) {
+        sendStockCountSummaryForRoute({ routeId: req.params.id, organizationId: orgId, senderUserId: null })
+          .catch((e) => logWarn('promotor.checkout.email_summary_failed', e));
+      }
+    } catch (e) { logWarn('promotor.checkout.email_summary_dispatch_failed', e); }
+
     res.json({
       ...result.rows[0],
       remaining_routes_at_pdv: remainingRoutesAtPdv,
@@ -3206,6 +3216,7 @@ router.post('/promotor/routes/:id/checkout', promotorAuth, async (req, res) => {
     });
   } catch (err) { logError('promotor.checkout', err); res.status(500).json({ error: 'Erro' }); }
 });
+
 
 // Promotor: PDV Checkout (physical exit from store)
 router.post('/promotor/pdv-checkout', promotorAuth, async (req, res) => {
