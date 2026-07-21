@@ -415,7 +415,7 @@ router.get('/indicators', async (req, res) => {
          COUNT(*) FILTER (WHERE status='afastado')::int AS on_leave,
          COUNT(*) FILTER (WHERE status='ferias')::int AS on_vacation,
          COUNT(*) FILTER (WHERE status='desligado')::int AS terminated
-       FROM employees WHERE organization_id=$1`, [orgId]);
+       FROM employees WHERE organization_id=$1`, [orgId]).catch(() => ({ rows: [{}] }));
 
     // Turnover — last 12 months
     const turnover = await query(
