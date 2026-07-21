@@ -386,10 +386,8 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
           sku: p.sku,
           photo_url: p.photo_url,
           description: p.description,
-          initial_store: existing?.initial_store ?? null,
-          initial_stock: existing?.initial_stock ?? null,
-          final_store: existing?.final_store ?? null,
-          final_stock: existing?.final_stock ?? null,
+          store_qty: existing?.final_store ?? null,
+          stock_qty: existing?.final_stock ?? null,
           quantity: existing?.quantity ?? null,
           observation: existing?.observation ?? '',
         };
