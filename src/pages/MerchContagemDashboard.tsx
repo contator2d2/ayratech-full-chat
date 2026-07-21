@@ -16,8 +16,10 @@ import { useBrands } from "@/hooks/use-merchandising";
 import {
   useStockCountExecutions, useStockCountExecutionDetail, useResendStockCountEmail,
 } from "@/hooks/use-stock-count";
-import { BarChart3, Search, Mail, Download, Boxes } from "lucide-react";
+import { BarChart3, Search, Mail, Download, Boxes, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { StockCountPdfDialog } from "@/components/merch/StockCountPdfDialog";
+
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
   completed: { label: "Concluída", className: "bg-emerald-100 text-emerald-800" },
