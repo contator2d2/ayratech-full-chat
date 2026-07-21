@@ -16,8 +16,10 @@ import { useBrands } from "@/hooks/use-merchandising";
 import {
   useStockCountExecutions, useStockCountExecutionDetail, useResendStockCountEmail,
 } from "@/hooks/use-stock-count";
-import { BarChart3, Search, Mail, Download, Boxes } from "lucide-react";
+import { BarChart3, Search, Mail, Download, Boxes, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { StockCountPdfDialog } from "@/components/merch/StockCountPdfDialog";
+
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
   completed: { label: "Concluída", className: "bg-emerald-100 text-emerald-800" },
@@ -82,8 +84,10 @@ export default function MerchContagemDashboard() {
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [extraEmails, setExtraEmails] = useState("");
+  const [pdfOpen, setPdfOpen] = useState(false);
   const { data: detail } = useStockCountExecutionDetail(detailId || undefined);
   const resend = useResendStockCountEmail();
+
 
   const handleExportCsv = () => {
     const header = ["Data", "Marca", "PDV", "Promotor", "Status", "Itens", "Progresso %"];
@@ -304,14 +308,20 @@ export default function MerchContagemDashboard() {
               </div>
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setDetailId(null)}>Fechar</Button>
+            <Button variant="outline" onClick={() => setPdfOpen(true)} disabled={!detail}>
+              <FileText className="h-4 w-4 mr-2" /> Gerar PDF / CSV
+            </Button>
             <Button onClick={handleResend} disabled={resend.isPending || !detailId}>
               <Mail className="h-4 w-4 mr-2" /> {resend.isPending ? "Enviando..." : "Enviar e-mail"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StockCountPdfDialog open={pdfOpen} onOpenChange={setPdfOpen} detail={detail as any} />
     </MainLayout>
   );
 }
+
