@@ -1018,11 +1018,15 @@ router.post('/rh/pdvs', async (req, res) => {
         if (geo) { lat = geo.lat; lng = geo.lng; }
       } catch (_) {}
     }
+    const { ensurePdvGeofenceColumn } = require('../lib/geofence');
+    await ensurePdvGeofenceColumn(query);
+    const polygon = Array.isArray(d.geofence_polygon) && d.geofence_polygon.length >= 3 ? JSON.stringify(d.geofence_polygon) : null;
     const result = await query(
-      `INSERT INTO pdvs (organization_id, name, client_name, address, zip_code, city, state, neighborhood, latitude, longitude, radius_meters, supervisor_id, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-      [orgId, d.name, d.client_name, d.address, d.zip_code, d.city, d.state, d.neighborhood, lat, lng, d.radius_meters || 200, d.supervisor_id || null, d.notes]
+      `INSERT INTO pdvs (organization_id, name, client_name, address, zip_code, city, state, neighborhood, latitude, longitude, radius_meters, supervisor_id, notes, geofence_polygon)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb) RETURNING *`,
+      [orgId, d.name, d.client_name, d.address, d.zip_code, d.city, d.state, d.neighborhood, lat, lng, d.radius_meters || 200, d.supervisor_id || null, d.notes, polygon]
     );
+
     res.json(result.rows[0]);
   } catch (err) { logError('promotor.pdvs.create', err); res.status(500).json({ error: 'Erro' }); }
 });
