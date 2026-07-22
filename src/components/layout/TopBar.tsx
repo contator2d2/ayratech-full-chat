@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { MessageNotifications } from "./MessageNotifications";
 import { CRMAlerts } from "./CRMAlerts";
 import { ConnectionStatusIndicator } from "./ConnectionStatusIndicator";
+import { GlobalSearch } from "./GlobalSearch";
 import { OvertimeRequestsPanel, useOvertimePendingCount } from "@/components/rh/OvertimeRequestsPanel";
 
 function getGreeting(hour: number): { text: string; icon: typeof Sun } {
@@ -61,6 +62,11 @@ export function TopBar() {
             {branding.company_name}
           </span>
         )}
+      </div>
+
+      {/* Global Search */}
+      <div className="flex-1 flex justify-center max-w-md">
+        <GlobalSearch />
       </div>
 
       {/* Right Side Controls */}

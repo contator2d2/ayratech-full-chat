@@ -89,7 +89,7 @@ interface NavSection {
   adminOnly?: boolean; // Entire section requires admin role
 }
 
-const getNavSections = (hasConnections: boolean): NavSection[] => [
+export const getNavSections = (hasConnections: boolean): NavSection[] => [
   {
     title: "Atendimento",
     icon: MessagesSquare,
