@@ -173,6 +173,15 @@ export default function MerchMarcas() {
     } catch (e: any) { toast.error(e.message); }
   };
 
+  const handleLinkByNetwork = async () => {
+    if (!selectedNetwork || !pdvDialogBrand?.id) return;
+    try {
+      const r = await addPdvBrandByNetwork.mutateAsync({ brand_id: pdvDialogBrand.id, rede_id: selectedNetwork });
+      toast.success(`${r?.linked ?? 0} PDV(s) vinculado(s) via rede`);
+      setSelectedNetwork('');
+    } catch (e: any) { toast.error(e.message); }
+  };
+
   return (
     <MainLayout>
       <div className="space-y-4">
