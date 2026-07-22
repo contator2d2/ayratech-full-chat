@@ -13,13 +13,14 @@ interface Props {
   centerLng?: number | string | null;
   radiusMeters?: number | null;
   onChange: (polygon: PolygonPoint[] | null) => void;
+  onUseCentroid?: (lat: number, lng: number) => void;
 }
 
 /**
  * Editor de geofence poligonal. Click no mapa adiciona vértice.
  * Marcadores são arrastáveis. "Fechar" gera o polígono.
  */
-export function PdvGeofenceEditor({ value, centerLat, centerLng, radiusMeters, onChange }: Props) {
+export function PdvGeofenceEditor({ value, centerLat, centerLng, radiusMeters, onChange, onUseCentroid }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
@@ -115,9 +116,18 @@ export function PdvGeofenceEditor({ value, centerLat, centerLng, radiusMeters, o
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <Label className="flex items-center gap-1"><MapPin className="h-4 w-4" /> Perímetro do PDV (opcional)</Label>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
+          {onUseCentroid && points.length >= 3 && (
+            <Button size="sm" variant="outline" type="button" onClick={() => {
+              const cx = points.reduce((s, p) => s + p.lat, 0) / points.length;
+              const cy = points.reduce((s, p) => s + p.lng, 0) / points.length;
+              onUseCentroid(cx, cy);
+            }}>
+              <MapPin className="h-3.5 w-3.5 mr-1" /> Usar centro do polígono
+            </Button>
+          )}
           <Button size="sm" variant="ghost" type="button" onClick={() => setPoints((p) => p.slice(0, -1))} disabled={!points.length}>
             <Undo2 className="h-3.5 w-3.5 mr-1" /> Desfazer
           </Button>

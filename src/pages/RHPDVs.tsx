@@ -313,6 +313,10 @@ export default function RHPDVs() {
               centerLng={form.longitude}
               radiusMeters={form.radius_meters}
               onChange={(poly) => setForm((f: any) => ({ ...f, geofence_polygon: poly }))}
+              onUseCentroid={(lat, lng) => {
+                setForm((f: any) => ({ ...f, latitude: lat.toFixed(6), longitude: lng.toFixed(6) }));
+                toast({ title: 'Coordenadas atualizadas', description: 'Centro do polígono aplicado como lat/lng do PDV.' });
+              }}
             />
 
             <div className="space-y-1"><Label>Supervisor</Label>
