@@ -296,6 +296,51 @@ export default function MerchRotas() {
               <X className="h-3 w-3 mr-1" /> Limpar
             </Button>
           )}
+
+          <Popover open={pdvOpen} onOpenChange={setPdvOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" role="combobox" aria-expanded={pdvOpen} className="w-[280px] justify-between">
+                <span className="truncate">
+                  {filterPdv
+                    ? pdvs.find((p: any) => p.id === filterPdv)?.name || 'PDV'
+                    : 'Buscar PDV...'}
+                </span>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[320px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Digite nome, cidade, código..." />
+                <CommandList>
+                  <CommandEmpty>Nenhum PDV encontrado.</CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem value="__all__" onSelect={() => { setFilterPdv(''); setPdvOpen(false); }}>
+                      <Check className={cn("mr-2 h-4 w-4", !filterPdv ? "opacity-100" : "opacity-0")} />
+                      Todos os PDVs
+                    </CommandItem>
+                    {pdvs.filter((p: any) => p?.id).map((p: any) => (
+                      <CommandItem
+                        key={p.id}
+                        value={`${p.name || ''} ${p.city || ''} ${p.state || ''} ${p.internal_code || ''} ${p.cnpj || ''}`}
+                        onSelect={() => { setFilterPdv(p.id); setPdvOpen(false); }}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", filterPdv === p.id ? "opacity-100" : "opacity-0")} />
+                        <div className="flex flex-col min-w-0">
+                          <span className="truncate">{p.name}</span>
+                          <span className="text-[10px] text-muted-foreground truncate">{[p.city, p.state].filter(Boolean).join(' - ')}</span>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          {filterPdv && (
+            <Button variant="ghost" size="sm" onClick={() => setFilterPdv('')} className="h-8 px-2 text-muted-foreground">
+              <X className="h-3 w-3 mr-1" /> Limpar
+            </Button>
+          )}
         </div>
 
         {/* Additional Filters */}
