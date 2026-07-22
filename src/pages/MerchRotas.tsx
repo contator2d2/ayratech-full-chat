@@ -218,13 +218,14 @@ export default function MerchRotas() {
 
   const routesByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
-    routes.forEach((r: any) => {
+    const filtered = filterPdv ? routes.filter((r: any) => r.pdv_id === filterPdv) : routes;
+    filtered.forEach((r: any) => {
       const key = r.visit_date?.split('T')[0] || r.visit_date;
       if (!map[key]) map[key] = [];
       map[key].push(r);
     });
     return map;
-  }, [routes]);
+  }, [routes, filterPdv]);
 
   const headerLabel = viewMode === 'month'
     ? format(currentDate, 'MMMM yyyy', { locale: ptBR })
