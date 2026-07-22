@@ -469,25 +469,31 @@ router.post('/punch', authenticatePromotor, async (req, res) => {
       if (e.code !== '42P01' && e.code !== '42703') throw e;
     }
 
-    // ===== GEO VALIDATION =====
+    // ===== GEO VALIDATION (polygon-first, radius fallback) =====
+    const { validatePdvLocation, ensurePdvGeofenceColumn } = require('../lib/geofence');
+    await ensurePdvGeofenceColumn(query);
     let distance = null;
     let geo_status = 'sem_gps';
 
     if (latitude && longitude && pdv_id) {
-      const pdv = await query(`SELECT latitude, longitude, radius_meters FROM pdvs WHERE id = $1`, [pdv_id]);
-      if (pdv.rows[0] && pdv.rows[0].latitude) {
-        const R = 6371000;
-        const dLat = (pdv.rows[0].latitude - latitude) * Math.PI / 180;
-        const dLng = (pdv.rows[0].longitude - longitude) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-          Math.cos(latitude * Math.PI / 180) * Math.cos(pdv.rows[0].latitude * Math.PI / 180) *
-          Math.sin(dLng/2) * Math.sin(dLng/2);
-        distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        geo_status = distance <= pdv.rows[0].radius_meters ? 'dentro_area' : 'fora_area';
+      const pdv = await query(`SELECT latitude, longitude, radius_meters, geofence_polygon FROM pdvs WHERE id = $1`, [pdv_id]);
+      if (pdv.rows[0]) {
+        const v = validatePdvLocation({
+          userLat: latitude, userLng: longitude,
+          pdvLat: pdv.rows[0].latitude, pdvLng: pdv.rows[0].longitude,
+          radiusMeters: pdv.rows[0].radius_meters,
+          polygon: pdv.rows[0].geofence_polygon,
+        });
+        distance = v.distance != null ? Math.round(v.distance) : null;
+        if (v.status === 'inside') geo_status = 'dentro_area';
+        else if (v.status === 'outside') geo_status = 'fora_area';
+        else geo_status = 'sem_gps';
       }
     } else if (latitude && longitude) {
       geo_status = 'sem_pdv';
     }
+
+
 
     if (geo_status === 'fora_area') {
       const rules = await query(
