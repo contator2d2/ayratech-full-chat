@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useBrands, useCreateBrand, useUpdateBrand, useDeleteBrand, useBrandPdvs, useAddPdvBrand, useRemovePdvBrand } from "@/hooks/use-merchandising";
+import { useBrands, useCreateBrand, useUpdateBrand, useDeleteBrand, useBrandPdvs, useAddPdvBrand, useRemovePdvBrand, useNetworks, useAddPdvBrandByNetwork } from "@/hooks/use-merchandising";
 import { usePDVs } from "@/hooks/use-promotor";
 import { FileUploadInput } from "@/components/ui/file-upload-input";
 import { BrandImportDialog } from "@/components/merchandising/BrandImportDialog";
@@ -65,8 +65,11 @@ export default function MerchMarcas() {
 
   const { data: allPdvs = [] } = usePDVs();
   const { data: brandPdvs = [] } = useBrandPdvs(pdvDialogBrand?.id);
+  const { data: networks = [] } = useNetworks();
   const addPdvBrand = useAddPdvBrand();
   const removePdvBrand = useRemovePdvBrand();
+  const addPdvBrandByNetwork = useAddPdvBrandByNetwork();
+  const [selectedNetwork, setSelectedNetwork] = useState<string>('');
 
   const linkedPdvIds = new Set(brandPdvs.map((bp: any) => bp.pdv_id));
   const filteredAvailable = useMemo(() =>
@@ -167,6 +170,15 @@ export default function MerchMarcas() {
     try {
       await removePdvBrand.mutateAsync(pbId);
       toast.success('PDV desvinculado');
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleLinkByNetwork = async () => {
+    if (!selectedNetwork || !pdvDialogBrand?.id) return;
+    try {
+      const r = await addPdvBrandByNetwork.mutateAsync({ brand_id: pdvDialogBrand.id, rede_id: selectedNetwork });
+      toast.success(`${r?.linked ?? 0} PDV(s) vinculado(s) via rede`);
+      setSelectedNetwork('');
     } catch (e: any) { toast.error(e.message); }
   };
 
@@ -356,6 +368,21 @@ export default function MerchMarcas() {
           <div className="relative mb-3 shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar PDV..." value={pdvSearch} onChange={e => setPdvSearch(e.target.value)} className="pl-9" />
+          </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-3 shrink-0 p-2 rounded-md border bg-muted/30">
+            <Label className="text-xs shrink-0 flex items-center gap-1"><Link2 className="h-3.5 w-3.5" /> Vincular por Rede:</Label>
+            <Select value={selectedNetwork} onValueChange={setSelectedNetwork}>
+              <SelectTrigger className="h-9 flex-1"><SelectValue placeholder="Selecione uma rede..." /></SelectTrigger>
+              <SelectContent>
+                {networks.map((n: any) => (
+                  <SelectItem key={n.id} value={n.id}>{n.name} {typeof n.pdv_count === 'number' ? `(${n.pdv_count} PDVs)` : ''}</SelectItem>
+                ))}
+                {networks.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma rede cadastrada</div>}
+              </SelectContent>
+            </Select>
+            <Button size="sm" onClick={handleLinkByNetwork} disabled={!selectedNetwork || addPdvBrandByNetwork.isPending}>
+              {addPdvBrandByNetwork.isPending ? 'Vinculando...' : 'Vincular todos'}
+            </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 flex-1 min-h-0 overflow-hidden">
             <div className="border rounded-lg p-3 flex flex-col min-h-0 overflow-hidden">

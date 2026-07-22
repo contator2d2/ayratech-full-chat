@@ -1005,6 +1005,25 @@ router.post('/pdv-brands', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Bulk link ALL PDVs of a network (rede) to a brand
+router.post('/pdv-brands/by-network', async (req, res) => {
+  try {
+    await ensureMerchandisingInfra();
+    const { brand_id, rede_id } = req.body || {};
+    if (!brand_id || !rede_id) return res.status(400).json({ error: 'brand_id e rede_id são obrigatórios' });
+    const r = await query(
+      `INSERT INTO merch_pdv_brands (organization_id, pdv_id, brand_id)
+       SELECT $1, rp.pdv_id, $2
+       FROM merch_rede_pdvs rp
+       WHERE rp.rede_id = $3 AND rp.organization_id = $1
+       ON CONFLICT (pdv_id, brand_id) DO UPDATE SET active=true
+       RETURNING pdv_id`,
+      [req.orgId, brand_id, rede_id]
+    );
+    res.json({ ok: true, linked: r.rowCount });
+  } catch (e) { logError('bulk brand-pdv by network', e); res.status(500).json({ error: e.message }); }
+});
+
 router.delete('/pdv-brands/:id', async (req, res) => {
   try {
     await query('DELETE FROM merch_pdv_brands WHERE id=$1 AND organization_id=$2', [req.params.id, req.orgId]);
