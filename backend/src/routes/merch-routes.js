@@ -2583,7 +2583,37 @@ router.post('/promotor/routes/:id/justify', promotorAuth, async (req, res) => {
 // Promotor: Check-in (also handles PDV visit creation)
 router.post('/promotor/routes/:id/checkin', promotorAuth, async (req, res) => {
   try {
-    const { latitude, longitude, device, photo_url, all_routes_at_pdv } = req.body;
+    const { latitude, longitude, device, photo_url, all_routes_at_pdv, geo_justification } = req.body;
+    // Geofence validation (polygon-first, radius fallback)
+    try {
+      const { validatePdvLocation, ensurePdvGeofenceColumn } = require('../lib/geofence');
+      await ensurePdvGeofenceColumn(query);
+      const routeInfo = await query(`SELECT pdv_id FROM merch_routes WHERE id=$1 AND promoter_id=$2`, [req.params.id, req.employeeId]);
+      const pdvId0 = routeInfo.rows[0]?.pdv_id;
+      if (pdvId0 && latitude != null && longitude != null) {
+        const pdvGeo = await query(`SELECT latitude, longitude, radius_meters, geofence_polygon FROM pdvs WHERE id=$1`, [pdvId0]);
+        if (pdvGeo.rows[0]) {
+          const v = validatePdvLocation({
+            userLat: latitude, userLng: longitude,
+            pdvLat: pdvGeo.rows[0].latitude, pdvLng: pdvGeo.rows[0].longitude,
+            radiusMeters: pdvGeo.rows[0].radius_meters,
+            polygon: pdvGeo.rows[0].geofence_polygon,
+          });
+          if (v.status === 'outside' && !geo_justification) {
+            return res.status(400).json({
+              error: 'outside_geofence',
+              message: v.mode === 'polygon'
+                ? 'Você está fora do perímetro do PDV. Entre no local para fazer check-in ou envie justificativa.'
+                : 'Você está fora da área permitida do PDV. Aproxime-se ou envie justificativa.',
+              distance: v.distance != null ? Math.round(v.distance) : null,
+              mode: v.mode,
+            });
+          }
+        }
+      }
+    } catch (e) { logError('promotor.checkin.geofence', e); }
+
+
     const route = await query(
       `SELECT r.*, bc.require_checkin_photo, r.pdv_id, r.visit_date
        FROM merch_routes r

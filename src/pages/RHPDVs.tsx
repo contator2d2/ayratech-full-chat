@@ -19,8 +19,10 @@ import { MapPin, Plus, Edit, Search, Loader2, Navigation, Upload, Download, Tras
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PDVImportDialog } from "@/components/promotor/PDVImportDialog";
+import { PdvGeofenceEditor, type PolygonPoint } from "@/components/promotor/PdvGeofenceEditor";
 
-const EMPTY_PDV = { name: '', client_name: '', address: '', address_number: '', complement: '', zip_code: '', city: '', state: '', neighborhood: '', latitude: '', longitude: '', radius_meters: 200, supervisor_id: '', notes: '', active: true };
+const EMPTY_PDV: any = { name: '', client_name: '', address: '', address_number: '', complement: '', zip_code: '', city: '', state: '', neighborhood: '', latitude: '', longitude: '', radius_meters: 200, supervisor_id: '', notes: '', active: true, geofence_polygon: null as PolygonPoint[] | null };
+
 
 function splitAddressAndNumber(address: string) {
   const normalized = String(address || '').trim().replace(/\s+/g, ' ');
@@ -105,7 +107,7 @@ export default function RHPDVs() {
   const openCreate = () => { setForm(EMPTY_PDV); setEditId(null); setShowDialog(true); };
   const openEdit = (pdv: any) => {
     const parsed = splitAddressAndNumber(pdv.address || '');
-    setForm({ name: pdv.name, client_name: pdv.client_name || '', address: parsed.street || pdv.address || '', address_number: pdv.address_number || parsed.number || '', complement: pdv.complement || '', zip_code: pdv.zip_code || '', city: pdv.city || '', state: pdv.state || '', neighborhood: pdv.neighborhood || '', latitude: pdv.latitude || '', longitude: pdv.longitude || '', radius_meters: pdv.radius_meters || 200, supervisor_id: pdv.supervisor_id || '', notes: pdv.notes || '', active: pdv.active !== false });
+    setForm({ name: pdv.name, client_name: pdv.client_name || '', address: parsed.street || pdv.address || '', address_number: pdv.address_number || parsed.number || '', complement: pdv.complement || '', zip_code: pdv.zip_code || '', city: pdv.city || '', state: pdv.state || '', neighborhood: pdv.neighborhood || '', latitude: pdv.latitude || '', longitude: pdv.longitude || '', radius_meters: pdv.radius_meters || 200, supervisor_id: pdv.supervisor_id || '', notes: pdv.notes || '', active: pdv.active !== false, geofence_polygon: Array.isArray(pdv.geofence_polygon) ? pdv.geofence_polygon : null });
     setEditId(pdv.id);
     setShowDialog(true);
   };
@@ -260,7 +262,7 @@ export default function RHPDVs() {
       </div>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editId ? 'Editar PDV' : 'Novo PDV'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -305,6 +307,14 @@ export default function RHPDVs() {
               <div className="space-y-1"><Label>Raio (metros)</Label><Input type="number" value={form.radius_meters} onChange={e => setForm(f => ({ ...f, radius_meters: Number(e.target.value) }))} /></div>
             </div>
             <GeocodeButton form={form} setForm={setForm} />
+            <PdvGeofenceEditor
+              value={form.geofence_polygon}
+              centerLat={form.latitude}
+              centerLng={form.longitude}
+              radiusMeters={form.radius_meters}
+              onChange={(poly) => setForm((f: any) => ({ ...f, geofence_polygon: poly }))}
+            />
+
             <div className="space-y-1"><Label>Supervisor</Label>
               <Select value={form.supervisor_id} onValueChange={v => setForm(f => ({ ...f, supervisor_id: v }))}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
