@@ -199,11 +199,13 @@ export function CameraCapture({
   qualityConfig,
   allowManualUpload = true,
   autoOpen = false,
+  requireConfirmation = false,
 }: CameraCaptureProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<{ lat?: number; lng?: number } | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
