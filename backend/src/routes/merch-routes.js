@@ -259,6 +259,7 @@ router.get('/routes', async (req, res) => {
         const ids = rows.map(r => r.id);
         const rbRes = await query(
           `SELECT rb.route_id, rb.id, rb.brand_id, rb.checklist_id, rb.sort_order,
+                  rb.progress_pct as stored_progress_pct, rb.status as stored_status,
                   b.name as brand_name, bc.name as checklist_name,
                   (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id) as total_products,
                   (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id AND rpe.status = 'completed') as completed_products,
@@ -277,7 +278,14 @@ router.get('/routes', async (req, res) => {
           rb.total_products = total;
           rb.completed_products = done;
           rb.photos_count = Number(rb.photos_count || 0);
-          rb.progress_pct = total > 0 ? Math.round((done / total) * 100) : (rb.photos_count > 0 ? 100 : 0);
+          // Prefer stored progress_pct (from refreshRouteProgress) — it accounts for
+          // required ANTES/DEPOIS category photos. Fallback only when nothing was stored.
+          const stored = rb.stored_progress_pct != null ? Number(rb.stored_progress_pct) : null;
+          if (stored != null && !Number.isNaN(stored)) {
+            rb.progress_pct = stored;
+          } else {
+            rb.progress_pct = total > 0 ? Math.round((done / total) * 100) : (rb.photos_count > 0 ? 100 : 0);
+          }
           (map[rb.route_id] = map[rb.route_id] || []).push(rb);
         }
 
