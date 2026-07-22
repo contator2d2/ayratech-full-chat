@@ -320,7 +320,7 @@ export default function MerchMarcas() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? 'Editar Marca' : 'Nova Marca'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Código Interno</Label><Input value={form.internal_code || ''} onChange={e => set('internal_code', e.target.value)} /></div>
+            <div className="space-y-2"><Label>Código Interno</Label><Input value={form.internal_code || ''} readOnly disabled placeholder={editingId ? '' : 'Gerado automaticamente ao salvar'} className="bg-muted font-mono" /></div>
             <div className="space-y-2"><Label>Nome *</Label><Input value={form.name} onChange={e => set('name', e.target.value)} /></div>
             <div className="space-y-2"><Label>Razão Social</Label><Input value={form.razao_social} onChange={e => set('razao_social', e.target.value)} /></div>
             <div className="space-y-2"><Label>CNPJ</Label><Input value={form.cnpj} onChange={e => set('cnpj', e.target.value)} /></div>
