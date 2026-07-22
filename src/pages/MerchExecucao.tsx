@@ -66,7 +66,18 @@ export default function MerchExecucao() {
     return getDateRange(period);
   }, [period, dateFrom, dateTo]);
 
-  const { data: liveRoutes = [] } = useLiveRoutes({ date_from: dateRange.from, date_to: dateRange.to });
+  const { data: liveRoutesAll = [] } = useLiveRoutes({ date_from: dateRange.from, date_to: dateRange.to });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const liveRoutes = useMemo(() => {
+    const s = searchTerm.trim().toLowerCase();
+    return (liveRoutesAll as any[]).filter((r: any) => {
+      if (statusFilter && r.status !== statusFilter) return false;
+      if (!s) return true;
+      return [r.promoter_name, r.pdv_name, r.pdv_city, r.pdv_state, r.brand_name, r.checklist_name]
+        .some((v: any) => v && String(v).toLowerCase().includes(s));
+    });
+  }, [liveRoutesAll, searchTerm, statusFilter]);
   const [damageFilter, setDamageFilter] = useState('');
   const { data: damages = [] } = useMerchDamages({ status: damageFilter || undefined });
   const { data: returnRequests = [] } = useReturnRequests();
@@ -158,6 +169,29 @@ export default function MerchExecucao() {
                   <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-40" />
                 </div>
               </>
+            )}
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Buscar</label>
+              <Input
+                placeholder="Promotor, loja, cidade, marca..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Status</label>
+              <Select value={statusFilter || "__all__"} onValueChange={v => setStatusFilter(v === "__all__" ? "" : v)}>
+                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos</SelectItem>
+                  {Object.entries(STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {(searchTerm || statusFilter) && (
+              <Button variant="ghost" size="sm" onClick={() => { setSearchTerm(''); setStatusFilter(''); }}>
+                Limpar
+              </Button>
             )}
           </div>
         </Card>
