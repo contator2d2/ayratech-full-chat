@@ -87,6 +87,11 @@ export default function MerchExecucao() {
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [contingencyCapturedAt, setContingencyCapturedAt] = useState<string>(() => defaultDatetimeLocal());
+  const [contingencyBrandId, setContingencyBrandId] = useState<string>('');
+  const [contingencyCategoryId, setContingencyCategoryId] = useState<string>('');
+  const [contingencyPhotoType, setContingencyPhotoType] = useState<string>('contingency');
+  const [contingencyReason, setContingencyReason] = useState<string>('');
 
   const { data: routeDetail, isLoading: isLoadingDetail } = useMerchRouteDetail(viewRouteId || undefined);
   const viewRoute = routeDetail || liveRoutes.find((r: any) => r.id === viewRouteId);
