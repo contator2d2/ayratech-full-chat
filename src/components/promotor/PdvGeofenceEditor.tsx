@@ -96,12 +96,13 @@ export function PdvGeofenceEditor({ value, centerLat, centerLng, radiusMeters, o
     });
 
     if (points.length >= 3) {
-      polygonLayer.current = L.polygon(points.map((p) => [p.lat, p.lng]), {
+      polygonLayer.current = L.polygon(points.map((p) => [p.lat, p.lng] as [number, number]), {
         color: '#10b981', weight: 2, fillOpacity: 0.2,
       }).addTo(map);
     } else if (points.length === 2) {
-      L.polyline(points.map((p) => [p.lat, p.lng]), { color: '#3b82f6', dashArray: '4,4' }).addTo(layer);
+      L.polyline(points.map((p) => [p.lat, p.lng] as [number, number]), { color: '#3b82f6', dashArray: '4,4' }).addTo(layer);
     }
+
     onChange(points.length >= 3 ? points : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points]);
