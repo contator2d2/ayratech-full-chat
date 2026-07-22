@@ -35,6 +35,8 @@ interface CameraCaptureProps {
   qualityConfig?: PhotoQualityConfig;
   allowManualUpload?: boolean;
   autoOpen?: boolean;
+  /** Se true, mostra a foto com watermark aplicada e exige "Aprovar" antes do upload. */
+  requireConfirmation?: boolean;
 }
 
 export interface PhotoQualityConfig {
@@ -197,11 +199,13 @@ export function CameraCapture({
   qualityConfig,
   allowManualUpload = true,
   autoOpen = false,
+  requireConfirmation = false,
 }: CameraCaptureProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<{ lat?: number; lng?: number } | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
@@ -294,8 +298,36 @@ export function CameraCapture({
   const handleClose = () => {
     stopCamera();
     setCapturedImage(null);
+    setPreviewMeta(null);
     setValidationError(null);
     setIsOpen(false);
+  };
+
+  // Aplica watermark + GPS ao canvas e devolve dataURL para preview
+  const stampCanvas = async (canvas: HTMLCanvasElement) => {
+    const { lat, lng } = await getCachedGeolocation({ timeoutMs: 1500 });
+    const wmData: WatermarkData = { ...watermark, latitude: lat, longitude: lng };
+    applyWatermark(canvas, wmData);
+    return { lat, lng };
+  };
+
+  // Comprime e envia o canvas já com watermark aplicada
+  const uploadCanvas = async (canvas: HTMLCanvasElement) => {
+    const blob = await compressWebP(
+      canvas,
+      config.compression_quality,
+      config.max_file_size_kb,
+    );
+    if (!blob) {
+      toast.error("Erro ao comprimir imagem");
+      return;
+    }
+    const file = new File([blob], `photo_${Date.now()}.webp`, { type: "image/webp" });
+    const token = (customTokenGetter ? customTokenGetter() : null)
+      || localStorage.getItem('promotor_token')
+      || localStorage.getItem('auth_token');
+    const localRef = await queueUpload(file, token);
+    onCapture(localRef);
   };
 
   const processAndUpload = async (canvas: HTMLCanvasElement) => {
@@ -305,37 +337,30 @@ export function CameraCapture({
     setIsOpen(false);
 
     try {
-      // #2 — Geolocalização cacheada (sem bloquear; usa cache de 90s e timeout curto)
-      const { lat, lng } = await getCachedGeolocation({ timeoutMs: 1500 });
-
-      // Aplica watermark
-      const wmData: WatermarkData = { ...watermark, latitude: lat, longitude: lng };
-      applyWatermark(canvas, wmData);
-
-      // #3 — Compressão em Web Worker (com fallback main-thread)
-      const blob = await compressWebP(
-        canvas,
-        config.compression_quality,
-        config.max_file_size_kb,
-      );
-      if (!blob) {
-        toast.error("Erro ao comprimir imagem");
-        return;
-      }
-
-      const file = new File([blob], `photo_${Date.now()}.webp`, { type: "image/webp" });
-      const token = (customTokenGetter ? customTokenGetter() : null)
-        || localStorage.getItem('promotor_token')
-        || localStorage.getItem('auth_token');
-
-      // #1 — Upload OTIMISTA em background
-      const localRef = await queueUpload(file, token);
-      onCapture(localRef);
+      await stampCanvas(canvas);
+      await uploadCanvas(canvas);
     } catch (err: any) {
       toast.error(err.message || "Erro ao processar foto");
     } finally {
       setIsProcessing(false);
       setCapturedImage(null);
+      setPreviewMeta(null);
+    }
+  };
+
+  // Fluxo com confirmação: aplica watermark, mostra preview e aguarda "Aprovar"
+  const stampAndPreview = async (canvas: HTMLCanvasElement) => {
+    setIsProcessing(true);
+    try {
+      stopCamera();
+      const meta = await stampCanvas(canvas);
+      setPreviewMeta(meta);
+      setCapturedImage(canvas.toDataURL("image/jpeg", 0.92));
+      setIsOpen(true);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao gerar prévia");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -364,8 +389,13 @@ export function CameraCapture({
       }
 
       setValidationError(null);
-      // Auto-aprovar: processa e envia imediatamente (sem etapa extra de "Salvar").
-      await processAndUpload(canvas);
+      if (requireConfirmation) {
+        // Aplica watermark + GPS e mostra prévia; upload só ao clicar "Aprovar".
+        await stampAndPreview(canvas);
+      } else {
+        // Auto-aprovar: processa e envia imediatamente (sem etapa extra de "Salvar").
+        await processAndUpload(canvas);
+      }
     } finally {
       captureLockRef.current = false;
     }
@@ -373,6 +403,7 @@ export function CameraCapture({
 
   const handleRetake = () => {
     setCapturedImage(null);
+    setPreviewMeta(null);
     setValidationError(null);
     startCamera(facingMode);
   };
@@ -384,6 +415,22 @@ export function CameraCapture({
 
   const handleAccept = async () => {
     if (!canvasRef.current) return;
+    if (requireConfirmation && capturedImage) {
+      // Canvas já tem watermark aplicada pelo stampAndPreview — só enviar.
+      setIsProcessing(true);
+      stopCamera();
+      setIsOpen(false);
+      try {
+        await uploadCanvas(canvasRef.current);
+      } catch (err: any) {
+        toast.error(err.message || "Erro ao enviar foto");
+      } finally {
+        setIsProcessing(false);
+        setCapturedImage(null);
+        setPreviewMeta(null);
+      }
+      return;
+    }
     await processAndUpload(canvasRef.current);
   };
 
@@ -440,10 +487,15 @@ export function CameraCapture({
         return;
       }
 
-      // If valid, show it as captured image
-      setCapturedImage(canvas.toDataURL("image/jpeg", 0.95));
       setIsManualOpen(false);
-      setIsOpen(true); // Open the preview dialog
+      if (requireConfirmation) {
+        // Aplica watermark + GPS e mostra prévia; upload só ao clicar "Aprovar".
+        await stampAndPreview(canvas);
+      } else {
+        // Preview sem watermark; watermark é aplicada no processAndUpload.
+        setCapturedImage(canvas.toDataURL("image/jpeg", 0.95));
+        setIsOpen(true);
+      }
     } catch (err) {
       toast.error("Erro ao processar imagem do computador.");
     } finally {
@@ -574,6 +626,24 @@ export function CameraCapture({
             <div className="relative">
               <img src={capturedImage} alt="Preview" className="w-full aspect-[3/4] object-cover" />
 
+              {requireConfirmation && (
+                <div className="absolute inset-x-0 top-0 p-3 bg-black/60 text-white text-[11px] space-y-0.5 backdrop-blur-sm">
+                  <div className="font-semibold text-xs mb-1">Confira a rotulagem antes de aprovar:</div>
+                  {watermark.pdvName && <div>PDV: <span className="font-medium">{watermark.pdvName}</span></div>}
+                  {watermark.brandName && <div>Marca: <span className="font-medium">{watermark.brandName}</span></div>}
+                  {watermark.promotorName && <div>Promotor: <span className="font-medium">{watermark.promotorName}</span></div>}
+                  {watermark.photoType && <div>Tipo: <span className="font-medium">{watermark.photoType}</span></div>}
+                  <div>
+                    GPS: <span className="font-medium">
+                      {previewMeta?.lat && previewMeta?.lng
+                        ? `${previewMeta.lat.toFixed(5)}, ${previewMeta.lng.toFixed(5)}`
+                        : 'não disponível'}
+                    </span>
+                  </div>
+                  <div>Data/hora: <span className="font-medium">{new Date().toLocaleString('pt-BR')}</span></div>
+                </div>
+              )}
+
               <div className="absolute inset-x-0 bottom-0 p-4 flex items-center justify-center gap-4 bg-gradient-to-t from-black/70 to-transparent">
                 <Button
                   variant="ghost"
@@ -595,7 +665,7 @@ export function CameraCapture({
                   ) : (
                     <Check className="h-4 w-4" />
                   )}
-                  {busy ? "Processando..." : "Aprovar"}
+                  {busy ? "Enviando..." : "Aprovar e enviar"}
                 </Button>
               </div>
             </div>

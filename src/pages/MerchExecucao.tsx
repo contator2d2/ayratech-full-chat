@@ -910,6 +910,7 @@ export default function MerchExecucao() {
                     }}
                     buttonLabel="Selecionar arquivo e validar"
                     allowManualUpload={true}
+                    requireConfirmation={true}
                   />
                 </div>
               </div>
