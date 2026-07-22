@@ -239,10 +239,11 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
               </p>
             ) : items.map((item, idx) => {
               const complete = isComplete(item);
+              const partial = isPartial(item);
               return (
                 <div
                   key={item.product_id || idx}
-                  className={`rounded-lg border ${complete ? 'border-green-500/50 bg-green-500/5' : 'bg-card'}`}
+                  className={`rounded-lg border ${complete ? 'border-green-500/50 bg-green-500/5' : partial ? 'border-amber-500/50 bg-amber-500/5' : 'bg-card'}`}
                 >
                   <button
                     type="button"
