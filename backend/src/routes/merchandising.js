@@ -188,22 +188,36 @@ router.get('/brands', async (req, res) => {
     let sql = 'SELECT * FROM merch_brands WHERE organization_id = $1';
     const params = [orgId];
     if (status && status !== 'all') { params.push(status); sql += ` AND status = $${params.length}`; }
-    if (search) { params.push(`%${search}%`); sql += ` AND (name ILIKE $${params.length} OR razao_social ILIKE $${params.length})`; }
+    if (search) {
+      params.push(`%${search}%`);
+      sql += ` AND (name ILIKE $${params.length} OR razao_social ILIKE $${params.length} OR cnpj ILIKE $${params.length} OR internal_code ILIKE $${params.length})`;
+    }
     sql += ' ORDER BY name';
     const r = await query(sql, params);
     res.json(r.rows);
   } catch (e) { logError('get brands', e); res.status(500).json({ error: e.message }); }
 });
 
+async function nextBrandInternalCode(orgId) {
+  const r = await query(
+    `SELECT COALESCE(MAX(NULLIF(regexp_replace(internal_code, '\\D', '', 'g'), '')::int), 0) AS m
+       FROM merch_brands WHERE organization_id = $1 AND internal_code ~ '^[0-9]+$'`,
+    [orgId]
+  );
+  const next = (Number(r.rows[0]?.m) || 0) + 1;
+  return String(next).padStart(4, '0');
+}
+
 router.post('/brands', async (req, res) => {
   try {
     await ensureMerchandisingInfra();
     const orgId = req.orgId;
-    const { name, razao_social, cnpj, logo_url, description, segment, responsible, phone, email, status, notes, street, number, neighborhood, city, zip } = req.body;
+    const { name, internal_code, razao_social, cnpj, logo_url, description, segment, responsible, phone, email, status, notes, street, number, neighborhood, city, zip } = req.body;
+    const code = (internal_code && String(internal_code).trim()) || await nextBrandInternalCode(orgId);
     const r = await query(
-      `INSERT INTO merch_brands (organization_id, name, razao_social, cnpj, logo_url, description, segment, responsible, phone, email, status, notes, street, number, neighborhood, city, zip)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
-      [orgId, name, razao_social, cnpj, logo_url, description, segment, responsible, phone, email, status || 'active', notes, street, number, neighborhood, city, zip]
+      `INSERT INTO merch_brands (organization_id, name, internal_code, razao_social, cnpj, logo_url, description, segment, responsible, phone, email, status, notes, street, number, neighborhood, city, zip)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
+      [orgId, name, code, razao_social, cnpj, logo_url, description, segment, responsible, phone, email, status || 'active', notes, street, number, neighborhood, city, zip]
     );
     res.json(r.rows[0]);
   } catch (e) { logError('create brand', e); res.status(500).json({ error: e.message }); }
@@ -211,10 +225,10 @@ router.post('/brands', async (req, res) => {
 
 router.put('/brands/:id', async (req, res) => {
   try {
-    const { name, razao_social, cnpj, logo_url, description, segment, responsible, phone, email, status, notes, street, number, neighborhood, city, zip } = req.body;
+    const { name, internal_code, razao_social, cnpj, logo_url, description, segment, responsible, phone, email, status, notes, street, number, neighborhood, city, zip } = req.body;
     const r = await query(
-      `UPDATE merch_brands SET name=$1, razao_social=$2, cnpj=$3, logo_url=$4, description=$5, segment=$6, responsible=$7, phone=$8, email=$9, status=$10, notes=$11, street=$12, number=$13, neighborhood=$14, city=$15, zip=$16, updated_at=NOW() WHERE id=$17 AND organization_id=$18 RETURNING *`,
-      [name, razao_social, cnpj, logo_url, description, segment, responsible, phone, email, status, notes, street, number, neighborhood, city, zip, req.params.id, req.orgId]
+      `UPDATE merch_brands SET name=$1, internal_code=COALESCE(NULLIF($2,''), internal_code), razao_social=$3, cnpj=$4, logo_url=$5, description=$6, segment=$7, responsible=$8, phone=$9, email=$10, status=$11, notes=$12, street=$13, number=$14, neighborhood=$15, city=$16, zip=$17, updated_at=NOW() WHERE id=$18 AND organization_id=$19 RETURNING *`,
+      [name, internal_code || '', razao_social, cnpj, logo_url, description, segment, responsible, phone, email, status, notes, street, number, neighborhood, city, zip, req.params.id, req.orgId]
     );
     res.json(r.rows[0]);
   } catch (e) { logError('update brand', e); res.status(500).json({ error: e.message }); }
@@ -518,7 +532,7 @@ router.get('/products', async (req, res) => {
     if (category_id) { params.push(category_id); sql += ` AND p.category_id=$${params.length}`; }
     if (subcategory_id) { params.push(subcategory_id); sql += ` AND p.subcategory_id=$${params.length}`; }
     if (status) { params.push(status); sql += ` AND p.status=$${params.length}`; }
-    if (search) { params.push(`%${search}%`); sql += ` AND (p.name ILIKE $${params.length} OR p.sku ILIKE $${params.length} OR p.barcode ILIKE $${params.length})`; }
+    if (search) { params.push(`%${search}%`); sql += ` AND (p.name ILIKE $${params.length} OR p.sku ILIKE $${params.length} OR p.barcode ILIKE $${params.length} OR p.internal_code ILIKE $${params.length} OR b.internal_code ILIKE $${params.length})`; }
     sql += ' ORDER BY p.name';
     const r = await query(sql, params);
     res.json(r.rows);
