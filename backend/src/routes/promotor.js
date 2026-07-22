@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { query } from '../db.js';
 import { authenticate } from '../middleware/auth.js';
 import { logInfo, logError } from '../logger.js';
+import { validatePdvLocation, ensurePdvGeofenceColumn } from '../lib/geofence.js';
 
 const router = express.Router();
 router.use((req, res, next) => {
@@ -470,7 +471,7 @@ router.post('/punch', authenticatePromotor, async (req, res) => {
     }
 
     // ===== GEO VALIDATION (polygon-first, radius fallback) =====
-    const { validatePdvLocation, ensurePdvGeofenceColumn } = require('../lib/geofence');
+    
     await ensurePdvGeofenceColumn(query);
     let distance = null;
     let geo_status = 'sem_gps';
@@ -1018,7 +1019,7 @@ router.post('/rh/pdvs', async (req, res) => {
         if (geo) { lat = geo.lat; lng = geo.lng; }
       } catch (_) {}
     }
-    const { ensurePdvGeofenceColumn } = require('../lib/geofence');
+    
     await ensurePdvGeofenceColumn(query);
     const polygon = Array.isArray(d.geofence_polygon) && d.geofence_polygon.length >= 3 ? JSON.stringify(d.geofence_polygon) : null;
     const result = await query(
@@ -1042,7 +1043,7 @@ router.put('/rh/pdvs/:id', async (req, res) => {
         if (geo) { lat = geo.lat; lng = geo.lng; }
       } catch (_) {}
     }
-    const { ensurePdvGeofenceColumn } = require('../lib/geofence');
+    
     await ensurePdvGeofenceColumn(query);
     const polygon = Array.isArray(d.geofence_polygon) && d.geofence_polygon.length >= 3 ? JSON.stringify(d.geofence_polygon)
       : (d.geofence_polygon === null ? null : undefined);

@@ -2586,7 +2586,7 @@ router.post('/promotor/routes/:id/checkin', promotorAuth, async (req, res) => {
     const { latitude, longitude, device, photo_url, all_routes_at_pdv, geo_justification } = req.body;
     // Geofence validation (polygon-first, radius fallback)
     try {
-      const { validatePdvLocation, ensurePdvGeofenceColumn } = require('../lib/geofence');
+      
       await ensurePdvGeofenceColumn(query);
       const routeInfo = await query(`SELECT pdv_id FROM merch_routes WHERE id=$1 AND promoter_id=$2`, [req.params.id, req.employeeId]);
       const pdvId0 = routeInfo.rows[0]?.pdv_id;
