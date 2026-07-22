@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, User, UserPlus, Eye, Copy, Trash2, Edit, Filter, Repeat, Sparkles, Package, RefreshCw, X, CheckCircle2, Activity, Store, Info, ChevronsUpDown, Check, AlertTriangle } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, User, UserPlus, Eye, Copy, Trash2, Edit, Filter, Repeat, Sparkles, Package, RefreshCw, X, CheckCircle2, Activity, Store, Info, ChevronsUpDown, Check, AlertTriangle, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AIRoutePlanner from "@/components/merch/AIRoutePlanner";
 import { useMerchRoutes, useCreateMerchRoute, useUpdateMerchRoute, useDeleteMerchRoute, useDuplicateMerchRoute, useBulkDeleteMerchRoutes, useBrandChecklists, useBrandPromoters, useRouteMixPreview, useRouteProducts, useAddRouteProduct, useRemoveRouteProduct, useSyncRouteProducts, useJustifyRoute, useAssignPromoter } from "@/hooks/use-merch-routes";
