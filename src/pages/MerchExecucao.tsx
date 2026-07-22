@@ -170,6 +170,29 @@ export default function MerchExecucao() {
                 </div>
               </>
             )}
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Buscar</label>
+              <Input
+                placeholder="Promotor, loja, cidade, marca..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Status</label>
+              <Select value={statusFilter || "__all__"} onValueChange={v => setStatusFilter(v === "__all__" ? "" : v)}>
+                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos</SelectItem>
+                  {Object.entries(STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {(searchTerm || statusFilter) && (
+              <Button variant="ghost" size="sm" onClick={() => { setSearchTerm(''); setStatusFilter(''); }}>
+                Limpar
+              </Button>
+            )}
           </div>
         </Card>
 
