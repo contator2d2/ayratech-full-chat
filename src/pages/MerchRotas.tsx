@@ -52,6 +52,8 @@ export default function MerchRotas() {
   const [filterPromoter, setFilterPromoter] = useState('');
   const [filterBrand, setFilterBrand] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterPdv, setFilterPdv] = useState('');
+  const [pdvOpen, setPdvOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [promoterOpen, setPromoterOpen] = useState(false);
   const [showAIPlanner, setShowAIPlanner] = useState(false);
