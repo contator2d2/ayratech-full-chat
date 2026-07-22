@@ -296,6 +296,13 @@ router.get('/routes', async (req, res) => {
             for (const rb of list) {
               if (!rb.progress_pct || rb.progress_pct < 100) rb.progress_pct = 100;
             }
+          } else if (list.length > 0) {
+            // Keep the route-level progress consistent with the sum of brand progresses,
+            // avoiding cases where the stored route.progress_pct is stale (e.g. 100%) while
+            // the brands still show partial (e.g. 73%). The detail endpoint recomputes this
+            // on the fly, so we align the list view here too.
+            const avg = list.reduce((sum, rb) => sum + Number(rb.progress_pct || 0), 0) / list.length;
+            r.progress_pct = Math.round(avg * 100) / 100;
           }
           r.route_brands = list;
           if (list.length > 0) {
