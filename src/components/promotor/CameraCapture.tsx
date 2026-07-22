@@ -626,6 +626,24 @@ export function CameraCapture({
             <div className="relative">
               <img src={capturedImage} alt="Preview" className="w-full aspect-[3/4] object-cover" />
 
+              {requireConfirmation && (
+                <div className="absolute inset-x-0 top-0 p-3 bg-black/60 text-white text-[11px] space-y-0.5 backdrop-blur-sm">
+                  <div className="font-semibold text-xs mb-1">Confira a rotulagem antes de aprovar:</div>
+                  {watermark.pdvName && <div>PDV: <span className="font-medium">{watermark.pdvName}</span></div>}
+                  {watermark.brandName && <div>Marca: <span className="font-medium">{watermark.brandName}</span></div>}
+                  {watermark.promotorName && <div>Promotor: <span className="font-medium">{watermark.promotorName}</span></div>}
+                  {watermark.photoType && <div>Tipo: <span className="font-medium">{watermark.photoType}</span></div>}
+                  <div>
+                    GPS: <span className="font-medium">
+                      {previewMeta?.lat && previewMeta?.lng
+                        ? `${previewMeta.lat.toFixed(5)}, ${previewMeta.lng.toFixed(5)}`
+                        : 'não disponível'}
+                    </span>
+                  </div>
+                  <div>Data/hora: <span className="font-medium">{new Date().toLocaleString('pt-BR')}</span></div>
+                </div>
+              )}
+
               <div className="absolute inset-x-0 bottom-0 p-4 flex items-center justify-center gap-4 bg-gradient-to-t from-black/70 to-transparent">
                 <Button
                   variant="ghost"
@@ -647,7 +665,7 @@ export function CameraCapture({
                   ) : (
                     <Check className="h-4 w-4" />
                   )}
-                  {busy ? "Processando..." : "Aprovar"}
+                  {busy ? "Enviando..." : "Aprovar e enviar"}
                 </Button>
               </div>
             </div>
