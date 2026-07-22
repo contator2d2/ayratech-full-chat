@@ -13,6 +13,7 @@ interface Props {
   centerLng?: number | string | null;
   radiusMeters?: number | null;
   onChange: (polygon: PolygonPoint[] | null) => void;
+  onUseCentroid?: (lat: number, lng: number) => void;
 }
 
 /**
