@@ -1089,7 +1089,8 @@ router.get('/routes/:id', authenticate, async (req, res) => {
       const rbRes = await query(
         `SELECT rb.*, b.name as brand_name, bc.name as checklist_name,
          (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id) as total_products,
-         (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id AND rpe.status = 'completed') as completed_products
+         (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id AND rpe.status = 'completed') as completed_products,
+         (SELECT COUNT(*) FROM route_photos rph WHERE rph.route_brand_id = rb.id) as photos_count
          FROM route_brands rb
          LEFT JOIN merch_brands b ON b.id = rb.brand_id
          LEFT JOIN brand_checklists bc ON bc.id = rb.checklist_id
