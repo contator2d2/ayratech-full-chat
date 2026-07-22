@@ -283,6 +283,12 @@ router.get('/routes', async (req, res) => {
 
         for (const r of rows) {
           const list = map[r.id] || [];
+          // If parent route is completed, ensure brands reflect 100% (fallback for routes without product/photo tracking)
+          if (r.status === 'completed') {
+            for (const rb of list) {
+              if (!rb.progress_pct || rb.progress_pct < 100) rb.progress_pct = 100;
+            }
+          }
           r.route_brands = list;
           if (list.length > 0) {
             r.is_multi_brand = list.length > 1;
@@ -291,6 +297,7 @@ router.get('/routes', async (req, res) => {
             }
           }
         }
+
       } catch (e) { logWarn('routes.list.route_brands_failed', e); }
 
       // Attach co-executors (route_person_assignments)
