@@ -532,7 +532,7 @@ router.get('/products', async (req, res) => {
     if (category_id) { params.push(category_id); sql += ` AND p.category_id=$${params.length}`; }
     if (subcategory_id) { params.push(subcategory_id); sql += ` AND p.subcategory_id=$${params.length}`; }
     if (status) { params.push(status); sql += ` AND p.status=$${params.length}`; }
-    if (search) { params.push(`%${search}%`); sql += ` AND (p.name ILIKE $${params.length} OR p.sku ILIKE $${params.length} OR p.barcode ILIKE $${params.length})`; }
+    if (search) { params.push(`%${search}%`); sql += ` AND (p.name ILIKE $${params.length} OR p.sku ILIKE $${params.length} OR p.barcode ILIKE $${params.length} OR p.internal_code ILIKE $${params.length} OR b.internal_code ILIKE $${params.length})`; }
     sql += ' ORDER BY p.name';
     const r = await query(sql, params);
     res.json(r.rows);
