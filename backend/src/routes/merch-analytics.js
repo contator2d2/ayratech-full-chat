@@ -599,8 +599,10 @@ router.get('/charts/routes-timeline', authenticate, async (req, res) => {
     const rows = (await query(`
       SELECT r.visit_date::text as date,
         COUNT(*) as total,
+        COUNT(*) as scheduled,
         COUNT(*) FILTER (WHERE r.status='completed') as completed,
-        COUNT(*) FILTER (WHERE r.status='in_progress') as partial
+        COUNT(*) FILTER (WHERE r.status='in_progress') as partial,
+        COUNT(*) FILTER (WHERE r.status IN ('scheduled','confirmed','pending')) as pending
       FROM merch_routes r
       WHERE r.organization_id = $1 ${filters}
       GROUP BY r.visit_date ORDER BY r.visit_date
