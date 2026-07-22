@@ -448,34 +448,56 @@ router.post('/execute', authenticate, async (req, res) => {
         [orgId, route_id, brand_id, pdv_id, promoter_id, start, end])).rows[0];
     }
 
-    let filled = 0;
     for (const it of (items || [])) {
-      // Simplified: current balance only — Frente (store) + Estoque (stock)
-      const storeQty = normalizeQty(it.store_qty ?? it.final_store);
-      const stockQty = normalizeQty(it.stock_qty ?? it.final_stock);
-      const hasCompleteBalance = storeQty !== null && stockQty !== null;
-      if (hasCompleteBalance) filled++;
-      const totalQuantity = hasCompleteBalance ? storeQty + stockQty : normalizeQty(it.quantity);
+      // Partial save support: only overwrite fields explicitly present in the payload.
+      const hasStoreKey = Object.prototype.hasOwnProperty.call(it, 'store_qty') || Object.prototype.hasOwnProperty.call(it, 'final_store');
+      const hasStockKey = Object.prototype.hasOwnProperty.call(it, 'stock_qty') || Object.prototype.hasOwnProperty.call(it, 'final_stock');
+      const payloadStore = hasStoreKey ? normalizeQty(it.store_qty ?? it.final_store) : undefined;
+      const payloadStock = hasStockKey ? normalizeQty(it.stock_qty ?? it.final_stock) : undefined;
       const existing = (await query(
-        'SELECT id FROM stock_count_items WHERE execution_id=$1 AND product_id=$2',
+        'SELECT * FROM stock_count_items WHERE execution_id=$1 AND product_id=$2',
         [exec.id, it.product_id])).rows[0];
+      const storeQty = hasStoreKey ? payloadStore : (existing?.final_store ?? null);
+      const stockQty = hasStockKey ? payloadStock : (existing?.final_stock ?? null);
+      const hasCompleteBalance = storeQty !== null && stockQty !== null;
+      const totalQuantity = hasCompleteBalance ? Number(storeQty) + Number(stockQty) : normalizeQty(it.quantity);
+      const observation = Object.prototype.hasOwnProperty.call(it, 'observation') ? (it.observation ?? null) : (existing?.observation ?? null);
       if (existing) {
         await query(
           `UPDATE stock_count_items
            SET quantity=$1, observation=$2, initial_store=NULL, initial_stock=NULL, final_store=$3, final_stock=$4,
-               collected_at=CASE WHEN $5 THEN NOW() ELSE collected_at END, collected_by=$6, updated_at=NOW()
+               collected_at=CASE WHEN $5 THEN COALESCE(collected_at, NOW()) ELSE NULL END, collected_by=$6, updated_at=NOW()
            WHERE id=$7`,
-          [totalQuantity, it.observation ?? null, storeQty, stockQty, hasCompleteBalance, (req.userId || req.employeeId), existing.id]);
+          [totalQuantity, observation, storeQty, stockQty, hasCompleteBalance, (req.userId || req.employeeId), existing.id]);
       } else {
         await query(
           `INSERT INTO stock_count_items
            (execution_id, product_id, quantity, observation, initial_store, initial_stock, final_store, final_stock, collected_at, collected_by)
            VALUES ($1,$2,$3,$4,NULL,NULL,$5,$6,CASE WHEN $7 THEN NOW() ELSE NULL END,$8)`,
-          [exec.id, it.product_id, totalQuantity, it.observation ?? null, storeQty, stockQty, hasCompleteBalance, (req.userId || req.employeeId)]);
+          [exec.id, it.product_id, totalQuantity, observation, storeQty, stockQty, hasCompleteBalance, (req.userId || req.employeeId)]);
       }
     }
 
-    const total = (items || []).length;
+    // Recompute progress from the FULL expected product list of this rule (not just payload),
+    // so partial saves of individual products don't collapse the total to 1.
+    const rule = (await query(
+      `SELECT selected_products, brand_id FROM stock_count_rules WHERE organization_id=$1 AND brand_id=$2 LIMIT 1`,
+      [orgId, brand_id])).rows[0];
+    let expectedTotal = 0;
+    const selected = parseJsonArray(rule?.selected_products);
+    if (selected && selected.length) {
+      expectedTotal = selected.length;
+    } else {
+      try {
+        const c = await query('SELECT COUNT(*)::int AS n FROM merch_products WHERE brand_id=$1', [brand_id]);
+        expectedTotal = c.rows[0]?.n || 0;
+      } catch { expectedTotal = 0; }
+    }
+    const filledRow = await query(
+      `SELECT COUNT(*)::int AS filled FROM stock_count_items
+       WHERE execution_id=$1 AND final_store IS NOT NULL AND final_stock IS NOT NULL`, [exec.id]);
+    const filled = filledRow.rows[0]?.filled || 0;
+    const total = Math.max(expectedTotal, (items || []).length, filled);
     const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
     const status = filled === 0 ? 'pending' : (filled >= total ? 'completed' : 'in_progress');
     const completedAt = status === 'completed' ? 'NOW()' : 'NULL';
