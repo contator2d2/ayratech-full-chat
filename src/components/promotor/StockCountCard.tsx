@@ -119,10 +119,10 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
       });
       if (isComplete(it)) {
         toast.success('Produto contado ✓');
-        updateField(idx, '_expanded', false);
       } else {
         toast.success('Parcial salvo — falta ' + (hasVal(it.store_qty) ? 'Estoque' : 'Frente'));
       }
+      updateField(idx, '_expanded', false);
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao salvar');
     } finally {
