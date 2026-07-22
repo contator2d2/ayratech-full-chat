@@ -49,8 +49,14 @@ export function PdvGeofenceEditor({ value, centerLat, centerLng, radiusMeters, o
       setPoints((prev) => [...prev, { lat: e.latlng.lat, lng: e.latlng.lng }]);
     });
 
-    setTimeout(() => map.invalidateSize(), 100);
-    return () => { map.remove(); mapInstance.current = null; };
+    // Fix tile rendering inside a dialog (initial width may be 0)
+    const invalidate = () => map.invalidateSize();
+    setTimeout(invalidate, 50);
+    setTimeout(invalidate, 250);
+    setTimeout(invalidate, 600);
+    const ro = new ResizeObserver(() => invalidate());
+    if (mapRef.current) ro.observe(mapRef.current);
+    return () => { ro.disconnect(); map.remove(); mapInstance.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
