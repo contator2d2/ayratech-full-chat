@@ -487,10 +487,15 @@ export function CameraCapture({
         return;
       }
 
-      // If valid, show it as captured image
-      setCapturedImage(canvas.toDataURL("image/jpeg", 0.95));
       setIsManualOpen(false);
-      setIsOpen(true); // Open the preview dialog
+      if (requireConfirmation) {
+        // Aplica watermark + GPS e mostra prévia; upload só ao clicar "Aprovar".
+        await stampAndPreview(canvas);
+      } else {
+        // Preview sem watermark; watermark é aplicada no processAndUpload.
+        setCapturedImage(canvas.toDataURL("image/jpeg", 0.95));
+        setIsOpen(true);
+      }
     } catch (err) {
       toast.error("Erro ao processar imagem do computador.");
     } finally {
