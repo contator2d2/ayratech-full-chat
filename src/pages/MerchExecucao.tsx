@@ -56,6 +56,28 @@ const DAMAGE_STATUS: Record<string, string> = {
   in_review: 'Em Conferência', completed: 'Concluída', cancelled: 'Cancelada',
 };
 
+function defaultDatetimeLocal(): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
+function getContingencyCategories(viewRoute: any, brandId: string): Array<{ id: string; name: string }> {
+  if (!viewRoute) return [];
+  const seen = new Map<string, string>();
+  const execs: any[] = viewRoute.executions || [];
+  execs.forEach((e) => {
+    if (!e.category_id) return;
+    if (brandId && e.route_brand_id && e.route_brand_id !== brandId) return;
+    if (!seen.has(e.category_id)) seen.set(e.category_id, e.category_name || 'Categoria');
+  });
+  const cp: any[] = viewRoute.category_progress || [];
+  cp.forEach((c) => {
+    if (c.category_id && !seen.has(c.category_id)) seen.set(c.category_id, c.category_name || 'Categoria');
+  });
+  return Array.from(seen, ([id, name]) => ({ id, name }));
+}
+
 export default function MerchExecucao() {
   const [period, setPeriod] = useState('today');
   const [dateFrom, setDateFrom] = useState('');
