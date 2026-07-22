@@ -389,8 +389,13 @@ export function CameraCapture({
       }
 
       setValidationError(null);
-      // Auto-aprovar: processa e envia imediatamente (sem etapa extra de "Salvar").
-      await processAndUpload(canvas);
+      if (requireConfirmation) {
+        // Aplica watermark + GPS e mostra prévia; upload só ao clicar "Aprovar".
+        await stampAndPreview(canvas);
+      } else {
+        // Auto-aprovar: processa e envia imediatamente (sem etapa extra de "Salvar").
+        await processAndUpload(canvas);
+      }
     } finally {
       captureLockRef.current = false;
     }
@@ -398,6 +403,7 @@ export function CameraCapture({
 
   const handleRetake = () => {
     setCapturedImage(null);
+    setPreviewMeta(null);
     setValidationError(null);
     startCamera(facingMode);
   };
@@ -409,6 +415,22 @@ export function CameraCapture({
 
   const handleAccept = async () => {
     if (!canvasRef.current) return;
+    if (requireConfirmation && capturedImage) {
+      // Canvas já tem watermark aplicada pelo stampAndPreview — só enviar.
+      setIsProcessing(true);
+      stopCamera();
+      setIsOpen(false);
+      try {
+        await uploadCanvas(canvasRef.current);
+      } catch (err: any) {
+        toast.error(err.message || "Erro ao enviar foto");
+      } finally {
+        setIsProcessing(false);
+        setCapturedImage(null);
+        setPreviewMeta(null);
+      }
+      return;
+    }
     await processAndUpload(canvasRef.current);
   };
 
