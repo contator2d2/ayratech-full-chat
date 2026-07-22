@@ -107,7 +107,7 @@ export default function RHPDVs() {
   const openCreate = () => { setForm(EMPTY_PDV); setEditId(null); setShowDialog(true); };
   const openEdit = (pdv: any) => {
     const parsed = splitAddressAndNumber(pdv.address || '');
-    setForm({ name: pdv.name, client_name: pdv.client_name || '', address: parsed.street || pdv.address || '', address_number: pdv.address_number || parsed.number || '', complement: pdv.complement || '', zip_code: pdv.zip_code || '', city: pdv.city || '', state: pdv.state || '', neighborhood: pdv.neighborhood || '', latitude: pdv.latitude || '', longitude: pdv.longitude || '', radius_meters: pdv.radius_meters || 200, supervisor_id: pdv.supervisor_id || '', notes: pdv.notes || '', active: pdv.active !== false });
+    setForm({ name: pdv.name, client_name: pdv.client_name || '', address: parsed.street || pdv.address || '', address_number: pdv.address_number || parsed.number || '', complement: pdv.complement || '', zip_code: pdv.zip_code || '', city: pdv.city || '', state: pdv.state || '', neighborhood: pdv.neighborhood || '', latitude: pdv.latitude || '', longitude: pdv.longitude || '', radius_meters: pdv.radius_meters || 200, supervisor_id: pdv.supervisor_id || '', notes: pdv.notes || '', active: pdv.active !== false, geofence_polygon: Array.isArray(pdv.geofence_polygon) ? pdv.geofence_polygon : null });
     setEditId(pdv.id);
     setShowDialog(true);
   };
