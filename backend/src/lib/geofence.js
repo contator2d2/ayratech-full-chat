@@ -71,7 +71,7 @@ async function ensurePdvGeofenceColumn(query) {
   } catch (_) { /* ignore */ }
 }
 
-module.exports = {
+export {
   haversineMeters,
   pointInPolygon,
   validatePdvLocation,
