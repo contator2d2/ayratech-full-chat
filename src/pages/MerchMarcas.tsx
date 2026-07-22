@@ -65,8 +65,11 @@ export default function MerchMarcas() {
 
   const { data: allPdvs = [] } = usePDVs();
   const { data: brandPdvs = [] } = useBrandPdvs(pdvDialogBrand?.id);
+  const { data: networks = [] } = useNetworks();
   const addPdvBrand = useAddPdvBrand();
   const removePdvBrand = useRemovePdvBrand();
+  const addPdvBrandByNetwork = useAddPdvBrandByNetwork();
+  const [selectedNetwork, setSelectedNetwork] = useState<string>('');
 
   const linkedPdvIds = new Set(brandPdvs.map((bp: any) => bp.pdv_id));
   const filteredAvailable = useMemo(() =>
