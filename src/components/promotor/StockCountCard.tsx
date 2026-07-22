@@ -317,11 +317,15 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
 
                       <Button
                         size="sm" className="w-full h-9"
-                        disabled={item._saving || !isComplete(item)}
+                        disabled={item._saving || !hasAnyValue(item)}
                         onClick={() => saveItem(idx)}
                       >
                         <Save className="h-3 w-3 mr-1" />
-                        {item._saving ? 'Salvando...' : 'Salvar produto'}
+                        {item._saving
+                          ? 'Salvando...'
+                          : isComplete(item)
+                            ? 'Salvar produto (100%)'
+                            : 'Salvar parcial'}
                       </Button>
                     </div>
                   )}
