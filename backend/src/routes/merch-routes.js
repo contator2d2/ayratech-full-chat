@@ -259,7 +259,10 @@ router.get('/routes', async (req, res) => {
         const ids = rows.map(r => r.id);
         const rbRes = await query(
           `SELECT rb.route_id, rb.id, rb.brand_id, rb.checklist_id, rb.sort_order,
-                  b.name as brand_name, bc.name as checklist_name
+                  b.name as brand_name, bc.name as checklist_name,
+                  (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id) as total_products,
+                  (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id AND rpe.status = 'completed') as completed_products,
+                  (SELECT COUNT(*) FROM route_photos rph WHERE rph.route_brand_id = rb.id) as photos_count
            FROM route_brands rb
            LEFT JOIN merch_brands b ON b.id = rb.brand_id
            LEFT JOIN brand_checklists bc ON bc.id = rb.checklist_id
@@ -269,10 +272,23 @@ router.get('/routes', async (req, res) => {
         );
         const map = {};
         for (const rb of rbRes.rows) {
+          const total = Number(rb.total_products || 0);
+          const done = Number(rb.completed_products || 0);
+          rb.total_products = total;
+          rb.completed_products = done;
+          rb.photos_count = Number(rb.photos_count || 0);
+          rb.progress_pct = total > 0 ? Math.round((done / total) * 100) : (rb.photos_count > 0 ? 100 : 0);
           (map[rb.route_id] = map[rb.route_id] || []).push(rb);
         }
+
         for (const r of rows) {
           const list = map[r.id] || [];
+          // If parent route is completed, ensure brands reflect 100% (fallback for routes without product/photo tracking)
+          if (r.status === 'completed') {
+            for (const rb of list) {
+              if (!rb.progress_pct || rb.progress_pct < 100) rb.progress_pct = 100;
+            }
+          }
           r.route_brands = list;
           if (list.length > 0) {
             r.is_multi_brand = list.length > 1;
@@ -281,6 +297,7 @@ router.get('/routes', async (req, res) => {
             }
           }
         }
+
       } catch (e) { logWarn('routes.list.route_brands_failed', e); }
 
       // Attach co-executors (route_person_assignments)
