@@ -213,6 +213,15 @@ export function useRemovePdvBrand() {
   });
 }
 
+export function useAddPdvBrandByNetwork() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { brand_id: string; rede_id: string }) =>
+      api<any>('/api/merchandising/pdv-brands/by-network', { method: 'POST', body: data }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['merch-pdv-brands'] }); qc.invalidateQueries({ queryKey: ['merch-brand-pdvs'] }); },
+  });
+}
+
 export function useImportBrandPdvs() {
   const qc = useQueryClient();
   return useMutation({
