@@ -43,6 +43,8 @@ type ItemState = {
 
 const hasVal = (v: any) => v !== null && v !== undefined && v !== '';
 const isComplete = (i: ItemState) => hasVal(i.store_qty) && hasVal(i.stock_qty);
+const isPartial = (i: ItemState) => !isComplete(i) && (hasVal(i.store_qty) || hasVal(i.stock_qty));
+const hasAnyValue = (i: ItemState) => hasVal(i.store_qty) || hasVal(i.stock_qty);
 const totalOf = (i: ItemState) => (Number(i.store_qty) || 0) + (Number(i.stock_qty) || 0);
 
 export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId }: StockCountCardProps) {
