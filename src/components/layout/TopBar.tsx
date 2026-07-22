@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { MessageNotifications } from "./MessageNotifications";
 import { CRMAlerts } from "./CRMAlerts";
 import { ConnectionStatusIndicator } from "./ConnectionStatusIndicator";
+import { GlobalSearch } from "./GlobalSearch";
 import { OvertimeRequestsPanel, useOvertimePendingCount } from "@/components/rh/OvertimeRequestsPanel";
 
 function getGreeting(hour: number): { text: string; icon: typeof Sun } {
