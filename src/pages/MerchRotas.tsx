@@ -99,7 +99,7 @@ export default function MerchRotas() {
       setIsSuperadmin(!!su || isAdmin);
     });
   }, [checkSuperadmin, user]);
-  useEffect(() => { setSelectedIds(new Set()); }, [viewMode, currentDate, filterPromoter, filterBrand, filterStatus]);
+  useEffect(() => { setSelectedIds(new Set()); }, [viewMode, currentDate, filterPromoter, filterBrand, filterStatus, filterPdv]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
