@@ -240,7 +240,7 @@ export default function MerchDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base">Evolução de Rotas ({periodLabel})</CardTitle>
-                  <CardDescription>Status das visitas planejadas vs realizadas</CardDescription>
+                  <CardDescription>Previsto vs Realizado por dia</CardDescription>
                 </div>
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </div>
@@ -268,9 +268,10 @@ export default function MerchDashboard() {
                       cursor={{ fill: 'hsl(var(--muted)/0.4)' }}
                       contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
                     />
-                    <Bar dataKey="completed" name="Concluídas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="partial" name="Parciais" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="pending" name="Pendentes" fill="hsl(var(--muted))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="scheduled" name="Previsto" fill="hsl(var(--muted-foreground))" radius={[4, 4, 0, 0]} fillOpacity={0.4} />
+                    <Bar dataKey="completed" name="Realizado" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="partial" name="Em Andamento" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="pending" name="Pendente" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
