@@ -56,6 +56,28 @@ const DAMAGE_STATUS: Record<string, string> = {
   in_review: 'Em Conferência', completed: 'Concluída', cancelled: 'Cancelada',
 };
 
+function defaultDatetimeLocal(): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
+function getContingencyCategories(viewRoute: any, brandId: string): Array<{ id: string; name: string }> {
+  if (!viewRoute) return [];
+  const seen = new Map<string, string>();
+  const execs: any[] = viewRoute.executions || [];
+  execs.forEach((e) => {
+    if (!e.category_id) return;
+    if (brandId && e.route_brand_id && e.route_brand_id !== brandId) return;
+    if (!seen.has(e.category_id)) seen.set(e.category_id, e.category_name || 'Categoria');
+  });
+  const cp: any[] = viewRoute.category_progress || [];
+  cp.forEach((c) => {
+    if (c.category_id && !seen.has(c.category_id)) seen.set(c.category_id, c.category_name || 'Categoria');
+  });
+  return Array.from(seen, ([id, name]) => ({ id, name }));
+}
+
 export default function MerchExecucao() {
   const [period, setPeriod] = useState('today');
   const [dateFrom, setDateFrom] = useState('');
@@ -87,6 +109,11 @@ export default function MerchExecucao() {
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [contingencyCapturedAt, setContingencyCapturedAt] = useState<string>(() => defaultDatetimeLocal());
+  const [contingencyBrandId, setContingencyBrandId] = useState<string>('');
+  const [contingencyCategoryId, setContingencyCategoryId] = useState<string>('');
+  const [contingencyPhotoType, setContingencyPhotoType] = useState<string>('contingency');
+  const [contingencyReason, setContingencyReason] = useState<string>('');
 
   const { data: routeDetail, isLoading: isLoadingDetail } = useMerchRouteDetail(viewRouteId || undefined);
   const viewRoute = routeDetail || liveRoutes.find((r: any) => r.id === viewRouteId);
@@ -771,33 +798,122 @@ export default function MerchExecucao() {
           </DialogContent>
         </Dialog>
 
-        {/* Upload Dialog (Using CameraCapture logic) */}
-        <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-          <DialogContent className="sm:max-w-md">
+        {/* Upload Dialog (Contingência com data/hora + categoria + marca) */}
+        <Dialog open={showUploadDialog} onOpenChange={(open) => {
+          setShowUploadDialog(open);
+          if (!open) {
+            setContingencyCapturedAt(defaultDatetimeLocal());
+            setContingencyBrandId('');
+            setContingencyCategoryId('');
+            setContingencyPhotoType('contingency');
+            setContingencyReason('');
+          }
+        }}>
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Subir Foto Manualmente</DialogTitle>
+              <DialogTitle>Subir Foto Manualmente (Contingência)</DialogTitle>
               <DialogDescription>
-                Selecione uma foto para anexar a esta rota como contingência. A foto será validada e terá marca d'água aplicada.
+                Registre uma foto tirada fora do app (ex.: celular quebrado). Defina data/hora, marca e categoria para que ela entre na galeria no local correto.
               </DialogDescription>
             </DialogHeader>
-            <div className="py-4">
-              {viewRoute && (
-                <CameraCapture
-                  onCapture={(url) => {
-                    toast.success("Foto enviada com sucesso!");
-                    setShowUploadDialog(false);
-                  }}
-                  watermark={{
-                    pdvName: viewRoute.pdv_name,
-                    brandName: viewRoute.is_multi_brand ? 'Multi-marca' : viewRoute.brand_name,
-                    promotorName: viewRoute.promoter_name,
-                    photoType: 'Contingência (Manual)'
-                  }}
-                  buttonLabel="Selecionar arquivo e validar"
-                  allowManualUpload={true}
-                />
-              )}
-            </div>
+            {viewRoute && (
+              <div className="space-y-3 py-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Data e hora da foto *</Label>
+                  <Input
+                    type="datetime-local"
+                    value={contingencyCapturedAt}
+                    onChange={(e) => setContingencyCapturedAt(e.target.value)}
+                    max={defaultDatetimeLocal()}
+                  />
+                </div>
+
+                {viewRoute.is_multi_brand && viewRoute.route_brands?.length > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Marca *</Label>
+                    <Select value={contingencyBrandId} onValueChange={(v) => { setContingencyBrandId(v); setContingencyCategoryId(''); }}>
+                      <SelectTrigger><SelectValue placeholder="Selecione a marca" /></SelectTrigger>
+                      <SelectContent>
+                        {viewRoute.route_brands.map((rb: any) => (
+                          <SelectItem key={rb.id} value={rb.id}>{rb.brand_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Categoria</Label>
+                  <Select value={contingencyCategoryId} onValueChange={setContingencyCategoryId}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a categoria (opcional)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sem categoria</SelectItem>
+                      {getContingencyCategories(viewRoute, contingencyBrandId).map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Tipo da foto *</Label>
+                  <Select value={contingencyPhotoType} onValueChange={setContingencyPhotoType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="before">Antes</SelectItem>
+                      <SelectItem value="after">Depois</SelectItem>
+                      <SelectItem value="contingency">Contingência (avulsa)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Motivo / Observação</Label>
+                  <Textarea
+                    placeholder="Ex.: celular do promotor quebrou — foto enviada por WhatsApp"
+                    value={contingencyReason}
+                    onChange={(e) => setContingencyReason(e.target.value)}
+                    className="text-sm"
+                    rows={2}
+                  />
+                </div>
+
+                <div className="pt-2 border-t">
+                  <Label className="text-xs mb-2 block">Foto</Label>
+                  <CameraCapture
+                    onCapture={async (url) => {
+                      if (!contingencyCapturedAt) { toast.error('Informe a data/hora da foto'); return; }
+                      if (viewRoute.is_multi_brand && !contingencyBrandId) { toast.error('Selecione a marca'); return; }
+                      try {
+                        await contingencyUpload.mutateAsync({
+                          routeId: viewRoute.id,
+                          photo_url: url,
+                          photo_type: contingencyPhotoType,
+                          category_id: contingencyCategoryId && contingencyCategoryId !== '__none__' ? contingencyCategoryId : null,
+                          route_brand_id: contingencyBrandId || null,
+                          captured_at: new Date(contingencyCapturedAt).toISOString(),
+                          reason: contingencyReason || 'Contingência operacional',
+                        });
+                        toast.success('Foto registrada na galeria da rota');
+                        setShowUploadDialog(false);
+                      } catch (err: any) {
+                        toast.error('Falha ao registrar foto: ' + (err?.message || ''));
+                      }
+                    }}
+                    watermark={{
+                      pdvName: viewRoute.pdv_name,
+                      brandName: viewRoute.is_multi_brand
+                        ? (viewRoute.route_brands?.find((rb: any) => rb.id === contingencyBrandId)?.brand_name || 'Multi-marca')
+                        : viewRoute.brand_name,
+                      promotorName: viewRoute.promoter_name,
+                      photoType: `Contingência (${contingencyPhotoType})`,
+                    }}
+                    buttonLabel="Selecionar arquivo e validar"
+                    allowManualUpload={true}
+                  />
+                </div>
+              </div>
+            )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowUploadDialog(false)}>Fechar</Button>
             </DialogFooter>

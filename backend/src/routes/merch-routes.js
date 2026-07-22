@@ -1483,15 +1483,30 @@ router.delete('/brand-promoters/:id', authenticate, async (req, res) => {
 // ===== SUPERVISOR: CONTINGENCY PHOTO UPLOAD =====
 router.post('/routes/:id/contingency-photos', authenticate, async (req, res) => {
   try {
-    const { photo_type, category_id, product_id, exposure_point, photo_url, reason } = req.body;
+    const { photo_type, category_id, product_id, exposure_point, photo_url, reason, captured_at, route_brand_id } = req.body;
     const route = await query('SELECT * FROM merch_routes WHERE id=$1', [req.params.id]);
     if (!route.rows.length) return res.status(404).json({ error: 'Rota não encontrada' });
 
+    // Parse captured_at (accepts ISO or datetime-local); fallback to now via column default
+    let capturedTs = null;
+    if (captured_at) {
+      const d = new Date(captured_at);
+      if (!isNaN(d.getTime())) capturedTs = d.toISOString();
+    }
+
+    // Detect optional columns to avoid schema drift
+    let hasCapturedAt = false, hasRouteBrandId = false;
+    try { await query(`SELECT captured_at FROM route_photos LIMIT 0`); hasCapturedAt = true; } catch {}
+    try { await query(`SELECT route_brand_id FROM route_photos LIMIT 0`); hasRouteBrandId = true; } catch {}
+
+    const cols = ['route_id','photo_type','category_id','product_id','exposure_point','photo_url','upload_source','uploaded_by','contingency_reason','contingency_uploaded_by','contingency_device'];
+    const vals = [req.params.id, photo_type || 'contingency', category_id || null, product_id || null, exposure_point || null, photo_url, 'web', req.userId, reason || null, req.userId, 'web_upload'];
+    if (hasCapturedAt && capturedTs) { cols.push('captured_at'); vals.push(capturedTs); }
+    if (hasRouteBrandId && route_brand_id) { cols.push('route_brand_id'); vals.push(route_brand_id); }
+    const placeholders = vals.map((_, i) => `$${i + 1}`).join(',');
     const photo = await query(
-      `INSERT INTO route_photos (route_id, photo_type, category_id, product_id, exposure_point, photo_url,
-       upload_source, uploaded_by, contingency_reason, contingency_uploaded_by, contingency_device)
-       VALUES ($1,$2,$3,$4,$5,$6,'web',$7,$8,$7,'web_upload') RETURNING *`,
-      [req.params.id, photo_type || 'contingency', category_id, product_id, exposure_point, photo_url, req.userId, reason]
+      `INSERT INTO route_photos (${cols.join(',')}) VALUES (${placeholders}) RETURNING *`,
+      vals
     );
 
     // Log contingency
@@ -1512,7 +1527,7 @@ router.post('/routes/:id/contingency-photos', authenticate, async (req, res) => 
     await query(
       `INSERT INTO execution_authors (route_id, action, performed_by, performer_role, source, details)
        VALUES ($1,'contingency_photo',$2,'supervisor','web',$3)`,
-      [req.params.id, req.userId, JSON.stringify({ photo_type, reason })]
+      [req.params.id, req.userId, JSON.stringify({ photo_type, reason, captured_at: capturedTs, category_id, route_brand_id })]
     );
 
     res.json(photo.rows[0]);
