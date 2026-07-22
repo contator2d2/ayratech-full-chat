@@ -172,6 +172,20 @@ async function ensureMerchandisingInfra() {
       `DO $$ BEGIN ALTER TABLE merch_brands ADD COLUMN IF NOT EXISTS zip VARCHAR(20); EXCEPTION WHEN others THEN NULL; END $$`,
       `ALTER TABLE merch_products ALTER COLUMN category_id DROP NOT NULL`,
       `ALTER TABLE merch_products ALTER COLUMN subcategory_id DROP NOT NULL`,
+      // Backfill: gera código interno automático para marcas sem código
+      `WITH ranked AS (
+         SELECT id, organization_id,
+           COALESCE((SELECT MAX(NULLIF(regexp_replace(b2.internal_code, '\\D', '', 'g'), '')::int)
+                     FROM merch_brands b2
+                     WHERE b2.organization_id = b.organization_id
+                       AND b2.internal_code ~ '^[0-9]+$'), 0)
+           + ROW_NUMBER() OVER (PARTITION BY organization_id ORDER BY created_at, id) AS n
+         FROM merch_brands b
+         WHERE internal_code IS NULL OR TRIM(internal_code) = ''
+       )
+       UPDATE merch_brands m
+       SET internal_code = LPAD(ranked.n::text, 4, '0'), updated_at = NOW()
+       FROM ranked WHERE m.id = ranked.id`,
     ];
   for (const sql of statements) {
     try { await query(sql); } catch (err) { logError('merch infra stmt', err, { sql: sql.slice(0, 80) }); }
