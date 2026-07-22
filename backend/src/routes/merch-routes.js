@@ -2217,6 +2217,9 @@ import jwt from 'jsonwebtoken';
 router.get('/promotor/agenda', promotorAuth, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
+    // Note: NÃO filtramos por organization_id porque um promotor de apoio (agência)
+    // pode ter organization_id diferente da rota. A segurança é garantida pelo
+    // vínculo em route_person_assignments (ou por promoter_id = ele mesmo).
     let sql = `SELECT r.*, p.name as pdv_name, p.address as pdv_address, p.city as pdv_city,
                p.latitude as pdv_lat, p.longitude as pdv_lng,
                b.name as brand_name, b.logo_url as brand_logo,
@@ -2226,8 +2229,7 @@ router.get('/promotor/agenda', promotorAuth, async (req, res) => {
                LEFT JOIN pdvs p ON p.id = r.pdv_id
                LEFT JOIN merch_brands b ON b.id = r.brand_id
                LEFT JOIN brand_checklists bc ON bc.id = r.checklist_id
-               WHERE r.organization_id = $2
-                 AND (
+               WHERE (
                    r.promoter_id = $1
                    OR EXISTS (
                      SELECT 1 FROM route_person_assignments rpa
@@ -2236,8 +2238,8 @@ router.get('/promotor/agenda', promotorAuth, async (req, res) => {
                         AND COALESCE(rpa.active, true) = true
                    )
                  )`;
-    const params = [req.employeeId, req.orgId];
-    let idx = 3;
+    const params = [req.employeeId];
+    let idx = 2;
     if (date_from) { sql += ` AND r.visit_date >= $${idx++}`; params.push(date_from); }
     if (date_to) { sql += ` AND r.visit_date <= $${idx++}`; params.push(date_to); }
     sql += ' ORDER BY r.visit_date, r.scheduled_time';
