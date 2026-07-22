@@ -2268,10 +2268,13 @@ router.get('/promotor/agenda', promotorAuth, async (req, res) => {
     } catch {}
     // Enrich with stock-count flag (has active rule for the brand+weekday+pdv)
     try {
-      const rulesRes = await query(
-        `SELECT brand_id, weekdays, pdv_overrides FROM stock_count_rules WHERE organization_id=$1 AND enabled=true`,
-        [req.orgId]
-      );
+      const orgIds = Array.from(new Set(rows.map(r => r.organization_id).filter(Boolean)));
+      const rulesRes = orgIds.length
+        ? await query(
+            `SELECT brand_id, weekdays, pdv_overrides FROM stock_count_rules WHERE organization_id = ANY($1::uuid[]) AND enabled=true`,
+            [orgIds]
+          )
+        : { rows: [] };
       const rulesByBrand = new Map();
       for (const rule of rulesRes.rows) {
         const wd = Array.isArray(rule.weekdays) ? rule.weekdays : (rule.weekdays ? (typeof rule.weekdays === 'string' ? JSON.parse(rule.weekdays) : rule.weekdays) : null);
