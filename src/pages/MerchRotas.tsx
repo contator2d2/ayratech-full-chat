@@ -52,6 +52,8 @@ export default function MerchRotas() {
   const [filterPromoter, setFilterPromoter] = useState('');
   const [filterBrand, setFilterBrand] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterPdv, setFilterPdv] = useState('');
+  const [pdvOpen, setPdvOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [promoterOpen, setPromoterOpen] = useState(false);
   const [showAIPlanner, setShowAIPlanner] = useState(false);
@@ -97,7 +99,7 @@ export default function MerchRotas() {
       setIsSuperadmin(!!su || isAdmin);
     });
   }, [checkSuperadmin, user]);
-  useEffect(() => { setSelectedIds(new Set()); }, [viewMode, currentDate, filterPromoter, filterBrand, filterStatus]);
+  useEffect(() => { setSelectedIds(new Set()); }, [viewMode, currentDate, filterPromoter, filterBrand, filterStatus, filterPdv]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -216,13 +218,14 @@ export default function MerchRotas() {
 
   const routesByDay = useMemo(() => {
     const map: Record<string, any[]> = {};
-    routes.forEach((r: any) => {
+    const filtered = filterPdv ? routes.filter((r: any) => r.pdv_id === filterPdv) : routes;
+    filtered.forEach((r: any) => {
       const key = r.visit_date?.split('T')[0] || r.visit_date;
       if (!map[key]) map[key] = [];
       map[key].push(r);
     });
     return map;
-  }, [routes]);
+  }, [routes, filterPdv]);
 
   const headerLabel = viewMode === 'month'
     ? format(currentDate, 'MMMM yyyy', { locale: ptBR })
@@ -290,6 +293,51 @@ export default function MerchRotas() {
           </Popover>
           {filterPromoter && (
             <Button variant="ghost" size="sm" onClick={() => setFilterPromoter('')} className="h-8 px-2 text-muted-foreground">
+              <X className="h-3 w-3 mr-1" /> Limpar
+            </Button>
+          )}
+
+          <Popover open={pdvOpen} onOpenChange={setPdvOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" role="combobox" aria-expanded={pdvOpen} className="w-[280px] justify-between">
+                <span className="truncate">
+                  {filterPdv
+                    ? pdvs.find((p: any) => p.id === filterPdv)?.name || 'PDV'
+                    : 'Buscar PDV...'}
+                </span>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[320px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Digite nome, cidade, código..." />
+                <CommandList>
+                  <CommandEmpty>Nenhum PDV encontrado.</CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem value="__all__" onSelect={() => { setFilterPdv(''); setPdvOpen(false); }}>
+                      <Check className={cn("mr-2 h-4 w-4", !filterPdv ? "opacity-100" : "opacity-0")} />
+                      Todos os PDVs
+                    </CommandItem>
+                    {pdvs.filter((p: any) => p?.id).map((p: any) => (
+                      <CommandItem
+                        key={p.id}
+                        value={`${p.name || ''} ${p.city || ''} ${p.state || ''} ${p.internal_code || ''} ${p.cnpj || ''}`}
+                        onSelect={() => { setFilterPdv(p.id); setPdvOpen(false); }}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", filterPdv === p.id ? "opacity-100" : "opacity-0")} />
+                        <div className="flex flex-col min-w-0">
+                          <span className="truncate">{p.name}</span>
+                          <span className="text-[10px] text-muted-foreground truncate">{[p.city, p.state].filter(Boolean).join(' - ')}</span>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          {filterPdv && (
+            <Button variant="ghost" size="sm" onClick={() => setFilterPdv('')} className="h-8 px-2 text-muted-foreground">
               <X className="h-3 w-3 mr-1" /> Limpar
             </Button>
           )}
