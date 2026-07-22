@@ -307,6 +307,14 @@ export default function RHPDVs() {
               <div className="space-y-1"><Label>Raio (metros)</Label><Input type="number" value={form.radius_meters} onChange={e => setForm(f => ({ ...f, radius_meters: Number(e.target.value) }))} /></div>
             </div>
             <GeocodeButton form={form} setForm={setForm} />
+            <PdvGeofenceEditor
+              value={form.geofence_polygon}
+              centerLat={form.latitude}
+              centerLng={form.longitude}
+              radiusMeters={form.radius_meters}
+              onChange={(poly) => setForm((f: any) => ({ ...f, geofence_polygon: poly }))}
+            />
+
             <div className="space-y-1"><Label>Supervisor</Label>
               <Select value={form.supervisor_id} onValueChange={v => setForm(f => ({ ...f, supervisor_id: v }))}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
