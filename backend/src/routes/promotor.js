@@ -1042,10 +1042,16 @@ router.put('/rh/pdvs/:id', async (req, res) => {
         if (geo) { lat = geo.lat; lng = geo.lng; }
       } catch (_) {}
     }
+    const { ensurePdvGeofenceColumn } = require('../lib/geofence');
+    await ensurePdvGeofenceColumn(query);
+    const polygon = Array.isArray(d.geofence_polygon) && d.geofence_polygon.length >= 3 ? JSON.stringify(d.geofence_polygon)
+      : (d.geofence_polygon === null ? null : undefined);
     const result = await query(
-      `UPDATE pdvs SET name=$2, client_name=$3, address=$4, zip_code=$5, city=$6, state=$7, neighborhood=$8, latitude=$9, longitude=$10, radius_meters=$11, supervisor_id=$12, notes=$13, active=$14, updated_at=NOW() WHERE id=$1 RETURNING *`,
-      [req.params.id, d.name, d.client_name, d.address, d.zip_code, d.city, d.state, d.neighborhood, lat, lng, d.radius_meters, d.supervisor_id || null, d.notes, d.active !== false]
+      `UPDATE pdvs SET name=$2, client_name=$3, address=$4, zip_code=$5, city=$6, state=$7, neighborhood=$8, latitude=$9, longitude=$10, radius_meters=$11, supervisor_id=$12, notes=$13, active=$14,
+        geofence_polygon = COALESCE($15::jsonb, geofence_polygon), updated_at=NOW() WHERE id=$1 RETURNING *`,
+      [req.params.id, d.name, d.client_name, d.address, d.zip_code, d.city, d.state, d.neighborhood, lat, lng, d.radius_meters, d.supervisor_id || null, d.notes, d.active !== false, polygon ?? null]
     );
+
     res.json(result.rows[0]);
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
