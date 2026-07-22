@@ -10,15 +10,26 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSuperadmin } from "@/hooks/use-superadmin";
+import { API_URL, getAuthToken } from "@/lib/api";
 import { getNavSections } from "./Sidebar";
 import { cn } from "@/lib/utils";
 
 export function GlobalSearch() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
   const { user, modulesEnabled, pagePermissions } = useAuth();
-  const { isSuperadmin } = useSuperadmin();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = getAuthToken();
+        if (!token) return;
+        const r = await fetch(`${API_URL}/api/admin/check`, { headers: { Authorization: `Bearer ${token}` } });
+        if (r.ok) { const d = await r.json(); setIsSuperadmin(!!d.isSuperadmin); }
+      } catch {}
+    })();
+  }, []);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
