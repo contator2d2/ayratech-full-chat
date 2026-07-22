@@ -298,8 +298,36 @@ export function CameraCapture({
   const handleClose = () => {
     stopCamera();
     setCapturedImage(null);
+    setPreviewMeta(null);
     setValidationError(null);
     setIsOpen(false);
+  };
+
+  // Aplica watermark + GPS ao canvas e devolve dataURL para preview
+  const stampCanvas = async (canvas: HTMLCanvasElement) => {
+    const { lat, lng } = await getCachedGeolocation({ timeoutMs: 1500 });
+    const wmData: WatermarkData = { ...watermark, latitude: lat, longitude: lng };
+    applyWatermark(canvas, wmData);
+    return { lat, lng };
+  };
+
+  // Comprime e envia o canvas já com watermark aplicada
+  const uploadCanvas = async (canvas: HTMLCanvasElement) => {
+    const blob = await compressWebP(
+      canvas,
+      config.compression_quality,
+      config.max_file_size_kb,
+    );
+    if (!blob) {
+      toast.error("Erro ao comprimir imagem");
+      return;
+    }
+    const file = new File([blob], `photo_${Date.now()}.webp`, { type: "image/webp" });
+    const token = (customTokenGetter ? customTokenGetter() : null)
+      || localStorage.getItem('promotor_token')
+      || localStorage.getItem('auth_token');
+    const localRef = await queueUpload(file, token);
+    onCapture(localRef);
   };
 
   const processAndUpload = async (canvas: HTMLCanvasElement) => {
@@ -309,37 +337,30 @@ export function CameraCapture({
     setIsOpen(false);
 
     try {
-      // #2 — Geolocalização cacheada (sem bloquear; usa cache de 90s e timeout curto)
-      const { lat, lng } = await getCachedGeolocation({ timeoutMs: 1500 });
-
-      // Aplica watermark
-      const wmData: WatermarkData = { ...watermark, latitude: lat, longitude: lng };
-      applyWatermark(canvas, wmData);
-
-      // #3 — Compressão em Web Worker (com fallback main-thread)
-      const blob = await compressWebP(
-        canvas,
-        config.compression_quality,
-        config.max_file_size_kb,
-      );
-      if (!blob) {
-        toast.error("Erro ao comprimir imagem");
-        return;
-      }
-
-      const file = new File([blob], `photo_${Date.now()}.webp`, { type: "image/webp" });
-      const token = (customTokenGetter ? customTokenGetter() : null)
-        || localStorage.getItem('promotor_token')
-        || localStorage.getItem('auth_token');
-
-      // #1 — Upload OTIMISTA em background
-      const localRef = await queueUpload(file, token);
-      onCapture(localRef);
+      await stampCanvas(canvas);
+      await uploadCanvas(canvas);
     } catch (err: any) {
       toast.error(err.message || "Erro ao processar foto");
     } finally {
       setIsProcessing(false);
       setCapturedImage(null);
+      setPreviewMeta(null);
+    }
+  };
+
+  // Fluxo com confirmação: aplica watermark, mostra preview e aguarda "Aprovar"
+  const stampAndPreview = async (canvas: HTMLCanvasElement) => {
+    setIsProcessing(true);
+    try {
+      stopCamera();
+      const meta = await stampCanvas(canvas);
+      setPreviewMeta(meta);
+      setCapturedImage(canvas.toDataURL("image/jpeg", 0.92));
+      setIsOpen(true);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao gerar prévia");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
