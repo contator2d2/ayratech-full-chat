@@ -264,6 +264,10 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
                           <Badge className="h-5 text-[10px] bg-green-600 hover:bg-green-600">
                             <CheckCircle2 className="h-3 w-3 mr-0.5" />Total: {totalOf(item)}
                           </Badge>
+                        ) : partial ? (
+                          <Badge className="h-5 text-[10px] bg-amber-500 hover:bg-amber-500 text-white">
+                            Parcial — falta {hasVal(item.store_qty) ? 'Estoque' : 'Frente'}
+                          </Badge>
                         ) : (
                           <Badge variant="outline" className="h-5 text-[10px]">Pendente</Badge>
                         )}
