@@ -66,7 +66,18 @@ export default function MerchExecucao() {
     return getDateRange(period);
   }, [period, dateFrom, dateTo]);
 
-  const { data: liveRoutes = [] } = useLiveRoutes({ date_from: dateRange.from, date_to: dateRange.to });
+  const { data: liveRoutesAll = [] } = useLiveRoutes({ date_from: dateRange.from, date_to: dateRange.to });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const liveRoutes = useMemo(() => {
+    const s = searchTerm.trim().toLowerCase();
+    return (liveRoutesAll as any[]).filter((r: any) => {
+      if (statusFilter && r.status !== statusFilter) return false;
+      if (!s) return true;
+      return [r.promoter_name, r.pdv_name, r.pdv_city, r.pdv_state, r.brand_name, r.checklist_name]
+        .some((v: any) => v && String(v).toLowerCase().includes(s));
+    });
+  }, [liveRoutesAll, searchTerm, statusFilter]);
   const [damageFilter, setDamageFilter] = useState('');
   const { data: damages = [] } = useMerchDamages({ status: damageFilter || undefined });
   const { data: returnRequests = [] } = useReturnRequests();
