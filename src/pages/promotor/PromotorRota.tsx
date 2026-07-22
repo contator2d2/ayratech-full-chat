@@ -1446,25 +1446,40 @@ export default function PromotorRota() {
               return (
                 <>
                   <Button className="w-full h-12" onClick={() => {
+                    // Helpers para nomear categoria/marca no toast
+                    const nameFor = (catId: string, routeBrandId?: string) => {
+                      const ex = allExecutions.find((e: any) => (e.category_id || null) === (catId || null) && (!routeBrandId || (e.route_brand_id || null) === routeBrandId));
+                      const cat = ex?.category_name || 'Categoria';
+                      const rb = routeBrandId ? routeBrands.find((b: any) => b.id === routeBrandId) : null;
+                      return rb?.brand_name ? `${rb.brand_name} › ${cat}` : cat;
+                    };
                     if (!allProductsDoneGlobal) {
-                      const pendingExtra = allExecutions.filter((e: any) => e.status !== 'completed' && e.exposure_point === 'extra').length;
-                      if (pendingExtra > 0) {
-                        toast.error(`Existem ${pendingExtra} produto(s) de PONTO EXTRA pendentes de execução.`);
-                      } else {
-                        toast.error(`Ainda faltam ${totalExecsGlobal - completedExecsGlobal} produto(s) no total para concluir a rota.`);
-                      }
+                      const pendingList = allExecutions.filter((e: any) => e.status !== 'completed');
+                      const pendingExtra = pendingList.filter((e: any) => e.exposure_point === 'extra').length;
+                      const sample = pendingList.slice(0, 3).map((e: any) => {
+                        const rb = e.route_brand_id ? routeBrands.find((b: any) => b.id === e.route_brand_id) : null;
+                        return `${rb?.brand_name ? rb.brand_name + ' › ' : ''}${e.category_name || 'Categoria'} › ${e.product_name || 'Produto'}`;
+                      }).join('\n');
+                      toast.error(
+                        (pendingExtra > 0 ? `${pendingExtra} produto(s) de PONTO EXTRA pendentes. ` : '') +
+                        `Faltam ${totalExecsGlobal - completedExecsGlobal} produto(s):\n${sample}${pendingList.length > 3 ? `\n… e mais ${pendingList.length - 3}` : ''}`,
+                        { duration: 8000 }
+                      );
                       return;
                     }
                     if (!allBeforePhotosDone) {
-                      toast.error(`Existem fotos da categoria (ANTES) obrigatórias pendentes. Verifique as categorias.`);
+                      const names = globalMissingBeforePhotos.slice(0, 4).map(([, d]: [string, any]) => nameFor(d.catId, d.routeBrandId)).join('\n');
+                      toast.error(`Fotos ANTES pendentes:\n${names}${globalMissingBeforePhotos.length > 4 ? `\n… e mais ${globalMissingBeforePhotos.length - 4}` : ''}`, { duration: 8000 });
                       return;
                     }
                     if (!allAfterPhotosDone) {
-                      toast.error(`Existem fotos da categoria (DEPOIS) obrigatórias pendentes. Verifique as categorias.`);
+                      const names = globalMissingAfterPhotos.slice(0, 4).map(([, d]: [string, any]) => nameFor(d.catId, d.routeBrandId)).join('\n');
+                      toast.error(`Fotos DEPOIS pendentes:\n${names}${globalMissingAfterPhotos.length > 4 ? `\n… e mais ${globalMissingAfterPhotos.length - 4}` : ''}`, { duration: 8000 });
                       return;
                     }
                     if (!allBrandsCompleted) {
-                      toast.error(`Existem marcas que ainda não foram totalmente concluídas.`);
+                      const pendingBrands = routeBrands.filter((rb: any) => !(rb.status === 'completed' || (rb.progress_pct || 0) >= 100)).map((rb: any) => `${rb.brand_name} (${Math.round(rb.progress_pct || 0)}%)`).join('\n');
+                      toast.error(`Marcas ainda não concluídas:\n${pendingBrands}`, { duration: 8000 });
                       return;
                     }
                     if (stockCountPending > 0) {
