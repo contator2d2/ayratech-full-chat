@@ -107,20 +107,22 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
 
   const saveItem = async (idx: number) => {
     const it = items[idx];
-    if (!isComplete(it)) { toast.error('Preencha Frente e Estoque'); return; }
+    if (!hasAnyValue(it)) { toast.error('Informe Frente ou Estoque'); return; }
     updateField(idx, '_saving', true);
     try {
+      const payloadItem: any = { product_id: it.product_id, observation: it.observation ?? null };
+      if (hasVal(it.store_qty)) payloadItem.store_qty = it.store_qty;
+      if (hasVal(it.stock_qty)) payloadItem.stock_qty = it.stock_qty;
       await executeSC.mutateAsync({
         route_id: routeId, brand_id: brandId, pdv_id: pdvId, promoter_id: promoterId,
-        items: [{
-          product_id: it.product_id,
-          store_qty: it.store_qty,
-          stock_qty: it.stock_qty,
-          observation: it.observation ?? null,
-        }],
+        items: [payloadItem],
       });
-      toast.success('Produto contado ✓');
-      updateField(idx, '_expanded', false);
+      if (isComplete(it)) {
+        toast.success('Produto contado ✓');
+        updateField(idx, '_expanded', false);
+      } else {
+        toast.success('Parcial salvo — falta ' + (hasVal(it.store_qty) ? 'Estoque' : 'Frente'));
+      }
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao salvar');
     } finally {
