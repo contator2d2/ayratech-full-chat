@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, User, UserPlus, Eye, Copy, Trash2, Edit, Filter, Repeat, Sparkles, Package, RefreshCw, X, CheckCircle2, Activity, Store, Info, ChevronsUpDown, Check, AlertTriangle } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, User, UserPlus, Eye, Copy, Trash2, Edit, Filter, Repeat, Sparkles, Package, RefreshCw, X, CheckCircle2, Activity, Store, Info, ChevronsUpDown, Check, AlertTriangle, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AIRoutePlanner from "@/components/merch/AIRoutePlanner";
 import { useMerchRoutes, useCreateMerchRoute, useUpdateMerchRoute, useDeleteMerchRoute, useDuplicateMerchRoute, useBulkDeleteMerchRoutes, useBrandChecklists, useBrandPromoters, useRouteMixPreview, useRouteProducts, useAddRouteProduct, useRemoveRouteProduct, useSyncRouteProducts, useJustifyRoute, useAssignPromoter } from "@/hooks/use-merch-routes";
@@ -579,19 +579,32 @@ export default function MerchRotas() {
                   {viewRoute.is_multi_brand && viewRoute.route_brands?.length > 0 && (
                     <div className="col-span-2 space-y-1">
                       <div className="text-[10px] text-muted-foreground font-medium">Marcas da rota</div>
-                      {viewRoute.route_brands.map((rb: any) => (
-                        <div key={rb.id || rb.brand_id} className="flex items-center justify-between text-xs p-1.5 rounded bg-muted/30">
-                          <span className="font-medium">{rb.brand_name || rb.brand_id}</span>
-                          <div className="flex items-center gap-2">
-                            {rb.progress_pct != null && (
-                              <span className="text-[10px] font-mono">{Math.round(rb.progress_pct)}%</span>
-                            )}
-                            <Badge variant="outline" className="text-[9px] h-4">
-                              {rb.status === 'completed' ? '✅' : rb.status === 'in_progress' ? '🔄' : '⏳'} {rb.status || 'pending'}
-                            </Badge>
+                      {viewRoute.route_brands.map((rb: any) => {
+                        const pct = Math.round(Number(rb.progress_pct || 0));
+                        const photos = Number(rb.photos_count || 0);
+                        const routeDone = viewRoute.status === 'completed';
+                        const effectiveStatus = pct >= 100 || rb.status === 'completed' || (routeDone && pct >= 100)
+                          ? 'completed'
+                          : (pct > 0 || rb.status === 'in_progress' ? 'in_progress' : 'pending');
+                        const label = effectiveStatus === 'completed'
+                          ? 'Concluída'
+                          : effectiveStatus === 'in_progress' ? 'Em andamento' : 'Pendente';
+                        const icon = effectiveStatus === 'completed' ? '✅' : effectiveStatus === 'in_progress' ? '🔄' : '⏳';
+                        return (
+                          <div key={rb.id || rb.brand_id} className="flex items-center justify-between text-xs p-1.5 rounded bg-muted/30">
+                            <span className="font-medium truncate">{rb.brand_name || rb.brand_id}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[10px] font-mono tabular-nums">{pct}%</span>
+                              <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                <Camera className="h-3 w-3" />{photos}
+                              </span>
+                              <Badge variant="outline" className="text-[9px] h-4">
+                                {icon} {label}
+                              </Badge>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                   {!viewRoute.is_multi_brand && viewRoute.checklist_name && (
