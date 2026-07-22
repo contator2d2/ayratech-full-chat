@@ -279,7 +279,11 @@ export function useContingencyPhotoUpload() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ routeId, ...data }: any) => api<any>(`/api/merch/routes/${routeId}/contingency-photos`, { method: 'POST', body: data }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['merch-route'] }); qc.invalidateQueries({ queryKey: ['merch-routes'] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['merch-route'] });
+      qc.invalidateQueries({ queryKey: ['merch-routes'] });
+      qc.invalidateQueries({ queryKey: ['photo-book'] });
+    },
   });
 }
 
