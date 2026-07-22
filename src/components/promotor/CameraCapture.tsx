@@ -35,6 +35,8 @@ interface CameraCaptureProps {
   qualityConfig?: PhotoQualityConfig;
   allowManualUpload?: boolean;
   autoOpen?: boolean;
+  /** Se true, mostra a foto com watermark aplicada e exige "Aprovar" antes do upload. */
+  requireConfirmation?: boolean;
 }
 
 export interface PhotoQualityConfig {
