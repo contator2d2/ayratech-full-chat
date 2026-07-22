@@ -20,7 +20,7 @@ interface Props {
  * Editor de geofence poligonal. Click no mapa adiciona vértice.
  * Marcadores são arrastáveis. "Fechar" gera o polígono.
  */
-export function PdvGeofenceEditor({ value, centerLat, centerLng, radiusMeters, onChange }: Props) {
+export function PdvGeofenceEditor({ value, centerLat, centerLng, radiusMeters, onChange, onUseCentroid }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
