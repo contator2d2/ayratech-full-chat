@@ -1509,26 +1509,53 @@ router.post('/routes/:id/contingency-photos', authenticate, async (req, res) => 
       vals
     );
 
-    // Log contingency
-    await query(
-      `INSERT INTO contingency_photo_uploads (route_id, photo_id, uploaded_by, uploader_role, source, reason)
-       VALUES ($1,$2,$3,'supervisor','web',$4)`,
-      [req.params.id, photo.rows[0].id, req.userId, reason]
-    );
+    // Log contingency (best-effort — do not fail the upload if audit tables drift)
+    try {
+      await query(
+        `INSERT INTO contingency_photo_uploads (route_id, photo_id, uploaded_by, uploader_role, source, reason)
+         VALUES ($1,$2,$3,'supervisor','web',$4)`,
+        [req.params.id, photo.rows[0].id, req.userId, reason]
+      );
+    } catch (e) { logError('routes.contingency_photo.audit_contingency', e); }
 
-    // Audit log
-    await query(
-      `INSERT INTO route_edit_audit_logs (route_id, field_changed, new_value, edited_by, editor_role, source, reason, route_was_completed)
-       VALUES ($1,'photo_added',$2,$3,'supervisor','web',$4,$5)`,
-      [req.params.id, photo_url, req.userId, reason || 'Contingência operacional', route.rows[0].status === 'completed']
-    );
+    try {
+      await query(
+        `INSERT INTO route_edit_audit_logs (route_id, field_changed, new_value, edited_by, editor_role, source, reason, route_was_completed)
+         VALUES ($1,'photo_added',$2,$3,'supervisor','web',$4,$5)`,
+        [req.params.id, photo_url, req.userId, reason || 'Contingência operacional', route.rows[0].status === 'completed']
+      );
+    } catch (e) { logError('routes.contingency_photo.audit_edit', e); }
 
-    // Execution author
-    await query(
-      `INSERT INTO execution_authors (route_id, action, performed_by, performer_role, source, details)
-       VALUES ($1,'contingency_photo',$2,'supervisor','web',$3)`,
-      [req.params.id, req.userId, JSON.stringify({ photo_type, reason, captured_at: capturedTs, category_id, route_brand_id })]
-    );
+    try {
+      await query(
+        `INSERT INTO execution_authors (route_id, action, performed_by, performer_role, source, details)
+         VALUES ($1,'contingency_photo',$2,'supervisor','web',$3)`,
+        [req.params.id, req.userId, JSON.stringify({ photo_type, reason, captured_at: capturedTs, category_id, route_brand_id })]
+      );
+    } catch (e) { logError('routes.contingency_photo.author', e); }
+
+    // Mirror to live_photo_books so the Book de Fotos picks it up (best-effort)
+    try {
+      const orgRes = await query(
+        `SELECT organization_id FROM merch_routes WHERE id=$1`, [req.params.id]
+      );
+      const orgId = orgRes.rows[0]?.organization_id || route.rows[0].organization_id;
+      let brandForBook = route.rows[0].brand_id;
+      if (route_brand_id) {
+        try {
+          const rb = await query(`SELECT brand_id FROM route_brands WHERE id=$1`, [route_brand_id]);
+          if (rb.rows[0]?.brand_id) brandForBook = rb.rows[0].brand_id;
+        } catch {}
+      }
+      await query(
+        `INSERT INTO live_photo_books (organization_id, brand_id, pdv_id, route_id, category_id, product_id,
+           photo_type, photo_url, promoter_id, captured_at, upload_source)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, COALESCE($10, NOW()), 'web_contingency')`,
+        [orgId, brandForBook, route.rows[0].pdv_id, req.params.id,
+         category_id || null, product_id || null, photo_type || 'contingency',
+         photo_url, route.rows[0].promoter_id, capturedTs]
+      );
+    } catch (e) { logError('routes.contingency_photo.live_book_mirror', e); }
 
     res.json(photo.rows[0]);
   } catch (err) { logError('routes.contingency_photo', err); res.status(500).json({ error: 'Erro' }); }
