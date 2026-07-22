@@ -1,210 +1,183 @@
-# 🪜 Passo a Passo — Guia Operacional do Sistema Ayratech
+# 🪜 Passo a Passo — Sistema Ayratech (Merchandising + RH)
 
-Guia prático de uso, módulo por módulo. Para visão geral e módulos, ver [`SISTEMA.md`](../SISTEMA.md).
+Guia operacional focado em **agências de merchandising**. Para visão geral, ver [`SISTEMA.md`](../SISTEMA.md).
 
 Atualizado: **Julho/2026**.
 
 ---
 
-## 1. Primeiros passos (Admin da Organização)
+## 1. Configuração inicial da agência
 
-1. Acesse `/login` e entre com o usuário master da organização.
-2. **Configurações → Organização**: preencha nome, logo, timezone (`America/Sao_Paulo`).
-3. **Departamentos**: crie os setores (Vendas, Suporte, Cobrança, Trade, RH).
-4. **Colaboradores/Acessos**: cadastre usuários e atribua Templates de Permissão.
-5. **Conexões WhatsApp** (`/conexao`): adicione ao menos 1 conexão (Evolution / W-API / Meta Cloud) e escaneie o QR.
-6. **Marcas & Redes** (se usa Trade): cadastre em `/merch/marcas` e `/merch/redes`.
-
----
-
-## 2. Atendimento (Chat WhatsApp)
-
-1. Abra `/chat`. Conversas aparecem na coluna esquerda; use a busca global (⌘/Ctrl+K) para achar qualquer menu.
-2. Selecione uma conversa → responda com texto, emoji, áudio (mic), imagem, doc.
-3. **Notas internas**: aba lateral, invisível ao cliente.
-4. **@Mencionar** um atendente: digite `@` e escolha.
-5. **Tag**: clique no ícone de tag; use para filtrar (SLA, prioridade, tipo).
-6. **Respostas rápidas**: digite `/` no compositor.
-7. **Agendar mensagem**: clique no relógio ao lado do enviar.
-8. **Iniciar fluxo/chatbot manualmente**: menu de ações da conversa.
-9. **Transcrição**: clique no ícone em áudios recebidos (Whisper).
+1. Faça login em `/login` com o usuário admin da agência.
+2. **Configurações → Organização**: nome, logo, timezone (`America/Sao_Paulo`).
+3. **Colaboradores / Acessos**: cadastre supervisores e promotores; aplique Templates de Permissão.
+4. **Departamentos** (`/departamentos`): estruture Trade, RH, Supervisão etc.
+5. Se for usar WhatsApp para falar com marcas: `/conexao` → adicione uma conexão e escaneie o QR.
 
 ---
 
-## 3. CRM
+## 2. Cadastros de Merchandising
 
-### Negociações (Kanban)
-1. `/crm/negociacoes` → arraste cards entre etapas.
-2. Clique no card para ver detalhes, tarefas, histórico, anexos.
-3. Cor da borda indica status (SLA/quente/perdido).
+### 2.1 Redes e PDVs
+1. `/merch/redes` → cadastre a rede (Assaí, Atacadão, etc.).
+2. Adicione PDVs vinculados (endereço, código, contato).
+3. Em `/rh/pdvs`, complete lat/lng e **desenhe o polígono** de geofence (ver seção 5).
 
-### Prospects e Empresas
-1. `/crm/prospects` — leads não convertidos.
-2. `/crm/empresas` — contas ativas.
-3. Import via Excel: botão **Importar** → mapeie colunas → confirme (mapeamento `código → brand_code`, fallback UTF-8/Latin1).
+### 2.2 Marcas
+1. `/merch/marcas → Nova`.
+2. Código interno é gerado automaticamente e pode ser pesquisado.
+3. Adicione **contrato de marca** em `/merch/contratos` se houver regra comercial.
 
-### Automações de CRM
-1. `/crm/configuracoes → Automações`.
-2. Crie gatilhos por etapa/tempo/condição; agendas respeitam o fuso `America/Sao_Paulo`.
+### 2.3 Produtos
+1. `/merch/produtos → Importar` (Excel).
+2. Mapeie colunas (`codigo → brand_code`); sistema tenta UTF-8 e cai para Latin1 automaticamente.
+3. Revise e confirme.
 
----
-
-## 4. Campanhas de Disparo
-
-1. `/campanhas → Nova campanha`.
-2. Escolha conexão + lista de contatos + template.
-3. Defina delay mín/máx (recomendado: 5s–15s).
-4. Agende ou dispare imediatamente.
-5. Acompanhe métricas em tempo real; falhas logadas em `campaign_messages`.
-
----
-
-## 5. Cobrança (Asaas)
-
-1. `/cobranca → Integração`: cole a API Key Asaas e escolha sandbox/production.
-2. **Regras de notificação**: crie mensagens para "3 dias antes", "no dia", "3 dias depois", etc.
-3. **Blacklist / Pausa**: por cliente ou global — editar em `asaas_customers` via UI.
-4. **Alertas**: defina limite (`R$` e dias) para inadimplência crítica; alerta chega por email e WhatsApp.
-5. **Limite diário** de mensagens por cliente (padrão 3).
-6. Fila de cobrança em `/cobranca/fila`.
+### 2.4 Categorias e Checklists
+1. `/merch/categorias`: crie os grupos (Reposição, Ponto Extra, Preço, etc.).
+2. `/merch/checklists`: para cada categoria defina:
+   - Quantidade mínima de fotos.
+   - Se exige **Antes/Depois**.
+   - Regras de validade/saldo.
+   - Regras de **contagem** (produtos esperados).
 
 ---
 
-## 6. Merchandising / Trade
+## 3. Rotas e Agenda
 
-### Cadastros
-1. `/merch/redes` → cadastre rede e vincule PDVs (`merch_rede_pdvs`).
-2. `/merch/marcas` — código interno é auto-gerado e pesquisável.
-3. `/merch/produtos` — vincule à marca; import em lote via Excel.
-4. `/merch/categorias` e `/merch/checklists` — defina qtd mínima de fotos, validade, saldo/estoque.
-
-### Rotas & Agenda
 1. `/merch/rotas → Nova rota`.
-2. Escolha Promotor + PDV + Marcas.
-3. **Recorrência por marca**: p.ex. Marca A (Seg/Qua/Sex), Marca B (Ter/Qui).
-4. Salve.
-5. Para editar uma rota recorrente, o sistema pergunta:
-   - **Apenas esta data** ou
-   - **Esta e todas as futuras**.
-6. **Co-promotor** (apoio): botão "Adicionar promotor de apoio" na rota.
-7. **Ação em massa (superadmin)**: barra de manutenção — seleciona rotas e apaga "estas + futuras".
-
-### Contagem de Saldo (Estoque)
-1. Definir a marca com regra de contagem no `/merch/checklists`.
-2. No app, promotor entra em cada produto:
-   - Digita **Estoque** → **Salvar parcial** (badge âmbar).
-   - Volta depois, digita **Frente** → **Salvar produto (100%)** → verde.
-3. Dashboard: `/merch/contagem-dashboard`.
-4. PDF customizado (logo cliente + marca, título, data) e CSV via botão Exportar.
-5. Email automático após conclusão da rota (Programação → Contagem).
-
-### Book de Fotos
-1. `/merch/book-fotos` → filtra por PDV/marca/data.
-2. Gera PDF com logos, título, subtítulo. Link público disponível.
+2. Escolha Promotor + PDV.
+3. Selecione as Marcas atendidas nesse PDV.
+4. Para **cada marca**, marque os dias da semana em que ela deve ser executada.
+   Exemplo: Marca A = Seg/Qua/Sex; Marca B = Ter/Qui.
+5. Defina data inicial da recorrência e salve.
+6. **Editar rota recorrente**: o sistema pergunta
+   - "Apenas esta data" ou
+   - "Esta e todas as futuras".
+7. **Co-promotor de apoio**: botão dentro da rota para adicionar 2º promotor.
+8. **Manutenção em massa (superadmin)**: barra de seleção → apagar "selecionadas + futuras".
+9. Acompanhe o progresso das rotas do dia: cada marca vira 🟢 quando 100% e 🟡 com % e nº de fotos enquanto parcial.
 
 ---
 
-## 7. RH e Ponto
+## 4. Execução — passo a passo do promotor
 
-### Cadastros
-1. `/rh/colaboradores` → CPF, cargo, PDV base, dados LGPD.
-   - **Validação Facial**: seguir organização / sempre exigir / isento.
-2. `/rh/cargos`, `/rh/escalas`, `/rh/feriados`.
+1. Promotor abre o app em `promoter.ayratech.app.br` e faz login com CPF + senha.
+2. Vê a lista de PDVs do dia.
+3. Ao chegar no PDV, faz **check-in** — sistema valida geofence (polígono; fallback raio).
+4. Vê os **cards de marca** do PDV.
+5. Clica numa marca → abre a tela de **categorias** daquela marca.
+6. Toca numa categoria → **câmera abre automaticamente**.
+7. Enquadra, captura, aprova → foto salva e sobe em background.
+8. Repete até bater a quantidade mínima. Pode continuar tirando extras.
+9. Se a categoria pede **Antes/Depois**, só pode tirar "Antes" enquanto não houver nenhuma "Depois". Depois de qualquer "Depois", trava o "Antes".
+10. **Contagem de saldo** (quando exigida):
+    - Entra em cada produto, digita **Estoque** → **Salvar parcial** (fica âmbar).
+    - Depois volta na frente da gôndola, digita **Frente** → **Salvar produto (100%)** → verde.
+    - Se hoje não vai contar, marca **"Não fiz hoje"** (passa para próxima visita da semana).
+11. Ao terminar todas as marcas (100%), aparece o botão **Concluir Rota**.
+12. Se o sistema estiver configurado, dispara **email automático** com o resumo para a marca.
 
-### PDV com Geofence (polígono)
+---
+
+## 5. Geofence de PDV (polígono)
+
 1. `/rh/pdvs → editar` um PDV.
-2. Preencha Lat/Lng (ou "Gerar pelo Endereço") → mapa centraliza.
-3. Clique no mapa para desenhar o **polígono** (mín. 3 pontos); arraste os marcadores para ajustar.
-4. Botão **"Usar centro do polígono"** → preenche lat/lng automaticamente.
-5. Salvar. A partir daí check-in/ponto exige estar **dentro do polígono** (fallback: raio).
+2. Preencha Lat/Lng manualmente ou clique em **Gerar Coordenadas pelo Endereço** — o mapa centraliza.
+3. Dê zoom no satélite até ver o telhado do PDV.
+4. **Clique no mapa** para adicionar cada vértice do perímetro (mín. 3).
+5. Arraste marcadores para ajustar; botão direito remove vértice.
+6. Clique em **"Usar centro do polígono"** → preenche Lat/Lng automaticamente com o centroide.
+7. Salvar.
+8. A partir daí, check-in e ponto exigem estar **dentro do polígono**. Se o PDV não tiver polígono desenhado, cai no raio (padrão 200m).
 
-### Ponto
-1. Promotor bate ponto no app ou no Totem (`/totem`).
-2. Sistema valida biometria facial (WebGL, fallback CPU) conforme override do funcionário.
-3. **Ajuste manual**: `/rh/ponto → editar registro` → informar motivo obrigatório → flag `manual_adjustment` aparece no histórico.
+---
 
-### Holerite em lote
+## 6. Ponto e Biometria
+
+### Configurar
+1. `/rh/colaboradores → editar` o promotor.
+2. Campo **Validação Facial**:
+   - **Seguir Organização** (padrão)
+   - **Sempre Exigir**
+   - **Isento** (bypass individual)
+3. Configuração global da organização vale para quem estiver como "Seguir Organização".
+
+### Bater ponto
+- App do promotor: botão Ponto → câmera facial → valida distância euclidiana até 0.6 → registra com geofence.
+- Totem (`/totem`): promotor digita CPF ou aproxima o rosto.
+
+### Ajuste manual
+1. `/rh/ponto → editar registro`.
+2. Informe **motivo obrigatório**.
+3. Registro fica marcado com flag `manual_adjustment` no histórico e logs.
+
+---
+
+## 7. Holerite em lote
+
 1. `/rh/holerite → Importar em lote`.
-2. Selecione todos os PDFs (nome do arquivo = nome/CPF do colaborador).
-3. Revise mapeamento (ajuste linhas erradas).
-4. Confirme → distribui no app de cada promotor.
+2. Selecione **todos os PDFs** de uma vez (o nome do arquivo deve conter nome ou CPF do colaborador).
+3. Sistema mapeia automaticamente cada PDF a um colaborador.
+4. Ajuste linhas com mapeamento incorreto (dropdown).
+5. Clique em **Distribuir** — cada promotor recebe o holerite dele no app.
 
 ---
 
-## 8. App do Promotor
+## 8. Contagem de Saldo — dashboard e relatórios
 
-1. Login em `promoter.ayratech.app.br` com CPF + senha (`ayra` + 3 números + 2 letras).
-2. **Home**: rotas do dia listadas por PDV.
-3. Ao entrar num PDV, **cards de marca** aparecem:
-   - 🟢 verde = 100%
-   - 🟡 amarelo = parcial (com % e nº de fotos)
-4. Clique numa marca → **drill-down** para as categorias daquela marca.
-5. Categoria pede fotos Antes/Depois:
-   - Câmera abre automaticamente (`autoOpen`).
-   - Foto é aprovada → **salva e sobe em background** (fila concorrente).
-   - Não é possível tirar **Antes** se já existe qualquer **Depois** na categoria.
-6. Ao voltar, thumbnails aparecem imediatamente (otimista).
-7. Ao concluir 100% em todas as marcas, aparece o botão **Concluir Rota** no final da lista.
-8. **Contagem de saldo**: fluxo parcial descrito acima.
-9. **Modo offline**: fotos e chamadas ficam em IndexedDB; sincronizam ao voltar online.
-
-Detalhes técnicos do pipeline: [`promotor-upload-fotos.md`](./promotor-upload-fotos.md).
+1. `/merch/contagem-dashboard`: filtra por marca/PDV/data.
+2. Botão **PDF customizado**: escolha logo do cliente, logo da marca, título, subtítulo, data. Cada produto listado linha a linha com Estoque + Frente + Total.
+3. Botão **CSV** para export bruto.
+4. `/merch/relatorios-programacao`: agenda **envio automático** do resumo para o email da marca depois que o promotor conclui a rota.
 
 ---
 
-## 9. Portais Externos
+## 9. Book de Fotos
 
-### Portal da Rede (`/network`)
-- Login isolado. Gerencia unidades, PDVs, QR codes, requisitos de doc, aprova agências/visitas.
-
-### Portal da Agência (`/agency`)
-- Marcas, regras de acesso, folgas, pedidos à rede, dashboard.
-
-### Supermercado (`/supermarket`)
-- Usuários em `supermarket_users`, PDVs em `supermarket_units`.
-
-### Totem (`/totem`)
-- Reconhecimento facial + teclado virtual; identidade customizável por unidade.
+1. `/merch/book-fotos → Novo book`.
+2. Filtre por período, PDV, marca, categoria.
+3. Personalize logo do cliente + logo da marca + título + subtítulo.
+4. Gere o PDF e/ou compartilhe o **link público**.
 
 ---
 
-## 10. Assinatura Digital de Documentos
+## 10. Portais externos (Rede e Agência)
 
-1. `/modelos-contrato` → crie o modelo com variáveis.
-2. `/assinaturas → Novo envio` → escolha destinatário e canal.
-3. Destinatário abre link, valida OTP (SMS/WhatsApp), assina.
-4. Documento fica com **SHA-256 + carimbo GMT-3**; verificação pública em `/verificar-documento`.
+### Rede (`/network`)
+1. Login isolado da rede.
+2. Cadastra unidades e PDVs.
+3. Gera **QR codes** por PDV (colar na portaria).
+4. Define **requisitos de documentos** para agências.
+5. Aprova cadastros de agência (`/network/agency-signups`) e visitas.
 
----
-
-## 11. IA e Automações
-
-- **Fluxos** (`/fluxos`): construtor visual; gatilhos por palavra-chave, tag, webhook.
-- **Chatbots** (`/chatbots`): árvore de decisão.
-- **Agentes IA** (`/agentes-ia` / `/agentes-ia-cliente`): usam RAG (cosine_similarity no PostgreSQL) sobre a base de conhecimento.
-- **Secretária de Grupos** (`/secretaria-grupos`): resumos e follow-up automáticos.
+### Agência parceira (`/agency`)
+1. Cadastro público em `/agency/signup`.
+2. Após aprovado, gerencia marcas, folgas, regras de acesso e envia pedidos à rede.
 
 ---
 
-## 12. Deploy e Rollback
+## 11. Deploy e Rollback (para o time técnico)
 
-1. Em DEV: `./scripts/release.sh` gera imagens Docker versionadas.
-2. Copie `releases/vYYYYMMDDHHMM/` para produção.
+1. Em DEV: `./scripts/release.sh` → gera imagens Docker versionadas (ex.: `v202607221430`).
+2. Copie `releases/<versão>/` para produção.
 3. `docker load < frontend.tar && docker load < backend.tar`.
-4. `VERSION=vYYYYMMDDHHMM docker-compose up -d`.
-5. Rollback: apenas troque `VERSION` para uma versão anterior e suba de novo.
-6. Migrações SQL: aplique manualmente via `psql` os `backend/schema-*.sql` novos.
+4. `VERSION=<versão> docker-compose up -d`.
+5. Rollback: apenas troque `VERSION` para uma anterior e suba de novo.
+6. Migrações SQL: aplicar manualmente os `backend/schema-*.sql` novos via `psql`.
 
-Detalhes: [`DEPLOY.md`](../DEPLOY.md).
+Detalhes completos: [`DEPLOY.md`](../DEPLOY.md).
 
 ---
 
-## 13. Suporte a Problemas Comuns
+## 12. Problemas comuns
 
 | Sintoma | Onde olhar |
 |---------|-----------|
-| Promotor não consegue bater ponto | Geofence do PDV (`/rh/pdvs`) + override facial do colaborador (`/rh/colaboradores`) |
-| Fotos não sobem | Console do app → fila `pending_uploads` (IndexedDB); verificar rede |
-| Cobrança não dispara | `asaas_integrations.billing_paused`, `blacklist`, limite diário, regras ativas |
-| Rota "pending" mesmo concluída | Rodar recompute em `/merch/rotas`; ver progresso por marca |
-| 500 em rota do backend | Verificar `import`/`export` ESM em arquivos recentes; log `backend/src/logger.js` |
+| Promotor não consegue bater ponto | Geofence do PDV (`/rh/pdvs`) + override facial (`/rh/colaboradores`) |
+| Fotos não sobem | Fila `pending_uploads` no IndexedDB; verificar rede; ver worker de compressão |
+| Rota "pending" mesmo concluída | Recomputar em `/merch/rotas`; conferir progresso por marca |
+| Marca fica em amarelo depois de concluir tudo | Ver se falta Antes/Depois em alguma categoria |
+| Contagem some ao salvar parcial | Não deve ocorrer — `stock-count.js /execute` merge por campo. Se ocorrer, checar payload |
+| 500 em rota do backend | Verificar `import/export` ESM em arquivos recentes; `backend/src/logger.js` |
+| Coordenadas do PDV erradas | Desenhar polígono e clicar "Usar centro do polígono" |
