@@ -64,6 +64,11 @@ export function TopBar() {
         )}
       </div>
 
+      {/* Global Search */}
+      <div className="flex-1 flex justify-center max-w-md">
+        <GlobalSearch />
+      </div>
+
       {/* Right Side Controls */}
       <div className="flex items-center gap-4">
         {/* Connection Status Indicator */}
