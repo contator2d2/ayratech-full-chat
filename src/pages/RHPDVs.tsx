@@ -19,8 +19,10 @@ import { MapPin, Plus, Edit, Search, Loader2, Navigation, Upload, Download, Tras
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PDVImportDialog } from "@/components/promotor/PDVImportDialog";
+import { PdvGeofenceEditor, type PolygonPoint } from "@/components/promotor/PdvGeofenceEditor";
 
-const EMPTY_PDV = { name: '', client_name: '', address: '', address_number: '', complement: '', zip_code: '', city: '', state: '', neighborhood: '', latitude: '', longitude: '', radius_meters: 200, supervisor_id: '', notes: '', active: true };
+const EMPTY_PDV: any = { name: '', client_name: '', address: '', address_number: '', complement: '', zip_code: '', city: '', state: '', neighborhood: '', latitude: '', longitude: '', radius_meters: 200, supervisor_id: '', notes: '', active: true, geofence_polygon: null as PolygonPoint[] | null };
+
 
 function splitAddressAndNumber(address: string) {
   const normalized = String(address || '').trim().replace(/\s+/g, ' ');
