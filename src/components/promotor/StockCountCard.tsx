@@ -43,6 +43,8 @@ type ItemState = {
 
 const hasVal = (v: any) => v !== null && v !== undefined && v !== '';
 const isComplete = (i: ItemState) => hasVal(i.store_qty) && hasVal(i.stock_qty);
+const isPartial = (i: ItemState) => !isComplete(i) && (hasVal(i.store_qty) || hasVal(i.stock_qty));
+const hasAnyValue = (i: ItemState) => hasVal(i.store_qty) || hasVal(i.stock_qty);
 const totalOf = (i: ItemState) => (Number(i.store_qty) || 0) + (Number(i.stock_qty) || 0);
 
 export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId }: StockCountCardProps) {
@@ -105,19 +107,21 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
 
   const saveItem = async (idx: number) => {
     const it = items[idx];
-    if (!isComplete(it)) { toast.error('Preencha Frente e Estoque'); return; }
+    if (!hasAnyValue(it)) { toast.error('Informe Frente ou Estoque'); return; }
     updateField(idx, '_saving', true);
     try {
+      const payloadItem: any = { product_id: it.product_id, observation: it.observation ?? null };
+      if (hasVal(it.store_qty)) payloadItem.store_qty = it.store_qty;
+      if (hasVal(it.stock_qty)) payloadItem.stock_qty = it.stock_qty;
       await executeSC.mutateAsync({
         route_id: routeId, brand_id: brandId, pdv_id: pdvId, promoter_id: promoterId,
-        items: [{
-          product_id: it.product_id,
-          store_qty: it.store_qty,
-          stock_qty: it.stock_qty,
-          observation: it.observation ?? null,
-        }],
+        items: [payloadItem],
       });
-      toast.success('Produto contado ✓');
+      if (isComplete(it)) {
+        toast.success('Produto contado ✓');
+      } else {
+        toast.success('Parcial salvo — falta ' + (hasVal(it.store_qty) ? 'Estoque' : 'Frente'));
+      }
       updateField(idx, '_expanded', false);
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao salvar');
@@ -235,10 +239,11 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
               </p>
             ) : items.map((item, idx) => {
               const complete = isComplete(item);
+              const partial = isPartial(item);
               return (
                 <div
                   key={item.product_id || idx}
-                  className={`rounded-lg border ${complete ? 'border-green-500/50 bg-green-500/5' : 'bg-card'}`}
+                  className={`rounded-lg border ${complete ? 'border-green-500/50 bg-green-500/5' : partial ? 'border-amber-500/50 bg-amber-500/5' : 'bg-card'}`}
                 >
                   <button
                     type="button"
@@ -258,6 +263,10 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
                         {complete ? (
                           <Badge className="h-5 text-[10px] bg-green-600 hover:bg-green-600">
                             <CheckCircle2 className="h-3 w-3 mr-0.5" />Total: {totalOf(item)}
+                          </Badge>
+                        ) : partial ? (
+                          <Badge className="h-5 text-[10px] bg-amber-500 hover:bg-amber-500 text-white">
+                            Parcial — falta {hasVal(item.store_qty) ? 'Estoque' : 'Frente'}
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="h-5 text-[10px]">Pendente</Badge>
@@ -308,11 +317,15 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
 
                       <Button
                         size="sm" className="w-full h-9"
-                        disabled={item._saving || !isComplete(item)}
+                        disabled={item._saving || !hasAnyValue(item)}
                         onClick={() => saveItem(idx)}
                       >
                         <Save className="h-3 w-3 mr-1" />
-                        {item._saving ? 'Salvando...' : 'Salvar produto'}
+                        {item._saving
+                          ? 'Salvando...'
+                          : isComplete(item)
+                            ? 'Salvar produto (100%)'
+                            : 'Salvar parcial'}
                       </Button>
                     </div>
                   )}
