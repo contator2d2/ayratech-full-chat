@@ -1729,8 +1729,16 @@ router.get('/photo-book', authenticate, async (req, res) => {
     ) combined WHERE 1=1`;
     const params = [orgId];
     let idx = 2;
-    if (brand_id) { sql += ` AND brand_id=$${idx++}`; params.push(brand_id); }
-    if (pdv_id) { sql += ` AND pdv_id=$${idx++}`; params.push(pdv_id); }
+    if (brand_id) {
+      const arr = String(brand_id).split(',').map(s => s.trim()).filter(Boolean);
+      if (arr.length === 1) { sql += ` AND brand_id=$${idx++}`; params.push(arr[0]); }
+      else if (arr.length > 1) { sql += ` AND brand_id = ANY($${idx++}::uuid[])`; params.push(arr); }
+    }
+    if (pdv_id) {
+      const arr = String(pdv_id).split(',').map(s => s.trim()).filter(Boolean);
+      if (arr.length === 1) { sql += ` AND pdv_id=$${idx++}`; params.push(arr[0]); }
+      else if (arr.length > 1) { sql += ` AND pdv_id = ANY($${idx++}::uuid[])`; params.push(arr); }
+    }
     if (date_from) { sql += ` AND captured_at >= $${idx++}`; params.push(date_from); }
     if (date_to) { sql += ` AND captured_at <= $${idx++}`; params.push(date_to + ' 23:59:59'); }
     sql += ' ORDER BY captured_at DESC LIMIT 500';

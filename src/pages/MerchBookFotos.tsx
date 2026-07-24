@@ -6,13 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { usePhotoBook, useRotatePhoto } from "@/hooks/use-merch-routes";
 import { useBrands } from "@/hooks/use-merchandising";
 import { usePDVs } from "@/hooks/use-promotor";
 import { resolveMediaUrl } from "@/lib/media";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare, RotateCw, RotateCcw } from "lucide-react";
+import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare, RotateCw, RotateCcw, ChevronDown, X } from "lucide-react";
 import { BookEditorDialog } from "@/components/merch/BookEditorDialog";
 import { toast } from "sonner";
 
@@ -25,7 +26,7 @@ const PHOTO_TYPES: Record<string, string> = {
 
 export default function MerchBookFotos() {
   const [brandFilter, setBrandFilter] = useState('');
-  const [pdvFilter, setPdvFilter] = useState('');
+  const [pdvFilter, setPdvFilter] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   const [viewPhoto, setViewPhoto] = useState<any>(null);
@@ -37,9 +38,18 @@ export default function MerchBookFotos() {
   const { data: pdvs = [] } = usePDVs();
   const { data: photos = [], isLoading } = usePhotoBook({
     brand_id: brandFilter || undefined,
-    pdv_id: pdvFilter || undefined,
+    pdv_id: pdvFilter.length ? pdvFilter.join(',') : undefined,
     date_from: dateFrom, date_to: dateTo,
   });
+
+  const togglePdv = (id: string) => {
+    setPdvFilter(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const pdvLabel = pdvFilter.length === 0
+    ? 'Todos os PDVs'
+    : pdvFilter.length === 1
+      ? ((pdvs as any[]).find((p: any) => p.id === pdvFilter[0])?.name || '1 PDV')
+      : `${pdvFilter.length} PDVs selecionados`;
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -116,14 +126,35 @@ export default function MerchBookFotos() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex-1 min-w-[150px]">
-                <Select value={pdvFilter || '__all__'} onValueChange={v => setPdvFilter(v === '__all__' ? '' : v)}>
-                  <SelectTrigger><SelectValue placeholder="PDV" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">Todos os PDVs</SelectItem>
-                    {(pdvs as any[]).filter((p: any) => p?.id).map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              <div className="flex-1 min-w-[180px]">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between font-normal">
+                      <span className="truncate">{pdvLabel}</span>
+                      <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-0" align="start">
+                    <div className="flex items-center justify-between p-2 border-b">
+                      <span className="text-xs text-muted-foreground">
+                        {pdvFilter.length} selecionado{pdvFilter.length === 1 ? '' : 's'}
+                      </span>
+                      {pdvFilter.length > 0 && (
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setPdvFilter([])}>
+                          <X className="h-3 w-3 mr-1" /> Limpar
+                        </Button>
+                      )}
+                    </div>
+                    <div className="max-h-64 overflow-y-auto p-1">
+                      {(pdvs as any[]).filter((p: any) => p?.id).map((p: any) => (
+                        <label key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm">
+                          <Checkbox checked={pdvFilter.includes(p.id)} onCheckedChange={() => togglePdv(p.id)} />
+                          <span className="truncate">{p.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
                 <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36" />
