@@ -120,6 +120,21 @@ export default function MerchBookFotos() {
   const toggleRede = toggleIn(setRedeFilter);
   const toggleCity = toggleIn(setCityFilter);
 
+  // Accumulate distinct supervisors seen in photos (union across queries so filter list is stable)
+  useEffect(() => {
+    if (!Array.isArray(photos) || photos.length === 0) return;
+    setSupervisorsFromPhotos(prev => {
+      const map = new Map(prev.map(s => [s.id, s.name]));
+      (photos as any[]).forEach((p: any) => {
+        if (p.supervisor_id && p.supervisor_name && !map.has(p.supervisor_id)) {
+          map.set(p.supervisor_id, p.supervisor_name);
+        }
+      });
+      if (map.size === prev.length) return prev;
+      return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    });
+  }, [photos]);
+
   const buildLabel = (arr: string[], list: { id: string; name: string }[], allLabel: string, singularSuffix = '') => {
     if (arr.length === 0) return allLabel;
     if (arr.length === 1) return list.find(x => x.id === arr[0])?.name || `1${singularSuffix}`;
