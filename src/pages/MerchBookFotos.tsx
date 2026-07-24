@@ -128,7 +128,7 @@ export default function MerchBookFotos() {
   const pdvLabel = buildLabel(pdvFilter, (pdvs as any[]).map((p: any) => ({ id: p.id, name: p.name })), 'Todos os PDVs');
   const promoterLabel = buildLabel(promoterFilter, (promoters as any[]).map((p: any) => ({ id: p.id, name: p.full_name || p.name })), 'Todos os colaboradores');
   const categoryLabel = buildLabel(categoryFilter, (categories as any[]).map((c: any) => ({ id: c.id, name: c.name })), 'Todas as categorias');
-  const supervisorLabel = buildLabel(supervisorFilter, supervisors, 'Todos os supervisores');
+  const supervisorLabel = buildLabel(supervisorFilter, supervisorsFromPhotos, 'Todos os supervisores');
   const photoTypeLabel = photoTypeFilter.length === 0 ? 'Todos os tipos'
     : photoTypeFilter.length === 1 ? (PHOTO_TYPES[photoTypeFilter[0]] || photoTypeFilter[0])
     : `${photoTypeFilter.length} tipos`;
@@ -214,7 +214,7 @@ export default function MerchBookFotos() {
               </div>
               <MultiSelectPopover label={pdvLabel} values={pdvFilter} options={(pdvs as any[]).filter((p: any) => p?.id).map((p: any) => ({ id: p.id, name: p.name }))} onToggle={togglePdv} onClear={() => setPdvFilter([])} />
               <MultiSelectPopover label={promoterLabel} values={promoterFilter} options={(promoters as any[]).filter((p: any) => p?.id).map((p: any) => ({ id: p.id, name: p.full_name || p.name }))} onToggle={togglePromoter} onClear={() => setPromoterFilter([])} />
-              <MultiSelectPopover label={supervisorLabel} values={supervisorFilter} options={supervisors} onToggle={toggleSupervisor} onClear={() => setSupervisorFilter([])} />
+              <MultiSelectPopover label={supervisorLabel} values={supervisorFilter} options={supervisorsFromPhotos} onToggle={toggleSupervisor} onClear={() => setSupervisorFilter([])} />
               <MultiSelectPopover label={categoryLabel} values={categoryFilter} options={(categories as any[]).filter((c: any) => c?.id).map((c: any) => ({ id: c.id, name: c.name }))} onToggle={toggleCategory} onClear={() => setCategoryFilter([])} />
               <MultiSelectPopover label={photoTypeLabel} values={photoTypeFilter} options={Object.entries(PHOTO_TYPES).map(([id, name]) => ({ id, name }))} onToggle={togglePhotoType} onClear={() => setPhotoTypeFilter([])} />
               <MultiSelectPopover label={redeLabel} values={redeFilter} options={(redes as any[]).filter((r: any) => r?.id).map((r: any) => ({ id: r.id, name: r.name }))} onToggle={toggleRede} onClear={() => setRedeFilter([])} />
