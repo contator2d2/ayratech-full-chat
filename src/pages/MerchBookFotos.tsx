@@ -87,14 +87,8 @@ export default function MerchBookFotos() {
   const { data: categories = [] } = useCategories();
   const { data: redes = [] } = useRedes();
 
-  // Supervisors = employees that appear as supervisor_id of any promoter
-  const supervisors = useMemo(() => {
-    const map = new Map<string, string>();
-    (promoters as any[]).forEach((p: any) => {
-      if (p.supervisor_id && p.supervisor_name) map.set(p.supervisor_id, p.supervisor_name);
-    });
-    return Array.from(map, ([id, name]) => ({ id, name }));
-  }, [promoters]);
+  // Supervisors derived from photos (each row already carries supervisor_id/supervisor_name)
+  const [supervisorsFromPhotos, setSupervisorsFromPhotos] = useState<{ id: string; name: string }[]>([]);
 
   // City options derived from PDVs
   const cities = useMemo(() => {
