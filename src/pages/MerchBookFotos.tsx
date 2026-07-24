@@ -402,7 +402,8 @@ export default function MerchBookFotos() {
                   )})}
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         ))}
 
