@@ -1689,7 +1689,7 @@ router.get('/photo-book', authenticate, async (req, res) => {
   try {
     const orgRes = await query('SELECT organization_id FROM organization_members WHERE user_id=$1 LIMIT 1', [req.userId]);
     const orgId = orgRes.rows[0].organization_id;
-    const { brand_id, pdv_id, date_from, date_to } = req.query;
+    const { brand_id, pdv_id, date_from, date_to, promoter_id, category_id, photo_type, supervisor_id, rede_id, city } = req.query;
 
     // Ensure live_photo_books has upload_source column
     try { await query(`ALTER TABLE live_photo_books ADD COLUMN IF NOT EXISTS upload_source VARCHAR(20) DEFAULT 'app'`); } catch(e) {}
@@ -1702,10 +1702,15 @@ router.get('/photo-book', authenticate, async (req, res) => {
       SELECT lpb.id, lpb.organization_id, lpb.brand_id, lpb.pdv_id, lpb.route_id, lpb.category_id, lpb.product_id,
              lpb.photo_type, lpb.photo_url, lpb.promoter_id, lpb.captured_at, lpb.upload_source,
              COALESCE(lpb.rotation,0) as rotation,
-             e.full_name as promoter_name, pc.name as category_name, pr.name as product_name,
-             p.name as pdv_name, b.name as brand_name
+             e.full_name as promoter_name, e.supervisor_id as supervisor_id,
+             sv.full_name as supervisor_name,
+             pc.name as category_name, pr.name as product_name,
+             p.name as pdv_name, p.city as pdv_city, b.name as brand_name,
+             (SELECT rp_.rede_id FROM merch_rede_pdvs rp_ WHERE rp_.pdv_id=lpb.pdv_id LIMIT 1) as rede_id,
+             (SELECT rd.name FROM merch_rede_pdvs rp_ JOIN merch_redes rd ON rd.id=rp_.rede_id WHERE rp_.pdv_id=lpb.pdv_id LIMIT 1) as rede_name
       FROM live_photo_books lpb
       LEFT JOIN employees e ON e.id=lpb.promoter_id
+      LEFT JOIN employees sv ON sv.id=e.supervisor_id
       LEFT JOIN merch_categories pc ON pc.id=lpb.category_id
       LEFT JOIN merch_products pr ON pr.id=lpb.product_id
       LEFT JOIN pdvs p ON p.id=lpb.pdv_id
@@ -1715,11 +1720,16 @@ router.get('/photo-book', authenticate, async (req, res) => {
       SELECT rp.id, r.organization_id, r.brand_id, r.pdv_id, rp.route_id, rp.category_id, rp.product_id,
              rp.photo_type, rp.photo_url, r.promoter_id, COALESCE(rp.captured_at, rp.created_at) as captured_at, rp.upload_source,
              COALESCE(rp.rotation,0) as rotation,
-             e2.full_name as promoter_name, pc2.name as category_name, pr2.name as product_name,
-             p2.name as pdv_name, b2.name as brand_name
+             e2.full_name as promoter_name, e2.supervisor_id as supervisor_id,
+             sv2.full_name as supervisor_name,
+             pc2.name as category_name, pr2.name as product_name,
+             p2.name as pdv_name, p2.city as pdv_city, b2.name as brand_name,
+             (SELECT rp_.rede_id FROM merch_rede_pdvs rp_ WHERE rp_.pdv_id=r.pdv_id LIMIT 1) as rede_id,
+             (SELECT rd.name FROM merch_rede_pdvs rp_ JOIN merch_redes rd ON rd.id=rp_.rede_id WHERE rp_.pdv_id=r.pdv_id LIMIT 1) as rede_name
       FROM route_photos rp
       JOIN merch_routes r ON r.id=rp.route_id
       LEFT JOIN employees e2 ON e2.id=r.promoter_id
+      LEFT JOIN employees sv2 ON sv2.id=e2.supervisor_id
       LEFT JOIN merch_categories pc2 ON pc2.id=rp.category_id
       LEFT JOIN merch_products pr2 ON pr2.id=rp.product_id
       LEFT JOIN pdvs p2 ON p2.id=r.pdv_id
@@ -1729,16 +1739,19 @@ router.get('/photo-book', authenticate, async (req, res) => {
     ) combined WHERE 1=1`;
     const params = [orgId];
     let idx = 2;
-    if (brand_id) {
-      const arr = String(brand_id).split(',').map(s => s.trim()).filter(Boolean);
-      if (arr.length === 1) { sql += ` AND brand_id=$${idx++}`; params.push(arr[0]); }
-      else if (arr.length > 1) { sql += ` AND brand_id = ANY($${idx++}::uuid[])`; params.push(arr); }
-    }
-    if (pdv_id) {
-      const arr = String(pdv_id).split(',').map(s => s.trim()).filter(Boolean);
-      if (arr.length === 1) { sql += ` AND pdv_id=$${idx++}`; params.push(arr[0]); }
-      else if (arr.length > 1) { sql += ` AND pdv_id = ANY($${idx++}::uuid[])`; params.push(arr); }
-    }
+    const applyList = (col, val, isUuid = true) => {
+      const arr = String(val).split(',').map(s => s.trim()).filter(Boolean);
+      if (arr.length === 1) { sql += ` AND ${col}=$${idx++}`; params.push(arr[0]); }
+      else if (arr.length > 1) { sql += ` AND ${col} = ANY($${idx++}${isUuid ? '::uuid[]' : '::text[]'})`; params.push(arr); }
+    };
+    if (brand_id) applyList('brand_id', brand_id);
+    if (pdv_id) applyList('pdv_id', pdv_id);
+    if (promoter_id) applyList('promoter_id', promoter_id);
+    if (category_id) applyList('category_id', category_id);
+    if (supervisor_id) applyList('supervisor_id', supervisor_id);
+    if (rede_id) applyList('rede_id', rede_id);
+    if (photo_type) applyList('photo_type', photo_type, false);
+    if (city) applyList('pdv_city', city, false);
     if (date_from) { sql += ` AND captured_at >= $${idx++}`; params.push(date_from); }
     if (date_to) { sql += ` AND captured_at <= $${idx++}`; params.push(date_to + ' 23:59:59'); }
     sql += ' ORDER BY captured_at DESC LIMIT 500';
