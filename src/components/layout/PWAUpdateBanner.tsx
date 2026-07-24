@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Download, Sparkles, CheckCircle2 } from "lucide-react";
+import { RefreshCw, Download, Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { db } from "@/lib/offline-db";
 
 const isInIframe = (() => {
   try {
@@ -70,7 +71,24 @@ export function PWAUpdateBanner() {
     return () => clearInterval(interval);
   }, [checkVersion]);
 
+  const [pendingCount, setPendingCount] = useState(0);
+  const [confirmForce, setConfirmForce] = useState(false);
+
   const handleUpdate = useCallback(async () => {
+    // Bloqueia atualização se houver itens pendentes no IndexedDB — evita perda de fotos.
+    try {
+      const [u, c] = await Promise.all([
+        db.pending_uploads.count(),
+        db.pending_api_calls.count(),
+      ]);
+      const total = u + c;
+      if (total > 0 && !confirmForce) {
+        setPendingCount(total);
+        setConfirmForce(true);
+        return;
+      }
+    } catch {}
+
     setUpdating(true);
     setProgress(0);
 
@@ -110,7 +128,7 @@ export function PWAUpdateBanner() {
       console.error("[PWA] Update failed:", err);
       window.location.reload();
     }
-  }, [newVersion]);
+  }, [newVersion, confirmForce]);
 
   if (!showPopup) return null;
 
