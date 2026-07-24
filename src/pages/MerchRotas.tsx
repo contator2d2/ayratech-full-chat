@@ -956,14 +956,16 @@ function RouteFormDialog({ open, route, onClose, pdvs, employees, onSave, onDele
   const [pdvIds, setPdvIds] = useState<string[]>([]);
   const isCreating = !route;
   const { data: brands = [] } = useBrands();
-  const { data: pdvBrands = [] } = usePdvBrands(form.pdv_id);
+  // Em criação, usa o primeiro PDV selecionado para o filtro de marcas do PDV
+  const primaryPdvId = isCreating ? (pdvIds[0] || '') : (form.pdv_id || '');
+  const { data: pdvBrands = [] } = usePdvBrands(primaryPdvId);
   
   // Use currently configuring brand, or first brand, or form brand
   const activeBrandId = configuringBrandId || (multiBrands.length > 0 ? multiBrands[0].brand_id : form.brand_id);
   const { data: checklists = [] } = useBrandChecklists(activeBrandId);
   const { data: brandPromoters = [] } = useBrandPromoters(activeBrandId);
 
-  const { data: mixPreview = [] } = useRouteMixPreview(form.pdv_id, activeBrandId);
+  const { data: mixPreview = [] } = useRouteMixPreview(primaryPdvId, activeBrandId);
   const { data: routeProducts = [] } = useRouteProducts(route?.id);
   const addProduct = useAddRouteProduct();
   const removeProduct = useRemoveRouteProduct();
