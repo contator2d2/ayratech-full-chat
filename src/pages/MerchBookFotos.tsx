@@ -25,7 +25,46 @@ const PHOTO_TYPES: Record<string, string> = {
   stock: 'Estoque', shelf: 'Prateleira', extra_point: 'Ponto Extra',
   damage: 'Avaria', expiry: 'Validade', contingency: 'Contingência',
   rupture: 'Ruptura',
+  rupture: 'Ruptura',
 };
+
+function MultiSelectPopover({ label, values, options, onToggle, onClear }: { label: string; values: string[]; options: { id: string; name: string }[]; onToggle: (id: string) => void; onClear: () => void }) {
+  return (
+    <div className="flex-1 min-w-[170px]">
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="w-full justify-between font-normal">
+            <span className="truncate">{label}</span>
+            <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 p-0" align="start">
+          <div className="flex items-center justify-between p-2 border-b">
+            <span className="text-xs text-muted-foreground">
+              {values.length} selecionado{values.length === 1 ? '' : 's'}
+            </span>
+            {values.length > 0 && (
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onClear}>
+                <X className="h-3 w-3 mr-1" /> Limpar
+              </Button>
+            )}
+          </div>
+          <div className="max-h-64 overflow-y-auto p-1">
+            {options.length === 0 && (
+              <div className="px-2 py-3 text-xs text-muted-foreground text-center">Nenhuma opção</div>
+            )}
+            {options.map((o) => (
+              <label key={o.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm">
+                <Checkbox checked={values.includes(o.id)} onCheckedChange={() => onToggle(o.id)} />
+                <span className="truncate">{o.name}</span>
+              </label>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
 
 export default function MerchBookFotos() {
   const [brandFilter, setBrandFilter] = useState('');
