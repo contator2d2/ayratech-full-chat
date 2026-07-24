@@ -1179,50 +1179,124 @@ function RouteFormDialog({ open, route, onClose, pdvs, employees, onSave, onDele
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Promotor *</Label>
-              <Select value={form.promoter_id || ''} onValueChange={v => setForm({ ...form, promoter_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {(sortedEmployees || []).filter((e: any) => e?.id).map((e: any) => {
-                    const isLinked = brandPromoters.some((bp: any) => bp.employee_id === e.id);
-                    return <SelectItem key={e.id} value={e.id}>{e.full_name}{isLinked ? ' ⭐' : ''}</SelectItem>;
-                  })}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs">Promotor(es) *</Label>
+              {isCreating ? (
+                <Popover open={promotersOpen} onOpenChange={(o) => { setPromotersOpen(o); if (!o) setPromoterSearch(''); }}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="w-full justify-between">
+                      <span className="truncate">
+                        {promoterIds.length === 0
+                          ? 'Selecione promotores'
+                          : promoterIds.length === 1
+                            ? (employees.find((e: any) => e.id === promoterIds[0])?.full_name || '1 promotor')
+                            : `${promoterIds.length} promotores`}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[360px] p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput placeholder="Buscar promotor..." value={promoterSearch} onValueChange={setPromoterSearch} />
+                      <CommandList>
+                        <CommandEmpty>Nenhum promotor encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {(sortedEmployees || [])
+                            .filter((e: any) => e?.id && (e.full_name || '').toLowerCase().includes(promoterSearch.toLowerCase()))
+                            .map((e: any) => {
+                              const isLinked = brandPromoters.some((bp: any) => bp.employee_id === e.id);
+                              const checked = promoterIds.includes(e.id);
+                              return (
+                                <CommandItem key={e.id} value={e.full_name} onSelect={() => {
+                                  setPromoterIds(prev => prev.includes(e.id) ? prev.filter(x => x !== e.id) : [...prev, e.id]);
+                                }}>
+                                  <Check className={cn("mr-2 h-4 w-4", checked ? "opacity-100" : "opacity-0")} />
+                                  <span>{e.full_name}{isLinked ? ' ⭐' : ''}</span>
+                                </CommandItem>
+                              );
+                            })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <Select value={form.promoter_id || ''} onValueChange={v => setForm({ ...form, promoter_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {(sortedEmployees || []).filter((e: any) => e?.id).map((e: any) => {
+                      const isLinked = brandPromoters.some((bp: any) => bp.employee_id === e.id);
+                      return <SelectItem key={e.id} value={e.id}>{e.full_name}{isLinked ? ' ⭐' : ''}</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+              {isCreating && promoterIds.length > 1 && (
+                <p className="text-[10px] text-muted-foreground mt-1">Uma rota será criada para cada promotor selecionado.</p>
+              )}
             </div>
             <div>
-              <Label className="text-xs">PDV *</Label>
-              <Popover open={pdvOpen} onOpenChange={setPdvOpen}>
+              <Label className="text-xs">PDV(s) *</Label>
+              <Popover open={pdvOpen} onOpenChange={(o) => { setPdvOpen(o); if (!o) setPdvSearch(''); }}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" role="combobox" aria-expanded={pdvOpen} className="w-full justify-between">
                     <span className="truncate">
-                      {form.pdv_id ? pdvs.find((p: any) => p.id === form.pdv_id)?.name || "PDV" : "Selecione o PDV"}
+                      {isCreating
+                        ? (pdvIds.length === 0
+                            ? 'Selecione o(s) PDV(s)'
+                            : pdvIds.length === 1
+                              ? (pdvs.find((p: any) => p.id === pdvIds[0])?.name || '1 PDV')
+                              : `${pdvIds.length} PDVs`)
+                        : (form.pdv_id ? pdvs.find((p: any) => p.id === form.pdv_id)?.name || "PDV" : "Selecione o PDV")}
                     </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[400px] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Buscar PDV..." />
+                  <Command shouldFilter={false}>
+                    <CommandInput placeholder="Buscar PDV..." value={pdvSearch} onValueChange={setPdvSearch} />
                     <CommandList>
                       <CommandEmpty>Nenhum PDV encontrado.</CommandEmpty>
                       <CommandGroup>
-                        {(pdvs || []).map((p: any) => (
-                          <CommandItem key={p.id} value={p.name} onSelect={() => { setForm({ ...form, pdv_id: p.id }); setPdvOpen(false); }}>
-                            <Check className={cn("mr-2 h-4 w-4", form.pdv_id === p.id ? "opacity-100" : "opacity-0")} />
-                            <div className="flex flex-col">
-                              <span>{p.name}</span>
-                              <span className="text-[10px] text-muted-foreground">{p.city} - {p.state}</span>
-                            </div>
-                          </CommandItem>
-                        ))}
+                        {(pdvs || [])
+                          .filter((p: any) => (p.name || '').toLowerCase().includes(pdvSearch.toLowerCase()) || (p.city || '').toLowerCase().includes(pdvSearch.toLowerCase()))
+                          .map((p: any) => {
+                            const checked = isCreating ? pdvIds.includes(p.id) : form.pdv_id === p.id;
+                            return (
+                              <CommandItem key={p.id} value={p.name} onSelect={() => {
+                                if (isCreating) {
+                                  setPdvIds(prev => prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id]);
+                                } else {
+                                  setForm({ ...form, pdv_id: p.id });
+                                  setPdvOpen(false);
+                                }
+                              }}>
+                                <Check className={cn("mr-2 h-4 w-4", checked ? "opacity-100" : "opacity-0")} />
+                                <div className="flex flex-col">
+                                  <span>{p.name}</span>
+                                  <span className="text-[10px] text-muted-foreground">{p.city} - {p.state}</span>
+                                </div>
+                              </CommandItem>
+                            );
+                          })}
                       </CommandGroup>
                     </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
+              {isCreating && pdvIds.length > 1 && (
+                <p className="text-[10px] text-muted-foreground mt-1">Uma rota será criada para cada PDV selecionado.</p>
+              )}
             </div>
           </div>
+
+          {isCreating && promoterIds.length * pdvIds.length > 1 && multiBrands.length > 0 && (
+            <div className="flex items-center gap-2 text-[11px] p-2 rounded-md border bg-primary/5 text-primary">
+              <Info className="h-3.5 w-3.5" />
+              <span>
+                Serão criadas <b>{promoterIds.length * pdvIds.length}</b> rotas ({promoterIds.length} promotor{promoterIds.length > 1 ? 'es' : ''} × {pdvIds.length} PDV{pdvIds.length > 1 ? 's' : ''}), cada uma com {multiBrands.length} marca{multiBrands.length > 1 ? 's' : ''}.
+              </span>
+            </div>
+          )}
 
           <div className="space-y-3 p-3 rounded-lg border bg-muted/30">
             <div className="flex items-center justify-between">
