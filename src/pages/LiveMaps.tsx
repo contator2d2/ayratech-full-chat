@@ -100,9 +100,27 @@ function LiveMapComponent({ employees, pdvs, regions, showPDVs, showPromoters, s
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     mapRef.current = L.map(containerRef.current).setView([-14.235, -51.9253], 4);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap',
-    }).addTo(mapRef.current);
+
+    const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap', maxZoom: 19,
+    });
+    const satellite = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: 'Tiles © Esri', maxZoom: 19 }
+    );
+    const labels = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      { attribution: 'Labels © Esri', maxZoom: 19 }
+    );
+    const hybrid = L.layerGroup([satellite, labels]);
+
+    streets.addTo(mapRef.current);
+    L.control.layers(
+      { 'Mapa': streets, 'Satélite': satellite, 'Híbrido': hybrid },
+      undefined,
+      { position: 'topright', collapsed: false }
+    ).addTo(mapRef.current);
+
     layersRef.current.addTo(mapRef.current);
 
     // Add pulse animation CSS
