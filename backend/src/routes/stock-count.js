@@ -235,7 +235,21 @@ router.post('/rules', authenticate, async (req, res) => {
       require_photo, require_justification,
       allow_postpone, postpone_limit_type, block_route_completion, selected_products,
       notify_on_complete, notification_emails,
+      // apply_scope: 'none' (default) | 'future_only' (from next week) | 'current_and_future' (from current week Monday)
+      apply_scope,
     } = req.body;
+
+    // Load previous rule state (for change-detection) BEFORE upserting.
+    let prevRule = null;
+    if (id) {
+      prevRule = (await query('SELECT * FROM stock_count_rules WHERE id=$1', [id])).rows[0] || null;
+    } else if (brand_id) {
+      prevRule = (await query(
+        'SELECT * FROM stock_count_rules WHERE organization_id=$1 AND brand_id=$2',
+        [orgId, brand_id]
+      )).rows[0] || null;
+    }
+
     const cols = {
       brand_id: brand_id || null,
       enabled: enabled ?? false,
@@ -279,7 +293,42 @@ router.post('/rules', authenticate, async (req, res) => {
            updated_at=NOW()
          RETURNING *`, vals);
     }
-    res.json(result.rows[0]);
+    const saved = result.rows[0];
+
+    // Detect if weekday configuration changed (weekdays or pdv_overrides)
+    const normalizeJson = (v) => {
+      if (!v) return null;
+      try { return JSON.stringify(typeof v === 'string' ? JSON.parse(v) : v); } catch { return String(v); }
+    };
+    const wdChanged = normalizeJson(prevRule?.weekdays) !== normalizeJson(saved.weekdays)
+      || normalizeJson(prevRule?.pdv_overrides) !== normalizeJson(saved.pdv_overrides)
+      || (prevRule?.enabled !== saved.enabled);
+
+    // Apply scope: clean pending executions so they get recreated on-demand under new rules
+    let cleaned = 0;
+    if (wdChanged && apply_scope && apply_scope !== 'none' && saved.brand_id) {
+      const now = new Date();
+      const dow = (now.getDay() + 6) % 7; // 0=Mon..6=Sun
+      const currentMonday = new Date(now); currentMonday.setDate(now.getDate() - dow); currentMonday.setHours(0,0,0,0);
+      const nextMonday = new Date(currentMonday); nextMonday.setDate(currentMonday.getDate() + 7);
+      const scopeStart = apply_scope === 'current_and_future' ? currentMonday : nextMonday;
+      const scopeStartStr = formatLocalDate(scopeStart);
+      // Only delete truly pending executions (never started, no items collected).
+      const del = await query(
+        `DELETE FROM stock_count_executions
+         WHERE organization_id=$1 AND brand_id=$2
+           AND status='pending'
+           AND COALESCE(completed_items,0) = 0
+           AND started_at IS NULL
+           AND (week_start >= $3 OR (week_start IS NULL AND created_at >= $3::timestamptz))
+         RETURNING id`,
+        [orgId, saved.brand_id, scopeStartStr]
+      );
+      cleaned = del.rowCount || 0;
+      logInfo('stock-count.rules.apply_scope', { orgId, brand_id: saved.brand_id, apply_scope, scopeStartStr, cleaned });
+    }
+
+    res.json({ ...saved, _cleaned_executions: cleaned, _wd_changed: wdChanged });
   } catch (err) { logError('stock-count.rules.upsert', err); res.status(500).json({ error: 'Erro' }); }
 });
 
