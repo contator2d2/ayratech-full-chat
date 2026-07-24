@@ -32,17 +32,38 @@ export default function MerchAuditoria() {
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
-  const [filterPromoter, setFilterPromoter] = useState('');
+  const [filterPromoters, setFilterPromoters] = useState<string[]>([]);
+  const [promoterSearch, setPromoterSearch] = useState('');
+  const [promoterOpen, setPromoterOpen] = useState(false);
 
-  const { data: routes = [] } = useMerchRoutes({ date_from: dateFrom, date_to: dateTo, promoter_id: filterPromoter || undefined });
+  const { data: routes = [] } = useMerchRoutes({ date_from: dateFrom, date_to: dateTo });
   const { data: auditLogs = [] } = useRouteAuditLogs(selectedRouteId || undefined);
   const { data: authors = [] } = useRouteAuthors(selectedRouteId || undefined);
   const { data: assignHistory = [] } = useRouteAssignmentHistory(selectedRouteId || undefined);
   const { data: employees = [] } = useEmployees();
   const { data: brands = [] } = useBrands();
 
-  // Routes with audit events
-  const routesWithEdits = (routes as any[]).filter((r: any) => r.status === 'completed' || r.has_edits);
+  const filteredRoutes = useMemo(() => {
+    if (!filterPromoters.length) return routes as any[];
+    return (routes as any[]).filter((r: any) => filterPromoters.includes(r.promoter_id));
+  }, [routes, filterPromoters]);
+
+  const filteredEmployees = useMemo(() => {
+    const q = promoterSearch.trim().toLowerCase();
+    const list = (employees as any[]).filter((e: any) => e?.id);
+    if (!q) return list;
+    return list.filter((e: any) => (e.full_name || '').toLowerCase().includes(q));
+  }, [employees, promoterSearch]);
+
+  const togglePromoter = (id: string) => {
+    setFilterPromoters(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const promoterLabel = filterPromoters.length === 0
+    ? 'Todos os promotores'
+    : filterPromoters.length === 1
+      ? ((employees as any[]).find((e: any) => e.id === filterPromoters[0])?.full_name || '1 selecionado')
+      : `${filterPromoters.length} selecionados`;
 
   return (
     <MainLayout>
@@ -51,14 +72,45 @@ export default function MerchAuditoria() {
         <Card>
           <CardContent className="pt-4">
             <div className="flex flex-wrap gap-3 items-end">
-              <div className="flex-1 min-w-[150px]">
-                <Select value={filterPromoter || '__all__'} onValueChange={v => setFilterPromoter(v === '__all__' ? '' : v)}>
-                  <SelectTrigger><SelectValue placeholder="Promotor" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">Todos</SelectItem>
-                    {(employees as any[]).filter((e: any) => e?.id).map((e: any) => <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              <div className="flex-1 min-w-[220px]">
+                <Popover open={promoterOpen} onOpenChange={setPromoterOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between font-normal">
+                      <span className="truncate">{promoterLabel}</span>
+                      <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[320px] p-0" align="start">
+                    <div className="p-2 border-b flex items-center gap-2">
+                      <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <Input
+                        placeholder="Digite o nome do promotor..."
+                        value={promoterSearch}
+                        onChange={e => setPromoterSearch(e.target.value)}
+                        className="h-8 border-0 focus-visible:ring-0 px-1"
+                        autoFocus
+                      />
+                      {filterPromoters.length > 0 && (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setFilterPromoters([])}>
+                          <X className="h-3 w-3 mr-1" />Limpar
+                        </Button>
+                      )}
+                    </div>
+                    <div className="max-h-72 overflow-y-auto py-1">
+                      {filteredEmployees.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">Nenhum promotor encontrado</p>
+                      ) : filteredEmployees.map((e: any) => (
+                        <label key={e.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted cursor-pointer text-sm">
+                          <Checkbox
+                            checked={filterPromoters.includes(e.id)}
+                            onCheckedChange={() => togglePromoter(e.id)}
+                          />
+                          <span className="truncate">{e.full_name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div><Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36" /></div>
               <div><Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36" /></div>
