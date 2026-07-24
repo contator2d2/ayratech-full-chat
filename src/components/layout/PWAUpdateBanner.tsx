@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Download, Sparkles, CheckCircle2 } from "lucide-react";
+import { RefreshCw, Download, Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { db } from "@/lib/offline-db";
 
 const isInIframe = (() => {
   try {
@@ -70,7 +71,24 @@ export function PWAUpdateBanner() {
     return () => clearInterval(interval);
   }, [checkVersion]);
 
+  const [pendingCount, setPendingCount] = useState(0);
+  const [confirmForce, setConfirmForce] = useState(false);
+
   const handleUpdate = useCallback(async () => {
+    // Bloqueia atualização se houver itens pendentes no IndexedDB — evita perda de fotos.
+    try {
+      const [u, c] = await Promise.all([
+        db.pending_uploads.count(),
+        db.pending_api_calls.count(),
+      ]);
+      const total = u + c;
+      if (total > 0 && !confirmForce) {
+        setPendingCount(total);
+        setConfirmForce(true);
+        return;
+      }
+    } catch {}
+
     setUpdating(true);
     setProgress(0);
 
@@ -110,7 +128,7 @@ export function PWAUpdateBanner() {
       console.error("[PWA] Update failed:", err);
       window.location.reload();
     }
-  }, [newVersion]);
+  }, [newVersion, confirmForce]);
 
   if (!showPopup) return null;
 
@@ -156,19 +174,36 @@ export function PWAUpdateBanner() {
           </div>
         )}
 
+        {!updating && !done && confirmForce && (
+          <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-foreground">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-destructive">Você tem {pendingCount} item(ns) pendente(s) de envio.</strong>
+                <p className="mt-1 text-muted-foreground">
+                  Se atualizar agora essas fotos podem ser perdidas. Conecte-se ao Wi-Fi ou 4G e aguarde a sincronização terminar antes de atualizar.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {!updating && !done && (
           <div className="flex flex-col gap-2 mt-5">
-            <Button onClick={handleUpdate} className="w-full gap-2">
+            <Button
+              onClick={handleUpdate}
+              className={cn("w-full gap-2", confirmForce && "bg-destructive text-destructive-foreground hover:bg-destructive/90")}
+            >
               <Download className="h-4 w-4" />
-              Atualizar agora
+              {confirmForce ? "Atualizar mesmo assim" : "Atualizar agora"}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               className="text-muted-foreground"
-              onClick={() => setShowPopup(false)}
+              onClick={() => { setShowPopup(false); setConfirmForce(false); }}
             >
-              Depois
+              {confirmForce ? "Cancelar e sincronizar depois" : "Depois"}
             </Button>
           </div>
         )}

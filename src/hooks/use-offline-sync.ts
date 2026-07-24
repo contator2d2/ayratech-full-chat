@@ -65,6 +65,11 @@ export function useOfflineSync() {
     setIsSyncing(true);
 
     try {
+    // Recupera itens travados em 'uploading'/'processing' de execuções anteriores
+    // e reprocessa também os 'failed' — retry automático a cada sync.
+    await db.pending_uploads.where('status').anyOf('failed', 'uploading').modify({ status: 'pending' });
+    await db.pending_api_calls.where('status').anyOf('failed', 'processing').modify({ status: 'pending' });
+
     const pendingUploads = await db.pending_uploads.where('status').equals('pending').toArray();
     const pendingCalls = await db.pending_api_calls.where('status').equals('pending').toArray();
 
@@ -288,6 +293,23 @@ export function useOfflineSync() {
     if (isOnline) {
       sync();
     }
+  }, [isOnline, sync]);
+
+  // Retry periódico enquanto houver pendências e o app estiver online.
+  // Evita a situação em que o promotor tira fotos, a rede oscila e os itens
+  // ficam parados com status='failed' até o próximo evento 'online'.
+  useEffect(() => {
+    if (!isOnline) return;
+    const interval = setInterval(async () => {
+      try {
+        const [u, c] = await Promise.all([
+          db.pending_uploads.count(),
+          db.pending_api_calls.count(),
+        ]);
+        if ((u + c) > 0) sync();
+      } catch {}
+    }, 30000);
+    return () => clearInterval(interval);
   }, [isOnline, sync]);
 
   return { isOnline, isSyncing, queueUpload, queueApiCall, sync, getLocalFileUrl };

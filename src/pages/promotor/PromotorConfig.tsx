@@ -15,9 +15,15 @@ import { FaceCaptureDialog } from "@/components/facial-recognition/FaceCaptureDi
 import { FaceVerifyDialog } from "@/components/facial-recognition/FaceVerifyDialog";
 import { resolveMediaUrl } from "@/lib/media";
 import { canInstallPWA, installPWA, isPWAInstalled } from "@/lib/pwa";
+import { db } from "@/lib/offline-db";
+import { useOfflineSync } from "@/hooks/use-offline-sync";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export default function PromotorConfig() {
   const [updating, setUpdating] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [confirmUpdateOpen, setConfirmUpdateOpen] = useState(false);
+  const { sync, isSyncing } = useOfflineSync();
   const { data: settings } = usePromotorSettings();
   const updateSettings = usePromotorUpdateSettings();
   const changePassword = usePromotorChangePassword();
@@ -120,7 +126,43 @@ export default function PromotorConfig() {
     }
   };
 
-  const handleForceUpdate = async () => {
+  const checkPending = async () => {
+    const [u, c] = await Promise.all([
+      db.pending_uploads.count(),
+      db.pending_api_calls.count(),
+    ]);
+    return u + c;
+  };
+
+  const handleForceUpdateClick = async () => {
+    const total = await checkPending();
+    setPendingCount(total);
+    if (total > 0) {
+      setConfirmUpdateOpen(true);
+      return;
+    }
+    doForceUpdate();
+  };
+
+  const handleTrySyncFirst = async () => {
+    setConfirmUpdateOpen(false);
+    toast({ title: 'Tentando enviar itens pendentes...', description: 'Aguarde alguns segundos e verifique novamente.' });
+    try {
+      await sync();
+      const remaining = await checkPending();
+      if (remaining === 0) {
+        toast({ title: '✅ Tudo sincronizado!', description: 'Agora é seguro atualizar.' });
+      } else {
+        setPendingCount(remaining);
+        setConfirmUpdateOpen(true);
+      }
+    } catch (err: any) {
+      toast({ title: 'Falha ao sincronizar', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const doForceUpdate = async () => {
+    setConfirmUpdateOpen(false);
     setUpdating(true);
     try {
       if ('serviceWorker' in navigator) {
@@ -138,6 +180,7 @@ export default function PromotorConfig() {
       if (token) localStorage.setItem('promotor_token', token);
       if (emp) localStorage.setItem('promotor_employee', emp);
       if (thm) localStorage.setItem('promotor-theme', thm);
+      // IMPORTANTE: não apagamos IndexedDB (AyraOfflineDB) — fotos pendentes ficam preservadas.
       toast({ title: '✅ Sistema atualizado!', description: 'Recarregando...' });
       setTimeout(() => window.location.reload(), 1000);
     } catch (err: any) {
@@ -327,7 +370,7 @@ export default function PromotorConfig() {
           <CardHeader className="p-3 pb-1"><CardTitle className="text-sm flex items-center gap-2"><RefreshCw className="h-4 w-4" /> Atualizar Sistema</CardTitle></CardHeader>
           <CardContent className="p-3 pt-0 space-y-2">
             <p className="text-xs text-muted-foreground">Limpa o cache do navegador, service workers e recarrega o app com a versão mais recente.</p>
-            <Button onClick={handleForceUpdate} disabled={updating} variant="outline" size="sm" className="w-full gap-2">
+            <Button onClick={handleForceUpdateClick} disabled={updating} variant="outline" size="sm" className="w-full gap-2">
               {updating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {updating ? 'Atualizando...' : 'Atualizar Agora'}
             </Button>
@@ -376,6 +419,33 @@ export default function PromotorConfig() {
           onResult={handleFaceVerified}
         />
       )}
+
+      <AlertDialog open={confirmUpdateOpen} onOpenChange={setConfirmUpdateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>⚠️ Você tem {pendingCount} item(ns) pendente(s)</AlertDialogTitle>
+            <AlertDialogDescription>
+              Existem fotos ou envios que ainda não foram sincronizados com o servidor.
+              Se você atualizar agora, esses itens podem ser perdidos.
+              <br /><br />
+              Recomendamos tentar sincronizar primeiro. Verifique se está online (Wi-Fi ou 4G) antes de continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button onClick={handleTrySyncFirst} disabled={isSyncing} className="w-full">
+              {isSyncing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Tentar sincronizar agora
+            </Button>
+            <AlertDialogCancel className="w-full mt-0">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={doForceUpdate}
+              className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Atualizar mesmo assim (perder pendentes)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PromotorLayout>
   );
 }
