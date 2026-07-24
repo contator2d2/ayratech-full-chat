@@ -139,6 +139,30 @@ export default function MerchRotas() {
   };
 
   const handleSaveIntent = (data: any) => {
+    // Suporte a criação em lote: promotor(es) x PDV(s)
+    if (Array.isArray(data) && !selectedRoute?.id) {
+      const payloads = data.map((d: any) => ({ ...d, brands: d.brands || [] }));
+      let ok = 0, fail = 0;
+      let done = 0;
+      const total = payloads.length;
+      payloads.forEach((p) => {
+        createRoute.mutate(p, {
+          onSuccess: () => { ok++; },
+          onError: () => { fail++; },
+          onSettled: () => {
+            done++;
+            if (done === total) {
+              if (fail === 0) toast.success(`${ok} rota(s) criada(s)`);
+              else toast.warning(`${ok} criada(s), ${fail} com erro`);
+              setShowCreate(false);
+              setSelectedRoute(null);
+            }
+          },
+        });
+      });
+      return;
+    }
+
     // Garantir que as marcas estejam no payload
     const finalData = {
       ...data,
