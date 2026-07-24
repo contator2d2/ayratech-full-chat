@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { usePhotoBook, useRotatePhoto } from "@/hooks/use-merch-routes";
-import { useBrands } from "@/hooks/use-merchandising";
+import { useBrands, useCategories } from "@/hooks/use-merchandising";
 import { usePDVs } from "@/hooks/use-promotor";
+import { usePromoters } from "@/hooks/use-access-control";
+import { useRedes } from "@/hooks/use-price-research";
 import { resolveMediaUrl } from "@/lib/media";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare, RotateCw, RotateCcw, ChevronDown, X } from "lucide-react";
@@ -22,11 +24,56 @@ const PHOTO_TYPES: Record<string, string> = {
   category_before: 'Antes (Categoria)', category_after: 'Depois (Categoria)',
   stock: 'Estoque', shelf: 'Prateleira', extra_point: 'Ponto Extra',
   damage: 'Avaria', expiry: 'Validade', contingency: 'Contingência',
+  rupture: 'Ruptura',
 };
+
+function MultiSelectPopover({ label, values, options, onToggle, onClear }: { label: string; values: string[]; options: { id: string; name: string }[]; onToggle: (id: string) => void; onClear: () => void }) {
+  return (
+    <div className="flex-1 min-w-[170px]">
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="w-full justify-between font-normal">
+            <span className="truncate">{label}</span>
+            <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72 p-0" align="start">
+          <div className="flex items-center justify-between p-2 border-b">
+            <span className="text-xs text-muted-foreground">
+              {values.length} selecionado{values.length === 1 ? '' : 's'}
+            </span>
+            {values.length > 0 && (
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onClear}>
+                <X className="h-3 w-3 mr-1" /> Limpar
+              </Button>
+            )}
+          </div>
+          <div className="max-h-64 overflow-y-auto p-1">
+            {options.length === 0 && (
+              <div className="px-2 py-3 text-xs text-muted-foreground text-center">Nenhuma opção</div>
+            )}
+            {options.map((o) => (
+              <label key={o.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm">
+                <Checkbox checked={values.includes(o.id)} onCheckedChange={() => onToggle(o.id)} />
+                <span className="truncate">{o.name}</span>
+              </label>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
 
 export default function MerchBookFotos() {
   const [brandFilter, setBrandFilter] = useState('');
   const [pdvFilter, setPdvFilter] = useState<string[]>([]);
+  const [promoterFilter, setPromoterFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [supervisorFilter, setSupervisorFilter] = useState<string[]>([]);
+  const [photoTypeFilter, setPhotoTypeFilter] = useState<string[]>([]);
+  const [redeFilter, setRedeFilter] = useState<string[]>([]);
+  const [cityFilter, setCityFilter] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   const [viewPhoto, setViewPhoto] = useState<any>(null);
@@ -36,20 +83,74 @@ export default function MerchBookFotos() {
 
   const { data: brands = [] } = useBrands();
   const { data: pdvs = [] } = usePDVs();
+  const { data: promoters = [] } = usePromoters();
+  const { data: categories = [] } = useCategories();
+  const { data: redes = [] } = useRedes();
+
+  // Supervisors derived from photos (each row already carries supervisor_id/supervisor_name)
+  const [supervisorsFromPhotos, setSupervisorsFromPhotos] = useState<{ id: string; name: string }[]>([]);
+
+  // City options derived from PDVs
+  const cities = useMemo(() => {
+    const set = new Set<string>();
+    (pdvs as any[]).forEach((p: any) => { if (p.city) set.add(p.city); });
+    return Array.from(set).sort();
+  }, [pdvs]);
+
   const { data: photos = [], isLoading } = usePhotoBook({
     brand_id: brandFilter || undefined,
     pdv_id: pdvFilter.length ? pdvFilter.join(',') : undefined,
+    promoter_id: promoterFilter.length ? promoterFilter.join(',') : undefined,
+    category_id: categoryFilter.length ? categoryFilter.join(',') : undefined,
+    supervisor_id: supervisorFilter.length ? supervisorFilter.join(',') : undefined,
+    photo_type: photoTypeFilter.length ? photoTypeFilter.join(',') : undefined,
+    rede_id: redeFilter.length ? redeFilter.join(',') : undefined,
+    city: cityFilter.length ? cityFilter.join(',') : undefined,
     date_from: dateFrom, date_to: dateTo,
   });
 
-  const togglePdv = (id: string) => {
-    setPdvFilter(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleIn = (setter: React.Dispatch<React.SetStateAction<string[]>>) => (id: string) => {
+    setter(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
-  const pdvLabel = pdvFilter.length === 0
-    ? 'Todos os PDVs'
-    : pdvFilter.length === 1
-      ? ((pdvs as any[]).find((p: any) => p.id === pdvFilter[0])?.name || '1 PDV')
-      : `${pdvFilter.length} PDVs selecionados`;
+  const togglePdv = toggleIn(setPdvFilter);
+  const togglePromoter = toggleIn(setPromoterFilter);
+  const toggleCategory = toggleIn(setCategoryFilter);
+  const toggleSupervisor = toggleIn(setSupervisorFilter);
+  const togglePhotoType = toggleIn(setPhotoTypeFilter);
+  const toggleRede = toggleIn(setRedeFilter);
+  const toggleCity = toggleIn(setCityFilter);
+
+  // Accumulate distinct supervisors seen in photos (union across queries so filter list is stable)
+  useEffect(() => {
+    if (!Array.isArray(photos) || photos.length === 0) return;
+    setSupervisorsFromPhotos(prev => {
+      const map = new Map(prev.map(s => [s.id, s.name]));
+      (photos as any[]).forEach((p: any) => {
+        if (p.supervisor_id && p.supervisor_name && !map.has(p.supervisor_id)) {
+          map.set(p.supervisor_id, p.supervisor_name);
+        }
+      });
+      if (map.size === prev.length) return prev;
+      return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    });
+  }, [photos]);
+
+  const buildLabel = (arr: string[], list: { id: string; name: string }[], allLabel: string, singularSuffix = '') => {
+    if (arr.length === 0) return allLabel;
+    if (arr.length === 1) return list.find(x => x.id === arr[0])?.name || `1${singularSuffix}`;
+    return `${arr.length} selecionados`;
+  };
+  const pdvLabel = buildLabel(pdvFilter, (pdvs as any[]).map((p: any) => ({ id: p.id, name: p.name })), 'Todos os PDVs');
+  const promoterLabel = buildLabel(promoterFilter, (promoters as any[]).map((p: any) => ({ id: p.id, name: p.full_name || p.name })), 'Todos os colaboradores');
+  const categoryLabel = buildLabel(categoryFilter, (categories as any[]).map((c: any) => ({ id: c.id, name: c.name })), 'Todas as categorias');
+  const supervisorLabel = buildLabel(supervisorFilter, supervisorsFromPhotos, 'Todos os supervisores');
+  const photoTypeLabel = photoTypeFilter.length === 0 ? 'Todos os tipos'
+    : photoTypeFilter.length === 1 ? (PHOTO_TYPES[photoTypeFilter[0]] || photoTypeFilter[0])
+    : `${photoTypeFilter.length} tipos`;
+  const redeLabel = buildLabel(redeFilter, (redes as any[]).map((r: any) => ({ id: r.id, name: r.name })), 'Todas as redes');
+  const cityLabel = cityFilter.length === 0 ? 'Todas as cidades'
+    : cityFilter.length === 1 ? cityFilter[0]
+    : `${cityFilter.length} cidades`;
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -126,42 +227,24 @@ export default function MerchBookFotos() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex-1 min-w-[180px]">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-between font-normal">
-                      <span className="truncate">{pdvLabel}</span>
-                      <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-0" align="start">
-                    <div className="flex items-center justify-between p-2 border-b">
-                      <span className="text-xs text-muted-foreground">
-                        {pdvFilter.length} selecionado{pdvFilter.length === 1 ? '' : 's'}
-                      </span>
-                      {pdvFilter.length > 0 && (
-                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setPdvFilter([])}>
-                          <X className="h-3 w-3 mr-1" /> Limpar
-                        </Button>
-                      )}
-                    </div>
-                    <div className="max-h-64 overflow-y-auto p-1">
-                      {(pdvs as any[]).filter((p: any) => p?.id).map((p: any) => (
-                        <label key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm">
-                          <Checkbox checked={pdvFilter.includes(p.id)} onCheckedChange={() => togglePdv(p.id)} />
-                          <span className="truncate">{p.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
+              <MultiSelectPopover label={pdvLabel} values={pdvFilter} options={(pdvs as any[]).filter((p: any) => p?.id).map((p: any) => ({ id: p.id, name: p.name }))} onToggle={togglePdv} onClear={() => setPdvFilter([])} />
+              <MultiSelectPopover label={promoterLabel} values={promoterFilter} options={(promoters as any[]).filter((p: any) => p?.id).map((p: any) => ({ id: p.id, name: p.full_name || p.name }))} onToggle={togglePromoter} onClear={() => setPromoterFilter([])} />
+              <MultiSelectPopover label={supervisorLabel} values={supervisorFilter} options={supervisorsFromPhotos} onToggle={toggleSupervisor} onClear={() => setSupervisorFilter([])} />
+              <MultiSelectPopover label={categoryLabel} values={categoryFilter} options={(categories as any[]).filter((c: any) => c?.id).map((c: any) => ({ id: c.id, name: c.name }))} onToggle={toggleCategory} onClear={() => setCategoryFilter([])} />
+              <MultiSelectPopover label={photoTypeLabel} values={photoTypeFilter} options={Object.entries(PHOTO_TYPES).map(([id, name]) => ({ id, name }))} onToggle={togglePhotoType} onClear={() => setPhotoTypeFilter([])} />
+              <MultiSelectPopover label={redeLabel} values={redeFilter} options={(redes as any[]).filter((r: any) => r?.id).map((r: any) => ({ id: r.id, name: r.name }))} onToggle={toggleRede} onClear={() => setRedeFilter([])} />
+              <MultiSelectPopover label={cityLabel} values={cityFilter} options={cities.map((c) => ({ id: c, name: c }))} onToggle={toggleCity} onClear={() => setCityFilter([])} />
               <div>
                 <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36" />
               </div>
               <div>
                 <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36" />
               </div>
+              {(brandFilter || pdvFilter.length || promoterFilter.length || categoryFilter.length || supervisorFilter.length || photoTypeFilter.length || redeFilter.length || cityFilter.length) ? (
+                <Button variant="ghost" size="sm" onClick={() => { setBrandFilter(''); setPdvFilter([]); setPromoterFilter([]); setCategoryFilter([]); setSupervisorFilter([]); setPhotoTypeFilter([]); setRedeFilter([]); setCityFilter([]); }}>
+                  <X className="h-4 w-4 mr-1" /> Limpar filtros
+                </Button>
+              ) : null}
             </div>
           </CardContent>
         </Card>
