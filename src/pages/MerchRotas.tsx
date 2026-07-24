@@ -1108,7 +1108,10 @@ function RouteFormDialog({ open, route, onClose, pdvs, employees, onSave, onDele
 
   const availableBrands = (brands || []).filter((b: any) => {
     if (!b?.id) return false;
-    if (form.pdv_id && pdvBrands.length > 0) {
+    // Se em criação com múltiplos PDVs, não filtra por PDV (marcas comuns podem variar);
+    // caso contrário, mantém o filtro do PDV primário.
+    const shouldFilterByPdv = isCreating ? pdvIds.length === 1 : !!form.pdv_id;
+    if (shouldFilterByPdv && primaryPdvId && pdvBrands.length > 0) {
       const isLinkedToPdv = pdvBrands.some((pb: any) => pb.brand_id === b.id);
       if (!isLinkedToPdv) return false;
     }
@@ -1116,27 +1119,49 @@ function RouteFormDialog({ open, route, onClose, pdvs, employees, onSave, onDele
   });
 
   const handleSave = () => {
+    const brandsPayload = multiBrands.map(mb => ({
+      brand_id: mb.brand_id,
+      checklist_id: mb.checklist_id || null,
+      weekdays: Array.isArray(mb.weekdays) ? mb.weekdays : [],
+    }));
+
+    // CRIAÇÃO EM LOTE: múltiplos promotores e/ou múltiplos PDVs
+    if (isCreating) {
+      if (promoterIds.length === 0 || pdvIds.length === 0 || multiBrands.length === 0) {
+        toast.error('Selecione ao menos 1 promotor, 1 PDV e 1 marca');
+        return;
+      }
+      const payloads: any[] = [];
+      for (const promoter_id of promoterIds) {
+        for (const pdv_id of pdvIds) {
+          const p: any = {
+            ...form,
+            promoter_id,
+            pdv_id,
+            brands: brandsPayload,
+          };
+          if (brandsPayload.length > 0) {
+            p.brand_id = brandsPayload[0].brand_id;
+            p.checklist_id = brandsPayload[0].checklist_id || null;
+          }
+          payloads.push(p);
+        }
+      }
+      // Se for apenas 1 combinação, envia como objeto; senão como array
+      onSave(payloads.length === 1 ? payloads[0] : payloads);
+      return;
+    }
+
+    // EDIÇÃO: mantém comportamento single
     if (!form.promoter_id || !form.pdv_id || multiBrands.length === 0) {
       toast.error('Preencha os campos obrigatórios (Promotor, PDV e Marcas)');
       return;
     }
-
-    const payload: any = { 
-      ...form,
-      brands: multiBrands.map(mb => ({
-        brand_id: mb.brand_id,
-        checklist_id: mb.checklist_id || null,
-        weekdays: Array.isArray(mb.weekdays) ? mb.weekdays : [],
-      }))
-    };
-    
-    // Garantir compatibilidade com APIs legadas que podem esperar brand_id na raiz
-    if (multiBrands.length > 0) {
-      payload.brand_id = multiBrands[0].brand_id;
-      payload.checklist_id = multiBrands[0].checklist_id || null;
+    const payload: any = { ...form, brands: brandsPayload };
+    if (brandsPayload.length > 0) {
+      payload.brand_id = brandsPayload[0].brand_id;
+      payload.checklist_id = brandsPayload[0].checklist_id || null;
     }
-
-    console.log("Saving payload from form:", payload);
     onSave(payload);
   };
 
