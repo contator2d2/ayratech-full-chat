@@ -419,6 +419,33 @@ export default function PromotorConfig() {
           onResult={handleFaceVerified}
         />
       )}
+
+      <AlertDialog open={confirmUpdateOpen} onOpenChange={setConfirmUpdateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>⚠️ Você tem {pendingCount} item(ns) pendente(s)</AlertDialogTitle>
+            <AlertDialogDescription>
+              Existem fotos ou envios que ainda não foram sincronizados com o servidor.
+              Se você atualizar agora, esses itens podem ser perdidos.
+              <br /><br />
+              Recomendamos tentar sincronizar primeiro. Verifique se está online (Wi-Fi ou 4G) antes de continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button onClick={handleTrySyncFirst} disabled={isSyncing} className="w-full">
+              {isSyncing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Tentar sincronizar agora
+            </Button>
+            <AlertDialogCancel className="w-full mt-0">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={doForceUpdate}
+              className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Atualizar mesmo assim (perder pendentes)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PromotorLayout>
   );
 }
