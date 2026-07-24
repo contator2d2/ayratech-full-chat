@@ -180,42 +180,24 @@ export default function MerchBookFotos() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex-1 min-w-[180px]">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-between font-normal">
-                      <span className="truncate">{pdvLabel}</span>
-                      <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-0" align="start">
-                    <div className="flex items-center justify-between p-2 border-b">
-                      <span className="text-xs text-muted-foreground">
-                        {pdvFilter.length} selecionado{pdvFilter.length === 1 ? '' : 's'}
-                      </span>
-                      {pdvFilter.length > 0 && (
-                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setPdvFilter([])}>
-                          <X className="h-3 w-3 mr-1" /> Limpar
-                        </Button>
-                      )}
-                    </div>
-                    <div className="max-h-64 overflow-y-auto p-1">
-                      {(pdvs as any[]).filter((p: any) => p?.id).map((p: any) => (
-                        <label key={p.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm">
-                          <Checkbox checked={pdvFilter.includes(p.id)} onCheckedChange={() => togglePdv(p.id)} />
-                          <span className="truncate">{p.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
+              <MultiSelectPopover label={pdvLabel} values={pdvFilter} options={(pdvs as any[]).filter((p: any) => p?.id).map((p: any) => ({ id: p.id, name: p.name }))} onToggle={togglePdv} onClear={() => setPdvFilter([])} />
+              <MultiSelectPopover label={promoterLabel} values={promoterFilter} options={(promoters as any[]).filter((p: any) => p?.id).map((p: any) => ({ id: p.id, name: p.full_name || p.name }))} onToggle={togglePromoter} onClear={() => setPromoterFilter([])} />
+              <MultiSelectPopover label={supervisorLabel} values={supervisorFilter} options={supervisors} onToggle={toggleSupervisor} onClear={() => setSupervisorFilter([])} />
+              <MultiSelectPopover label={categoryLabel} values={categoryFilter} options={(categories as any[]).filter((c: any) => c?.id).map((c: any) => ({ id: c.id, name: c.name }))} onToggle={toggleCategory} onClear={() => setCategoryFilter([])} />
+              <MultiSelectPopover label={photoTypeLabel} values={photoTypeFilter} options={Object.entries(PHOTO_TYPES).map(([id, name]) => ({ id, name }))} onToggle={togglePhotoType} onClear={() => setPhotoTypeFilter([])} />
+              <MultiSelectPopover label={redeLabel} values={redeFilter} options={(redes as any[]).filter((r: any) => r?.id).map((r: any) => ({ id: r.id, name: r.name }))} onToggle={toggleRede} onClear={() => setRedeFilter([])} />
+              <MultiSelectPopover label={cityLabel} values={cityFilter} options={cities.map((c) => ({ id: c, name: c }))} onToggle={toggleCity} onClear={() => setCityFilter([])} />
               <div>
                 <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36" />
               </div>
               <div>
                 <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36" />
               </div>
+              {(brandFilter || pdvFilter.length || promoterFilter.length || categoryFilter.length || supervisorFilter.length || photoTypeFilter.length || redeFilter.length || cityFilter.length) ? (
+                <Button variant="ghost" size="sm" onClick={() => { setBrandFilter(''); setPdvFilter([]); setPromoterFilter([]); setCategoryFilter([]); setSupervisorFilter([]); setPhotoTypeFilter([]); setRedeFilter([]); setCityFilter([]); }}>
+                  <X className="h-4 w-4 mr-1" /> Limpar filtros
+                </Button>
+              ) : null}
             </div>
           </CardContent>
         </Card>
