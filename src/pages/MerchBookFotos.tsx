@@ -198,19 +198,35 @@ export default function MerchBookFotos() {
     return (brands as any[]).find((b: any) => b.name === firstBrand) || null;
   }, [firstBrand, brands]);
 
-  // Group by date → PDV → brand
+  // Two-level grouping controlled by sortMode.
+  // Level 1 = section header, Level 2 = card. Photos inside a card are always sub-grouped by brand.
+  const SORT_CONFIG: Record<typeof sortMode, { l1: (p: any) => string; l2: (p: any) => string; l1Label: string; l2Icon: 'date' | 'pdv' | 'user'; l1SortDesc?: boolean }> = {
+    'date-pdv':       { l1: p => p.captured_at?.slice(0, 10) || 'sem-data', l2: p => p.pdv_name || 'PDV',           l1Label: 'date',       l2Icon: 'pdv',  l1SortDesc: true },
+    'pdv-date':       { l1: p => p.pdv_name || 'PDV',                       l2: p => p.captured_at?.slice(0, 10) || 'sem-data', l1Label: 'text', l2Icon: 'date' },
+    'supervisor-date':{ l1: p => p.supervisor_name || 'Sem supervisor',     l2: p => p.captured_at?.slice(0, 10) || 'sem-data', l1Label: 'text', l2Icon: 'date' },
+    'promoter-date':  { l1: p => p.promoter_name || 'Sem promotor',         l2: p => p.captured_at?.slice(0, 10) || 'sem-data', l1Label: 'text', l2Icon: 'date' },
+    'category-date':  { l1: p => p.category_name || 'Sem categoria',        l2: p => p.captured_at?.slice(0, 10) || 'sem-data', l1Label: 'text', l2Icon: 'date' },
+    'brand-date':     { l1: p => p.brand_name || 'Sem marca',               l2: p => p.captured_at?.slice(0, 10) || 'sem-data', l1Label: 'text', l2Icon: 'date' },
+  } as any;
+
+  const cfg = SORT_CONFIG[sortMode];
   const grouped = (photos as any[]).reduce((acc: any, p: any) => {
-    const date = p.captured_at?.slice(0, 10) || 'sem-data';
-    const pdv = p.pdv_name || 'PDV';
+    const k1 = cfg.l1(p);
+    const k2 = cfg.l2(p);
     const brand = p.brand_name || 'Marca';
-    if (!acc[date]) acc[date] = {};
-    if (!acc[date][pdv]) acc[date][pdv] = {};
-    if (!acc[date][pdv][brand]) acc[date][pdv][brand] = [];
-    acc[date][pdv][brand].push(p);
+    if (!acc[k1]) acc[k1] = {};
+    if (!acc[k1][k2]) acc[k1][k2] = {};
+    if (!acc[k1][k2][brand]) acc[k1][k2][brand] = [];
+    acc[k1][k2][brand].push(p);
     return acc;
   }, {} as Record<string, any>);
 
-  const sortedDates = Object.keys(grouped).sort().reverse();
+  const sortedL1 = Object.keys(grouped).sort((a, b) => cfg.l1SortDesc ? b.localeCompare(a) : a.localeCompare(b));
+  const formatDateHeader = (d: string) => d && d !== 'sem-data'
+    ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+    : 'Sem data';
+  const renderL1Header = (k: string) => cfg.l1Label === 'date' ? formatDateHeader(k) : k;
+  const sortedL2Keys = (obj: any) => Object.keys(obj).sort((a, b) => cfg.l2Icon === 'date' ? b.localeCompare(a) : a.localeCompare(b));
 
   return (
     <MainLayout>
