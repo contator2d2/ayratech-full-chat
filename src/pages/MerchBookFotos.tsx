@@ -306,7 +306,7 @@ export default function MerchBookFotos() {
           </CardContent></Card>
           <Card><CardContent className="pt-4 text-center">
             <Calendar className="h-5 w-5 mx-auto mb-1 text-primary" />
-            <div className="text-2xl font-bold">{sortedDates.length}</div>
+            <div className="text-2xl font-bold">{new Set((photos as any[]).map((p: any) => p.captured_at?.slice(0,10))).size}</div>
             <p className="text-xs text-muted-foreground">Dias com fotos</p>
           </CardContent></Card>
           <Card><CardContent className="pt-4 text-center">
