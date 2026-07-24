@@ -370,7 +370,7 @@ export default function PromotorConfig() {
           <CardHeader className="p-3 pb-1"><CardTitle className="text-sm flex items-center gap-2"><RefreshCw className="h-4 w-4" /> Atualizar Sistema</CardTitle></CardHeader>
           <CardContent className="p-3 pt-0 space-y-2">
             <p className="text-xs text-muted-foreground">Limpa o cache do navegador, service workers e recarrega o app com a versão mais recente.</p>
-            <Button onClick={handleForceUpdate} disabled={updating} variant="outline" size="sm" className="w-full gap-2">
+            <Button onClick={handleForceUpdateClick} disabled={updating} variant="outline" size="sm" className="w-full gap-2">
               {updating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {updating ? 'Atualizando...' : 'Atualizar Agora'}
             </Button>
