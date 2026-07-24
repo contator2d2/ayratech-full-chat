@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useMerchRoutes, useRouteAuditLogs, useRouteAuthors, useRouteAssignmentHistory } from "@/hooks/use-merch-routes";
@@ -11,7 +13,7 @@ import { useBrands } from "@/hooks/use-merchandising";
 import { usePDVs } from "@/hooks/use-promotor";
 import { useEmployees } from "@/hooks/use-rh";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { Shield, Eye, Clock, User, Edit, Camera, ArrowLeftRight, FileText, AlertTriangle } from "lucide-react";
+import { Shield, Eye, Clock, User, Edit, Camera, ArrowLeftRight, FileText, AlertTriangle, ChevronDown, X, Search } from "lucide-react";
 
 const FIELD_LABELS: Record<string, string> = {
   promoter_id: 'Promotor', photo_added: 'Foto adicionada', photo_removed: 'Foto removida',
