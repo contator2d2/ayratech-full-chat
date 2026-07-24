@@ -120,7 +120,7 @@ export default function MerchAuditoria() {
 
         {/* Routes list */}
         <div className="grid gap-3">
-          {(routes as any[]).map((r: any) => (
+          {filteredRoutes.map((r: any) => (
             <Card key={r.id} className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => setSelectedRouteId(r.id)}>
               <CardContent className="pt-4">
                 <div className="flex items-center justify-between gap-3">
@@ -140,7 +140,7 @@ export default function MerchAuditoria() {
               </CardContent>
             </Card>
           ))}
-          {routes.length === 0 && (
+          {filteredRoutes.length === 0 && (
             <Card><CardContent className="py-12 text-center text-muted-foreground">
               <Shield className="h-12 w-12 mx-auto mb-3 opacity-40" />
               <p>Nenhuma rota encontrada no período</p>
