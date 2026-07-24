@@ -65,6 +65,11 @@ export function useOfflineSync() {
     setIsSyncing(true);
 
     try {
+    // Recupera itens travados em 'uploading'/'processing' de execuções anteriores
+    // e reprocessa também os 'failed' — retry automático a cada sync.
+    await db.pending_uploads.where('status').anyOf('failed', 'uploading').modify({ status: 'pending' });
+    await db.pending_api_calls.where('status').anyOf('failed', 'processing').modify({ status: 'pending' });
+
     const pendingUploads = await db.pending_uploads.where('status').equals('pending').toArray();
     const pendingCalls = await db.pending_api_calls.where('status').equals('pending').toArray();
 
