@@ -21,6 +21,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 export default function PromotorConfig() {
   const [updating, setUpdating] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [confirmUpdateOpen, setConfirmUpdateOpen] = useState(false);
+  const { sync, isSyncing } = useOfflineSync();
   const { data: settings } = usePromotorSettings();
   const updateSettings = usePromotorUpdateSettings();
   const changePassword = usePromotorChangePassword();
@@ -123,7 +126,43 @@ export default function PromotorConfig() {
     }
   };
 
-  const handleForceUpdate = async () => {
+  const checkPending = async () => {
+    const [u, c] = await Promise.all([
+      db.pending_uploads.count(),
+      db.pending_api_calls.count(),
+    ]);
+    return u + c;
+  };
+
+  const handleForceUpdateClick = async () => {
+    const total = await checkPending();
+    setPendingCount(total);
+    if (total > 0) {
+      setConfirmUpdateOpen(true);
+      return;
+    }
+    doForceUpdate();
+  };
+
+  const handleTrySyncFirst = async () => {
+    setConfirmUpdateOpen(false);
+    toast({ title: 'Tentando enviar itens pendentes...', description: 'Aguarde alguns segundos e verifique novamente.' });
+    try {
+      await sync();
+      const remaining = await checkPending();
+      if (remaining === 0) {
+        toast({ title: '✅ Tudo sincronizado!', description: 'Agora é seguro atualizar.' });
+      } else {
+        setPendingCount(remaining);
+        setConfirmUpdateOpen(true);
+      }
+    } catch (err: any) {
+      toast({ title: 'Falha ao sincronizar', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const doForceUpdate = async () => {
+    setConfirmUpdateOpen(false);
     setUpdating(true);
     try {
       if ('serviceWorker' in navigator) {
@@ -141,6 +180,7 @@ export default function PromotorConfig() {
       if (token) localStorage.setItem('promotor_token', token);
       if (emp) localStorage.setItem('promotor_employee', emp);
       if (thm) localStorage.setItem('promotor-theme', thm);
+      // IMPORTANTE: não apagamos IndexedDB (AyraOfflineDB) — fotos pendentes ficam preservadas.
       toast({ title: '✅ Sistema atualizado!', description: 'Recarregando...' });
       setTimeout(() => window.location.reload(), 1000);
     } catch (err: any) {
