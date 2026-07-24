@@ -25,7 +25,6 @@ const PHOTO_TYPES: Record<string, string> = {
   stock: 'Estoque', shelf: 'Prateleira', extra_point: 'Ponto Extra',
   damage: 'Avaria', expiry: 'Validade', contingency: 'Contingência',
   rupture: 'Ruptura',
-  rupture: 'Ruptura',
 };
 
 function MultiSelectPopover({ label, values, options, onToggle, onClear }: { label: string; values: string[]; options: { id: string; name: string }[]; onToggle: (id: string) => void; onClear: () => void }) {
