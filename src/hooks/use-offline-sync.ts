@@ -295,5 +295,22 @@ export function useOfflineSync() {
     }
   }, [isOnline, sync]);
 
+  // Retry periódico enquanto houver pendências e o app estiver online.
+  // Evita a situação em que o promotor tira fotos, a rede oscila e os itens
+  // ficam parados com status='failed' até o próximo evento 'online'.
+  useEffect(() => {
+    if (!isOnline) return;
+    const interval = setInterval(async () => {
+      try {
+        const [u, c] = await Promise.all([
+          db.pending_uploads.count(),
+          db.pending_api_calls.count(),
+        ]);
+        if ((u + c) > 0) sync();
+      } catch {}
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [isOnline, sync]);
+
   return { isOnline, isSyncing, queueUpload, queueApiCall, sync, getLocalFileUrl };
 }
