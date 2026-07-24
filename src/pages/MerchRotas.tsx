@@ -1061,6 +1061,8 @@ function RouteFormDialog({ open, route, onClose, pdvs, employees, onSave, onDele
         });
         setMultiBrands([]);
         setConfiguringBrandId(null);
+        setPromoterIds([]);
+        setPdvIds([]);
       }
     }
   }, [route, open]);
