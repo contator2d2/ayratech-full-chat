@@ -562,6 +562,63 @@ export default function MerchContagemEstoque() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={scopeDialog.open} onOpenChange={(v) => !v && setScopeDialog({ open: false, payload: null })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Aplicar mudança de dias</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="text-muted-foreground">
+              Você alterou os dias da semana em que a contagem de saldo aparece. Como aplicar às rotas já criadas?
+            </p>
+            <div className="rounded-lg border p-3 space-y-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start h-auto py-2"
+                onClick={() => persistRule('future_only')}
+                disabled={upsert.isPending}
+              >
+                <div className="text-left">
+                  <p className="font-medium">Apenas a partir da próxima semana</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Mantém a semana atual como está. A nova regra vale de segunda que vem em diante.
+                  </p>
+                </div>
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start h-auto py-2"
+                onClick={() => persistRule('current_and_future')}
+                disabled={upsert.isPending}
+              >
+                <div className="text-left">
+                  <p className="font-medium">Incluir a semana atual</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Reprograma contagens pendentes desta semana também. Contagens já iniciadas não são afetadas.
+                  </p>
+                </div>
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start h-auto py-2"
+                onClick={() => persistRule('none')}
+                disabled={upsert.isPending}
+              >
+                <div className="text-left">
+                  <p className="font-medium">Só salvar (não mexer em rotas)</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Salva a regra sem cancelar contagens pendentes.
+                  </p>
+                </div>
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScopeDialog({ open: false, payload: null })}>Cancelar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }
