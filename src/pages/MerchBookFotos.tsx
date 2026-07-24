@@ -76,6 +76,7 @@ export default function MerchBookFotos() {
   const [cityFilter, setCityFilter] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [sortMode, setSortMode] = useState<'date-pdv' | 'pdv-date' | 'supervisor-date' | 'promoter-date' | 'category-date' | 'brand-date'>('date-pdv');
   const [viewPhoto, setViewPhoto] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bookEditorOpen, setBookEditorOpen] = useState(false);
@@ -197,19 +198,35 @@ export default function MerchBookFotos() {
     return (brands as any[]).find((b: any) => b.name === firstBrand) || null;
   }, [firstBrand, brands]);
 
-  // Group by date → PDV → brand
+  // Two-level grouping controlled by sortMode.
+  // Level 1 = section header, Level 2 = card. Photos inside a card are always sub-grouped by brand.
+  const SORT_CONFIG: Record<typeof sortMode, { l1: (p: any) => string; l2: (p: any) => string; l1Label: string; l2Icon: 'date' | 'pdv' | 'user'; l1SortDesc?: boolean }> = {
+    'date-pdv':       { l1: p => p.captured_at?.slice(0, 10) || 'sem-data', l2: p => p.pdv_name || 'PDV',           l1Label: 'date',       l2Icon: 'pdv',  l1SortDesc: true },
+    'pdv-date':       { l1: p => p.pdv_name || 'PDV',                       l2: p => p.captured_at?.slice(0, 10) || 'sem-data', l1Label: 'text', l2Icon: 'date' },
+    'supervisor-date':{ l1: p => p.supervisor_name || 'Sem supervisor',     l2: p => p.captured_at?.slice(0, 10) || 'sem-data', l1Label: 'text', l2Icon: 'date' },
+    'promoter-date':  { l1: p => p.promoter_name || 'Sem promotor',         l2: p => p.captured_at?.slice(0, 10) || 'sem-data', l1Label: 'text', l2Icon: 'date' },
+    'category-date':  { l1: p => p.category_name || 'Sem categoria',        l2: p => p.captured_at?.slice(0, 10) || 'sem-data', l1Label: 'text', l2Icon: 'date' },
+    'brand-date':     { l1: p => p.brand_name || 'Sem marca',               l2: p => p.captured_at?.slice(0, 10) || 'sem-data', l1Label: 'text', l2Icon: 'date' },
+  } as any;
+
+  const cfg = SORT_CONFIG[sortMode];
   const grouped = (photos as any[]).reduce((acc: any, p: any) => {
-    const date = p.captured_at?.slice(0, 10) || 'sem-data';
-    const pdv = p.pdv_name || 'PDV';
+    const k1 = cfg.l1(p);
+    const k2 = cfg.l2(p);
     const brand = p.brand_name || 'Marca';
-    if (!acc[date]) acc[date] = {};
-    if (!acc[date][pdv]) acc[date][pdv] = {};
-    if (!acc[date][pdv][brand]) acc[date][pdv][brand] = [];
-    acc[date][pdv][brand].push(p);
+    if (!acc[k1]) acc[k1] = {};
+    if (!acc[k1][k2]) acc[k1][k2] = {};
+    if (!acc[k1][k2][brand]) acc[k1][k2][brand] = [];
+    acc[k1][k2][brand].push(p);
     return acc;
   }, {} as Record<string, any>);
 
-  const sortedDates = Object.keys(grouped).sort().reverse();
+  const sortedL1 = Object.keys(grouped).sort((a, b) => cfg.l1SortDesc ? b.localeCompare(a) : a.localeCompare(b));
+  const formatDateHeader = (d: string) => d && d !== 'sem-data'
+    ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+    : 'Sem data';
+  const renderL1Header = (k: string) => cfg.l1Label === 'date' ? formatDateHeader(k) : k;
+  const sortedL2Keys = (obj: any) => Object.keys(obj).sort((a, b) => cfg.l2Icon === 'date' ? b.localeCompare(a) : a.localeCompare(b));
 
   return (
     <MainLayout>
@@ -239,6 +256,19 @@ export default function MerchBookFotos() {
               </div>
               <div>
                 <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36" />
+              </div>
+              <div className="flex-1 min-w-[200px]">
+                <Select value={sortMode} onValueChange={(v) => setSortMode(v as any)}>
+                  <SelectTrigger><SelectValue placeholder="Ordenar por" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date-pdv">Ordenar: Data → Loja</SelectItem>
+                    <SelectItem value="pdv-date">Ordenar: Loja → Data</SelectItem>
+                    <SelectItem value="supervisor-date">Ordenar: Supervisor → Data</SelectItem>
+                    <SelectItem value="promoter-date">Ordenar: Colaborador → Data</SelectItem>
+                    <SelectItem value="category-date">Ordenar: Categoria → Data</SelectItem>
+                    <SelectItem value="brand-date">Ordenar: Marca → Data</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               {(brandFilter || pdvFilter.length || promoterFilter.length || categoryFilter.length || supervisorFilter.length || photoTypeFilter.length || redeFilter.length || cityFilter.length) ? (
                 <Button variant="ghost" size="sm" onClick={() => { setBrandFilter(''); setPdvFilter([]); setPromoterFilter([]); setCategoryFilter([]); setSupervisorFilter([]); setPhotoTypeFilter([]); setRedeFilter([]); setCityFilter([]); }}>
@@ -276,7 +306,7 @@ export default function MerchBookFotos() {
           </CardContent></Card>
           <Card><CardContent className="pt-4 text-center">
             <Calendar className="h-5 w-5 mx-auto mb-1 text-primary" />
-            <div className="text-2xl font-bold">{sortedDates.length}</div>
+            <div className="text-2xl font-bold">{new Set((photos as any[]).map((p: any) => p.captured_at?.slice(0,10))).size}</div>
             <p className="text-xs text-muted-foreground">Dias com fotos</p>
           </CardContent></Card>
           <Card><CardContent className="pt-4 text-center">
@@ -292,16 +322,19 @@ export default function MerchBookFotos() {
         </div>
 
         {/* Photo Grid grouped */}
-        {sortedDates.map(date => (
-          <div key={date} className="space-y-3">
+        {sortedL1.map(k1 => (
+          <div key={k1} className="space-y-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              {new Date(date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+              {cfg.l1Label === 'date' ? <Calendar className="h-4 w-4" /> : cfg.l2Icon === 'date' && sortMode === 'pdv-date' ? <MapPin className="h-4 w-4" /> : <User className="h-4 w-4" />}
+              {renderL1Header(k1)}
             </h2>
-            {Object.entries(grouped[date]).map(([pdv, brandGroups]: [string, any]) => (
-              <Card key={pdv}>
+            {sortedL2Keys(grouped[k1]).map((k2) => {
+              const brandGroups = grouped[k1][k2];
+              const l2Title = cfg.l2Icon === 'date' ? formatDateHeader(k2) : k2;
+              return (
+              <Card key={k2}>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2"><MapPin className="h-4 w-4" /> {pdv}</CardTitle>
+                  <CardTitle className="text-sm flex items-center gap-2">{cfg.l2Icon === 'date' ? <Calendar className="h-4 w-4" /> : <MapPin className="h-4 w-4" />} {l2Title}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {Object.entries(brandGroups).map(([brand, bPhotos]: [string, any]) => {
@@ -316,7 +349,14 @@ export default function MerchBookFotos() {
                           variant="ghost" 
                           size="sm" 
                           className="h-6 px-2 text-[10px]"
-                          onClick={() => selectAllBrandPdv(brand, pdv)}
+                          onClick={() => {
+                            setSelectedIds(prev => {
+                              const next = new Set(prev);
+                              const all = bPhotos.every((p: any) => next.has(p.id));
+                              bPhotos.forEach((p: any) => all ? next.delete(p.id) : next.add(p.id));
+                              return next;
+                            });
+                          }}
                         >
                           <CheckSquare className="h-3 w-3 mr-1" />
                           {allBrandPdvSelected ? 'Desmarcar' : 'Selecionar todas'}
@@ -369,7 +409,8 @@ export default function MerchBookFotos() {
                   )})}
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         ))}
 
