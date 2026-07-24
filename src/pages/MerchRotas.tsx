@@ -948,6 +948,13 @@ function RouteFormDialog({ open, route, onClose, pdvs, employees, onSave, onDele
   const [multiBrands, setMultiBrands] = useState<{ brand_id: string; checklist_id?: string; weekdays?: number[] }[]>([]);
   const [configuringBrandId, setConfiguringBrandId] = useState<string | null>(null);
   const [pdvOpen, setPdvOpen] = useState(false);
+  const [promotersOpen, setPromotersOpen] = useState(false);
+  const [pdvSearch, setPdvSearch] = useState('');
+  const [promoterSearch, setPromoterSearch] = useState('');
+  // Multi-select (usado apenas na criação): permite escolher vários promotores e PDVs para gerar rotas em lote
+  const [promoterIds, setPromoterIds] = useState<string[]>([]);
+  const [pdvIds, setPdvIds] = useState<string[]>([]);
+  const isCreating = !route;
   const { data: brands = [] } = useBrands();
   const { data: pdvBrands = [] } = usePdvBrands(form.pdv_id);
   
