@@ -9,8 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { usePhotoBook, useRotatePhoto } from "@/hooks/use-merch-routes";
-import { useBrands } from "@/hooks/use-merchandising";
+import { useBrands, useCategories } from "@/hooks/use-merchandising";
 import { usePDVs } from "@/hooks/use-promotor";
+import { usePromoters } from "@/hooks/use-access-control";
+import { useRedes } from "@/hooks/use-price-research";
 import { resolveMediaUrl } from "@/lib/media";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare, RotateCw, RotateCcw, ChevronDown, X } from "lucide-react";
@@ -22,11 +24,18 @@ const PHOTO_TYPES: Record<string, string> = {
   category_before: 'Antes (Categoria)', category_after: 'Depois (Categoria)',
   stock: 'Estoque', shelf: 'Prateleira', extra_point: 'Ponto Extra',
   damage: 'Avaria', expiry: 'Validade', contingency: 'Contingência',
+  rupture: 'Ruptura',
 };
 
 export default function MerchBookFotos() {
   const [brandFilter, setBrandFilter] = useState('');
   const [pdvFilter, setPdvFilter] = useState<string[]>([]);
+  const [promoterFilter, setPromoterFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [supervisorFilter, setSupervisorFilter] = useState<string[]>([]);
+  const [photoTypeFilter, setPhotoTypeFilter] = useState<string[]>([]);
+  const [redeFilter, setRedeFilter] = useState<string[]>([]);
+  const [cityFilter, setCityFilter] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   const [viewPhoto, setViewPhoto] = useState<any>(null);
@@ -36,20 +45,65 @@ export default function MerchBookFotos() {
 
   const { data: brands = [] } = useBrands();
   const { data: pdvs = [] } = usePDVs();
+  const { data: promoters = [] } = usePromoters();
+  const { data: categories = [] } = useCategories();
+  const { data: redes = [] } = useRedes();
+
+  // Supervisors = employees that appear as supervisor_id of any promoter
+  const supervisors = useMemo(() => {
+    const map = new Map<string, string>();
+    (promoters as any[]).forEach((p: any) => {
+      if (p.supervisor_id && p.supervisor_name) map.set(p.supervisor_id, p.supervisor_name);
+    });
+    return Array.from(map, ([id, name]) => ({ id, name }));
+  }, [promoters]);
+
+  // City options derived from PDVs
+  const cities = useMemo(() => {
+    const set = new Set<string>();
+    (pdvs as any[]).forEach((p: any) => { if (p.city) set.add(p.city); });
+    return Array.from(set).sort();
+  }, [pdvs]);
+
   const { data: photos = [], isLoading } = usePhotoBook({
     brand_id: brandFilter || undefined,
     pdv_id: pdvFilter.length ? pdvFilter.join(',') : undefined,
+    promoter_id: promoterFilter.length ? promoterFilter.join(',') : undefined,
+    category_id: categoryFilter.length ? categoryFilter.join(',') : undefined,
+    supervisor_id: supervisorFilter.length ? supervisorFilter.join(',') : undefined,
+    photo_type: photoTypeFilter.length ? photoTypeFilter.join(',') : undefined,
+    rede_id: redeFilter.length ? redeFilter.join(',') : undefined,
+    city: cityFilter.length ? cityFilter.join(',') : undefined,
     date_from: dateFrom, date_to: dateTo,
   });
 
-  const togglePdv = (id: string) => {
-    setPdvFilter(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleIn = (setter: React.Dispatch<React.SetStateAction<string[]>>) => (id: string) => {
+    setter(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
-  const pdvLabel = pdvFilter.length === 0
-    ? 'Todos os PDVs'
-    : pdvFilter.length === 1
-      ? ((pdvs as any[]).find((p: any) => p.id === pdvFilter[0])?.name || '1 PDV')
-      : `${pdvFilter.length} PDVs selecionados`;
+  const togglePdv = toggleIn(setPdvFilter);
+  const togglePromoter = toggleIn(setPromoterFilter);
+  const toggleCategory = toggleIn(setCategoryFilter);
+  const toggleSupervisor = toggleIn(setSupervisorFilter);
+  const togglePhotoType = toggleIn(setPhotoTypeFilter);
+  const toggleRede = toggleIn(setRedeFilter);
+  const toggleCity = toggleIn(setCityFilter);
+
+  const buildLabel = (arr: string[], list: { id: string; name: string }[], allLabel: string, singularSuffix = '') => {
+    if (arr.length === 0) return allLabel;
+    if (arr.length === 1) return list.find(x => x.id === arr[0])?.name || `1${singularSuffix}`;
+    return `${arr.length} selecionados`;
+  };
+  const pdvLabel = buildLabel(pdvFilter, (pdvs as any[]).map((p: any) => ({ id: p.id, name: p.name })), 'Todos os PDVs');
+  const promoterLabel = buildLabel(promoterFilter, (promoters as any[]).map((p: any) => ({ id: p.id, name: p.full_name || p.name })), 'Todos os colaboradores');
+  const categoryLabel = buildLabel(categoryFilter, (categories as any[]).map((c: any) => ({ id: c.id, name: c.name })), 'Todas as categorias');
+  const supervisorLabel = buildLabel(supervisorFilter, supervisors, 'Todos os supervisores');
+  const photoTypeLabel = photoTypeFilter.length === 0 ? 'Todos os tipos'
+    : photoTypeFilter.length === 1 ? (PHOTO_TYPES[photoTypeFilter[0]] || photoTypeFilter[0])
+    : `${photoTypeFilter.length} tipos`;
+  const redeLabel = buildLabel(redeFilter, (redes as any[]).map((r: any) => ({ id: r.id, name: r.name })), 'Todas as redes');
+  const cityLabel = cityFilter.length === 0 ? 'Todas as cidades'
+    : cityFilter.length === 1 ? cityFilter[0]
+    : `${cityFilter.length} cidades`;
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
