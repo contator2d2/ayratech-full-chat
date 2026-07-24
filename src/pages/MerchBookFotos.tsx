@@ -26,7 +26,7 @@ const PHOTO_TYPES: Record<string, string> = {
 
 export default function MerchBookFotos() {
   const [brandFilter, setBrandFilter] = useState('');
-  const [pdvFilter, setPdvFilter] = useState('');
+  const [pdvFilter, setPdvFilter] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   const [viewPhoto, setViewPhoto] = useState<any>(null);
@@ -38,9 +38,18 @@ export default function MerchBookFotos() {
   const { data: pdvs = [] } = usePDVs();
   const { data: photos = [], isLoading } = usePhotoBook({
     brand_id: brandFilter || undefined,
-    pdv_id: pdvFilter || undefined,
+    pdv_id: pdvFilter.length ? pdvFilter.join(',') : undefined,
     date_from: dateFrom, date_to: dateTo,
   });
+
+  const togglePdv = (id: string) => {
+    setPdvFilter(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const pdvLabel = pdvFilter.length === 0
+    ? 'Todos os PDVs'
+    : pdvFilter.length === 1
+      ? ((pdvs as any[]).find((p: any) => p.id === pdvFilter[0])?.name || '1 PDV')
+      : `${pdvFilter.length} PDVs selecionados`;
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
