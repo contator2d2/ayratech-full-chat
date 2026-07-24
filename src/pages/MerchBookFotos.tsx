@@ -349,7 +349,14 @@ export default function MerchBookFotos() {
                           variant="ghost" 
                           size="sm" 
                           className="h-6 px-2 text-[10px]"
-                          onClick={() => selectAllBrandPdv(brand, pdv)}
+                          onClick={() => {
+                            setSelectedIds(prev => {
+                              const next = new Set(prev);
+                              const all = bPhotos.every((p: any) => next.has(p.id));
+                              bPhotos.forEach((p: any) => all ? next.delete(p.id) : next.add(p.id));
+                              return next;
+                            });
+                          }}
                         >
                           <CheckSquare className="h-3 w-3 mr-1" />
                           {allBrandPdvSelected ? 'Desmarcar' : 'Selecionar todas'}
