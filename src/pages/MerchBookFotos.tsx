@@ -322,16 +322,19 @@ export default function MerchBookFotos() {
         </div>
 
         {/* Photo Grid grouped */}
-        {sortedDates.map(date => (
-          <div key={date} className="space-y-3">
+        {sortedL1.map(k1 => (
+          <div key={k1} className="space-y-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              {new Date(date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+              {cfg.l1Label === 'date' ? <Calendar className="h-4 w-4" /> : cfg.l2Icon === 'date' && sortMode === 'pdv-date' ? <MapPin className="h-4 w-4" /> : <User className="h-4 w-4" />}
+              {renderL1Header(k1)}
             </h2>
-            {Object.entries(grouped[date]).map(([pdv, brandGroups]: [string, any]) => (
-              <Card key={pdv}>
+            {sortedL2Keys(grouped[k1]).map((k2) => {
+              const brandGroups = grouped[k1][k2];
+              const l2Title = cfg.l2Icon === 'date' ? formatDateHeader(k2) : k2;
+              return (
+              <Card key={k2}>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2"><MapPin className="h-4 w-4" /> {pdv}</CardTitle>
+                  <CardTitle className="text-sm flex items-center gap-2">{cfg.l2Icon === 'date' ? <Calendar className="h-4 w-4" /> : <MapPin className="h-4 w-4" />} {l2Title}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {Object.entries(brandGroups).map(([brand, bPhotos]: [string, any]) => {
