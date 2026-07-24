@@ -27,10 +27,16 @@ const PHOTO_TYPES: Record<string, string> = {
   rupture: 'Ruptura',
 };
 
-function MultiSelectPopover({ label, values, options, onToggle, onClear }: { label: string; values: string[]; options: { id: string; name: string }[]; onToggle: (id: string) => void; onClear: () => void }) {
+function MultiSelectPopover({ label, values, options, onToggle, onClear, searchPlaceholder = 'Buscar...' }: { label: string; values: string[]; options: { id: string; name: string }[]; onToggle: (id: string) => void; onClear: () => void; searchPlaceholder?: string }) {
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter(o => o.name?.toLowerCase().includes(q));
+  }, [options, query]);
   return (
     <div className="flex-1 min-w-[170px]">
-      <Popover>
+      <Popover onOpenChange={(open) => { if (!open) setQuery(''); }}>
         <PopoverTrigger asChild>
           <Button variant="outline" className="w-full justify-between font-normal">
             <span className="truncate">{label}</span>
@@ -38,7 +44,7 @@ function MultiSelectPopover({ label, values, options, onToggle, onClear }: { lab
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-72 p-0" align="start">
-          <div className="flex items-center justify-between p-2 border-b">
+          <div className="flex items-center justify-between p-2 border-b gap-2">
             <span className="text-xs text-muted-foreground">
               {values.length} selecionado{values.length === 1 ? '' : 's'}
             </span>
@@ -48,11 +54,20 @@ function MultiSelectPopover({ label, values, options, onToggle, onClear }: { lab
               </Button>
             )}
           </div>
+          <div className="p-2 border-b">
+            <Input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="h-8 text-sm"
+            />
+          </div>
           <div className="max-h-64 overflow-y-auto p-1">
-            {options.length === 0 && (
-              <div className="px-2 py-3 text-xs text-muted-foreground text-center">Nenhuma opção</div>
+            {filtered.length === 0 && (
+              <div className="px-2 py-3 text-xs text-muted-foreground text-center">Nenhum resultado</div>
             )}
-            {options.map((o) => (
+            {filtered.map((o) => (
               <label key={o.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-sm">
                 <Checkbox checked={values.includes(o.id)} onCheckedChange={() => onToggle(o.id)} />
                 <span className="truncate">{o.name}</span>
