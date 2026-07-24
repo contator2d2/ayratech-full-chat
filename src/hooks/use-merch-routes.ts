@@ -296,12 +296,18 @@ export function useAssignPromoter() {
 }
 
 // Photo Book
-export function usePhotoBook(filters?: { brand_id?: string; pdv_id?: string; date_from?: string; date_to?: string }) {
+export function usePhotoBook(filters?: { brand_id?: string; pdv_id?: string; date_from?: string; date_to?: string; promoter_id?: string; category_id?: string; photo_type?: string; supervisor_id?: string; rede_id?: string; city?: string }) {
   const params = new URLSearchParams();
   if (filters?.brand_id) params.set('brand_id', filters.brand_id);
   if (filters?.pdv_id) params.set('pdv_id', filters.pdv_id);
   if (filters?.date_from) params.set('date_from', filters.date_from);
   if (filters?.date_to) params.set('date_to', filters.date_to);
+  if (filters?.promoter_id) params.set('promoter_id', filters.promoter_id);
+  if (filters?.category_id) params.set('category_id', filters.category_id);
+  if (filters?.photo_type) params.set('photo_type', filters.photo_type);
+  if (filters?.supervisor_id) params.set('supervisor_id', filters.supervisor_id);
+  if (filters?.rede_id) params.set('rede_id', filters.rede_id);
+  if (filters?.city) params.set('city', filters.city);
   const qs = params.toString();
   return useQuery({
     queryKey: ['photo-book', qs],
