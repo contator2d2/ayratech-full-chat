@@ -71,6 +71,8 @@ export default function MerchContagemEstoque() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(emptyRule);
   const [prodSearch, setProdSearch] = useState("");
+  const [originalWd, setOriginalWd] = useState<string>("");
+  const [scopeDialog, setScopeDialog] = useState<{ open: boolean; payload: any | null }>({ open: false, payload: null });
 
   const { data: products = [] } = useProducts(
     form.brand_id ? { brand_id: form.brand_id } : undefined,
@@ -84,9 +86,15 @@ export default function MerchContagemEstoque() {
     return map;
   }, [rules]);
 
+  const wdSignature = (r: any) => JSON.stringify({
+    wd: Array.isArray(r?.weekdays) ? r.weekdays : (r?.weekdays ? JSON.parse(r.weekdays) : []),
+    ov: r?.pdv_overrides || {},
+    en: !!r?.enabled,
+  });
+
   const openNew = (brand: any) => {
     const existing = rulesByBrand.get(brand.id);
-    setForm(existing
+    const next = existing
       ? {
           ...emptyRule,
           ...existing,
@@ -101,22 +109,42 @@ export default function MerchContagemEstoque() {
             ? (typeof existing.pdv_overrides === 'object' ? existing.pdv_overrides : JSON.parse(existing.pdv_overrides))
             : {},
         }
-      : { ...emptyRule, brand_id: brand.id });
+      : { ...emptyRule, brand_id: brand.id };
+    setForm(next);
+    setOriginalWd(existing ? wdSignature(next) : "");
     setProdSearch("");
     setOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!form.brand_id) { toast.error("Selecione uma marca"); return; }
+  const persistRule = async (apply_scope: 'none' | 'future_only' | 'current_and_future') => {
     try {
-      await upsert.mutateAsync({
+      const res: any = await upsert.mutateAsync({
         ...form,
         selected_products: form.selected_products?.length ? form.selected_products : null,
+        apply_scope,
       });
-      toast.success("Regra salva");
+      const cleaned = res?._cleaned_executions || 0;
+      toast.success(
+        cleaned > 0
+          ? `Regra salva. ${cleaned} contagem(ns) pendente(s) reprogramada(s).`
+          : "Regra salva"
+      );
       setOpen(false);
+      setScopeDialog({ open: false, payload: null });
     } catch (e: any) { toast.error(e?.message || "Erro ao salvar"); }
   };
+
+  const handleSave = async () => {
+    if (!form.brand_id) { toast.error("Selecione uma marca"); return; }
+    // If weekday/enabled/pdv-override config changed vs the loaded rule, ask about scope
+    const currentSig = wdSignature(form);
+    if (originalWd && currentSig !== originalWd) {
+      setScopeDialog({ open: true, payload: form });
+      return;
+    }
+    await persistRule('none');
+  };
+
 
   const handleDelete = async (id: string) => {
     if (!confirm("Excluir esta regra de contagem?")) return;
