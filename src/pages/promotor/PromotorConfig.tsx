@@ -15,6 +15,9 @@ import { FaceCaptureDialog } from "@/components/facial-recognition/FaceCaptureDi
 import { FaceVerifyDialog } from "@/components/facial-recognition/FaceVerifyDialog";
 import { resolveMediaUrl } from "@/lib/media";
 import { canInstallPWA, installPWA, isPWAInstalled } from "@/lib/pwa";
+import { db } from "@/lib/offline-db";
+import { useOfflineSync } from "@/hooks/use-offline-sync";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export default function PromotorConfig() {
   const [updating, setUpdating] = useState(false);
