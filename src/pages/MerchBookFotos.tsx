@@ -257,6 +257,19 @@ export default function MerchBookFotos() {
               <div>
                 <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36" />
               </div>
+              <div className="flex-1 min-w-[200px]">
+                <Select value={sortMode} onValueChange={(v) => setSortMode(v as any)}>
+                  <SelectTrigger><SelectValue placeholder="Ordenar por" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date-pdv">Ordenar: Data → Loja</SelectItem>
+                    <SelectItem value="pdv-date">Ordenar: Loja → Data</SelectItem>
+                    <SelectItem value="supervisor-date">Ordenar: Supervisor → Data</SelectItem>
+                    <SelectItem value="promoter-date">Ordenar: Colaborador → Data</SelectItem>
+                    <SelectItem value="category-date">Ordenar: Categoria → Data</SelectItem>
+                    <SelectItem value="brand-date">Ordenar: Marca → Data</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {(brandFilter || pdvFilter.length || promoterFilter.length || categoryFilter.length || supervisorFilter.length || photoTypeFilter.length || redeFilter.length || cityFilter.length) ? (
                 <Button variant="ghost" size="sm" onClick={() => { setBrandFilter(''); setPdvFilter([]); setPromoterFilter([]); setCategoryFilter([]); setSupervisorFilter([]); setPhotoTypeFilter([]); setRedeFilter([]); setCityFilter([]); }}>
                   <X className="h-4 w-4 mr-1" /> Limpar filtros
