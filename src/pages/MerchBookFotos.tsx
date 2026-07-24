@@ -76,6 +76,7 @@ export default function MerchBookFotos() {
   const [cityFilter, setCityFilter] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [sortMode, setSortMode] = useState<'date-pdv' | 'pdv-date' | 'supervisor-date' | 'promoter-date' | 'category-date' | 'brand-date'>('date-pdv');
   const [viewPhoto, setViewPhoto] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bookEditorOpen, setBookEditorOpen] = useState(false);
