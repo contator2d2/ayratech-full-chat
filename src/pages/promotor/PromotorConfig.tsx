@@ -27,7 +27,7 @@ export default function PromotorConfig() {
   const [hardResetConfirmText, setHardResetConfirmText] = useState('');
   const [hardResetting, setHardResetting] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
-  const { sync, isSyncing } = useOfflineSync();
+  const { sync, isSyncing, syncProgress } = useOfflineSync();
   const { data: settings } = usePromotorSettings();
   const updateSettings = usePromotorUpdateSettings();
   const changePassword = usePromotorChangePassword();
