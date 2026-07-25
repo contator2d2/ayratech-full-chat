@@ -437,6 +437,25 @@ export default function PromotorConfig() {
           </CardContent>
         </Card>
 
+        {/* Hard Reset - Limpar Fila */}
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardHeader className="p-3 pb-1">
+            <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" /> Reset Total (Emergência)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0 space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Use apenas se a fila de sincronização estiver travada e as fotos não subirem mesmo online.
+              <strong className="text-destructive"> Todas as fotos pendentes serão apagadas permanentemente.</strong>
+            </p>
+            <Button onClick={openHardReset} variant="destructive" size="sm" className="w-full gap-2">
+              <Trash2 className="h-4 w-4" />
+              Limpar fila e resetar app
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* Status */}
         <Card>
           <CardHeader className="p-3 pb-1"><CardTitle className="text-sm flex items-center gap-2"><Smartphone className="h-4 w-4" /> Status do Dispositivo</CardTitle></CardHeader>
