@@ -18,6 +18,9 @@ import { canInstallPWA, installPWA, isPWAInstalled } from "@/lib/pwa";
 import { db } from "@/lib/offline-db";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Progress } from "@/components/ui/progress";
+import { useLiveQuery } from "dexie-react-hooks";
+import { cn } from "@/lib/utils";
 
 export default function PromotorConfig() {
   const [updating, setUpdating] = useState(false);
@@ -27,12 +30,18 @@ export default function PromotorConfig() {
   const [hardResetConfirmText, setHardResetConfirmText] = useState('');
   const [hardResetting, setHardResetting] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
-  const { sync, isSyncing } = useOfflineSync();
+  const { sync, isSyncing, syncProgress } = useOfflineSync();
   const { data: settings } = usePromotorSettings();
   const updateSettings = usePromotorUpdateSettings();
   const changePassword = usePromotorChangePassword();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  const livePendingUploads = useLiveQuery(() => db.pending_uploads.count(), [], 0);
+  const livePendingCalls = useLiveQuery(() => db.pending_api_calls.count(), [], 0);
+  const liveFailedUploads = useLiveQuery(() => db.pending_uploads.where('status').equals('failed').count(), [], 0);
+  const totalQueue = (livePendingUploads || 0) + (livePendingCalls || 0);
+
 
   const [theme, setTheme] = useState(settings?.theme || 'auto');
   const [notifications, setNotifications] = useState(settings?.notifications_enabled !== false);
@@ -422,6 +431,71 @@ export default function PromotorConfig() {
               {changePassword.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Alterar Senha
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* Force Sync */}
+        <Card className="border-blue-300 dark:border-blue-700">
+          <CardHeader className="p-3 pb-1">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} /> Sincronização Manual
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0 space-y-3">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-md bg-muted p-2">
+                <div className="text-lg font-bold">{totalQueue}</div>
+                <div className="text-[10px] text-muted-foreground">Na fila</div>
+              </div>
+              <div className="rounded-md bg-green-500/10 p-2">
+                <div className="text-lg font-bold text-green-700 dark:text-green-400">{syncProgress.done}</div>
+                <div className="text-[10px] text-muted-foreground">Enviadas</div>
+              </div>
+              <div className="rounded-md bg-destructive/10 p-2">
+                <div className="text-lg font-bold text-destructive">{syncProgress.failed || (liveFailedUploads || 0)}</div>
+                <div className="text-[10px] text-muted-foreground">Falharam</div>
+              </div>
+            </div>
+
+            {isSyncing && syncProgress.total > 0 && (
+              <div className="space-y-1">
+                <Progress value={(syncProgress.done / syncProgress.total) * 100} className="h-2" />
+                <p className="text-[11px] text-center text-muted-foreground">
+                  Enviando {syncProgress.done} de {syncProgress.total}...
+                </p>
+              </div>
+            )}
+
+            <Button
+              onClick={async () => {
+                if (!isOnline) {
+                  toast({ title: 'Sem conexão', description: 'Conecte-se a Wi-Fi ou 4G para sincronizar.', variant: 'destructive' });
+                  return;
+                }
+                if (totalQueue === 0) {
+                  toast({ title: '✅ Tudo sincronizado', description: 'Não há itens pendentes.' });
+                  return;
+                }
+                toast({ title: 'Iniciando envio em lote...', description: `${totalQueue} item(ns) na fila.` });
+                await sync();
+                const [u, c] = await Promise.all([db.pending_uploads.count(), db.pending_api_calls.count()]);
+                const remaining = u + c;
+                if (remaining === 0) {
+                  toast({ title: '✅ Sincronização concluída', description: 'Todas as fotos foram enviadas.' });
+                } else {
+                  toast({ title: `${remaining} item(ns) ainda pendente(s)`, description: 'Verifique a conexão e tente novamente.', variant: 'destructive' });
+                }
+              }}
+              disabled={isSyncing || !isOnline}
+              size="sm"
+              className="w-full gap-2"
+            >
+              {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {isSyncing ? 'Sincronizando...' : totalQueue > 0 ? `Sincronizar ${totalQueue} item(ns) agora` : 'Sincronizar agora'}
+            </Button>
+            {!isOnline && (
+              <p className="text-[11px] text-center text-destructive">Você está offline. Conecte-se para sincronizar.</p>
+            )}
           </CardContent>
         </Card>
 

@@ -26,6 +26,7 @@ export function useOnlineStatus() {
 export function useOfflineSync() {
   const isOnline = useOnlineStatus();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ total: number; done: number; failed: number }>({ total: 0, done: 0, failed: 0 });
   const syncingRef = useRef(false);
   const [localFileUrls, setLocalFileUrls] = useState<Record<string, string>>({});
   const urlsToRevoke = useRef<Set<string>>(new Set());
@@ -73,7 +74,10 @@ export function useOfflineSync() {
     const pendingUploads = await db.pending_uploads.where('status').equals('pending').toArray();
     const pendingCalls = await db.pending_api_calls.where('status').equals('pending').toArray();
 
-    if (pendingUploads.length === 0 && pendingCalls.length === 0) return;
+    const totalItems = pendingUploads.length + pendingCalls.length;
+    setSyncProgress({ total: totalItems, done: 0, failed: 0 });
+
+    if (totalItems === 0) return;
 
     // Cleanup old mappings (older than 3 days) to keep DB small
     const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
@@ -169,9 +173,11 @@ export function useOfflineSync() {
         }
 
         await db.pending_uploads.delete(upload.id!);
+        setSyncProgress(p => ({ ...p, done: p.done + 1 }));
       } catch (err: any) {
         logger.error('[OfflineSync] Erro no upload', { id: upload.id, error: err.message });
         await db.pending_uploads.update(upload.id!, { status: 'failed', error: err.message });
+        setSyncProgress(p => ({ ...p, failed: p.failed + 1 }));
       }
     };
 
@@ -239,10 +245,12 @@ export function useOfflineSync() {
         });
 
         await db.pending_api_calls.delete(call.id!);
+        setSyncProgress(p => ({ ...p, done: p.done + 1 }));
         logger.info('[OfflineSync] Chamada API concluída', { url: call.url });
       } catch (err: any) {
         logger.error('[OfflineSync] Erro na chamada API', { id: call.id, error: err.message, url: call.url });
         await db.pending_api_calls.update(call.id!, { status: 'failed', error: err.message });
+        setSyncProgress(p => ({ ...p, failed: p.failed + 1 }));
       }
     }
     } finally {
@@ -312,5 +320,5 @@ export function useOfflineSync() {
     return () => clearInterval(interval);
   }, [isOnline, sync]);
 
-  return { isOnline, isSyncing, queueUpload, queueApiCall, sync, getLocalFileUrl };
+  return { isOnline, isSyncing, syncProgress, queueUpload, queueApiCall, sync, getLocalFileUrl };
 }
