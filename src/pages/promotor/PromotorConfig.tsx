@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePromotorSettings, usePromotorUpdateSettings, usePromotorChangePassword, usePromotorFaceEnrollment, usePromotorSaveFaceEnrollment } from "@/hooks/use-promotor";
 import { PromotorLayout } from "./PromotorLayout";
 import { SyncDiagnosticPanel } from "@/components/promotor/SyncDiagnosticPanel";
-import { Settings, Lock, Palette, Wifi, WifiOff, Navigation, Smartphone, Loader2, Download, RefreshCw, ScanFace, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Settings, Lock, Palette, Wifi, WifiOff, Navigation, Smartphone, Loader2, Download, RefreshCw, ScanFace, CheckCircle2, ShieldCheck, Trash2, AlertTriangle } from "lucide-react";
 import { FaceCaptureDialog } from "@/components/facial-recognition/FaceCaptureDialog";
 import { FaceVerifyDialog } from "@/components/facial-recognition/FaceVerifyDialog";
 import { resolveMediaUrl } from "@/lib/media";
