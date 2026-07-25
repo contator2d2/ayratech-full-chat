@@ -23,6 +23,10 @@ export default function PromotorConfig() {
   const [updating, setUpdating] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [confirmUpdateOpen, setConfirmUpdateOpen] = useState(false);
+  const [hardResetOpen, setHardResetOpen] = useState(false);
+  const [hardResetConfirmText, setHardResetConfirmText] = useState('');
+  const [hardResetting, setHardResetting] = useState(false);
+  const [queueCount, setQueueCount] = useState(0);
   const { sync, isSyncing } = useOfflineSync();
   const { data: settings } = usePromotorSettings();
   const updateSettings = usePromotorUpdateSettings();
