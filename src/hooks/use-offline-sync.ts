@@ -173,9 +173,11 @@ export function useOfflineSync() {
         }
 
         await db.pending_uploads.delete(upload.id!);
+        setSyncProgress(p => ({ ...p, done: p.done + 1 }));
       } catch (err: any) {
         logger.error('[OfflineSync] Erro no upload', { id: upload.id, error: err.message });
         await db.pending_uploads.update(upload.id!, { status: 'failed', error: err.message });
+        setSyncProgress(p => ({ ...p, failed: p.failed + 1 }));
       }
     };
 
