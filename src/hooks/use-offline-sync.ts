@@ -245,10 +245,12 @@ export function useOfflineSync() {
         });
 
         await db.pending_api_calls.delete(call.id!);
+        setSyncProgress(p => ({ ...p, done: p.done + 1 }));
         logger.info('[OfflineSync] Chamada API concluída', { url: call.url });
       } catch (err: any) {
         logger.error('[OfflineSync] Erro na chamada API', { id: call.id, error: err.message, url: call.url });
         await db.pending_api_calls.update(call.id!, { status: 'failed', error: err.message });
+        setSyncProgress(p => ({ ...p, failed: p.failed + 1 }));
       }
     }
     } finally {
