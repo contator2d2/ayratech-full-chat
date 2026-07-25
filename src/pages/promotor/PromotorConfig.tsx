@@ -433,11 +433,6 @@ export default function PromotorConfig() {
           </CardContent>
         </Card>
 
-        {/* Force Update */}
-        <Card className="border-orange-300 dark:border-orange-700">
-          <CardHeader className="p-3 pb-1"><CardTitle className="text-sm flex items-center gap-2"><RefreshCw className="h-4 w-4" /> Atualizar Sistema</CardTitle></CardHeader>
-          <CardContent className="p-3 pt-0 space-y-2">
-            <p className="text-xs text-muted-foreground">Limpa o cache do navegador, service workers e recarrega o app com a versão mais recente.</p>
         {/* Force Sync */}
         <Card className="border-blue-300 dark:border-blue-700">
           <CardHeader className="p-3 pb-1">
@@ -482,10 +477,8 @@ export default function PromotorConfig() {
                 }
                 toast({ title: 'Iniciando envio em lote...', description: `${totalQueue} item(ns) na fila.` });
                 await sync();
-                const remaining = await (async () => {
-                  const [u, c] = await Promise.all([db.pending_uploads.count(), db.pending_api_calls.count()]);
-                  return u + c;
-                })();
+                const [u, c] = await Promise.all([db.pending_uploads.count(), db.pending_api_calls.count()]);
+                const remaining = u + c;
                 if (remaining === 0) {
                   toast({ title: '✅ Sincronização concluída', description: 'Todas as fotos foram enviadas.' });
                 } else {
@@ -505,7 +498,12 @@ export default function PromotorConfig() {
           </CardContent>
         </Card>
 
-        <Button onClick={handleForceUpdateClick} disabled={updating} variant="outline" size="sm" className="w-full gap-2">
+        {/* Force Update */}
+        <Card className="border-orange-300 dark:border-orange-700">
+          <CardHeader className="p-3 pb-1"><CardTitle className="text-sm flex items-center gap-2"><RefreshCw className="h-4 w-4" /> Atualizar Sistema</CardTitle></CardHeader>
+          <CardContent className="p-3 pt-0 space-y-2">
+            <p className="text-xs text-muted-foreground">Limpa o cache do navegador, service workers e recarrega o app com a versão mais recente.</p>
+            <Button onClick={handleForceUpdateClick} disabled={updating} variant="outline" size="sm" className="w-full gap-2">
               {updating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {updating ? 'Atualizando...' : 'Atualizar Agora'}
             </Button>
