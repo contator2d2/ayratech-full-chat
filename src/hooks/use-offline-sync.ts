@@ -74,7 +74,10 @@ export function useOfflineSync() {
     const pendingUploads = await db.pending_uploads.where('status').equals('pending').toArray();
     const pendingCalls = await db.pending_api_calls.where('status').equals('pending').toArray();
 
-    if (pendingUploads.length === 0 && pendingCalls.length === 0) return;
+    const totalItems = pendingUploads.length + pendingCalls.length;
+    setSyncProgress({ total: totalItems, done: 0, failed: 0 });
+
+    if (totalItems === 0) return;
 
     // Cleanup old mappings (older than 3 days) to keep DB small
     const threeDaysAgo = Date.now() - (3 * 24 * 60 * 60 * 1000);
