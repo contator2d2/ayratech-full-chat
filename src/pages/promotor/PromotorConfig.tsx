@@ -36,6 +36,12 @@ export default function PromotorConfig() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  const livePendingUploads = useLiveQuery(() => db.pending_uploads.count(), [], 0);
+  const livePendingCalls = useLiveQuery(() => db.pending_api_calls.count(), [], 0);
+  const liveFailedUploads = useLiveQuery(() => db.pending_uploads.where('status').equals('failed').count(), [], 0);
+  const totalQueue = (livePendingUploads || 0) + (livePendingCalls || 0);
+
+
   const [theme, setTheme] = useState(settings?.theme || 'auto');
   const [notifications, setNotifications] = useState(settings?.notifications_enabled !== false);
   const [currentPwd, setCurrentPwd] = useState('');
