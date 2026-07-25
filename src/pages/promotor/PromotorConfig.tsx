@@ -218,7 +218,7 @@ export default function PromotorConfig() {
             (dbs || []).map((d: any) => d?.name && indexedDB.deleteDatabase(d.name))
           );
         } else {
-          indexedDB.deleteDatabase('AyraOfflineDB');
+          (indexedDB as any).deleteDatabase('AyraOfflineDB');
         }
       } catch {}
       // 3) Service workers + caches
