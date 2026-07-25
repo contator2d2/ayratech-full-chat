@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePromotorSettings, usePromotorUpdateSettings, usePromotorChangePassword, usePromotorFaceEnrollment, usePromotorSaveFaceEnrollment } from "@/hooks/use-promotor";
 import { PromotorLayout } from "./PromotorLayout";
 import { SyncDiagnosticPanel } from "@/components/promotor/SyncDiagnosticPanel";
-import { Settings, Lock, Palette, Wifi, WifiOff, Navigation, Smartphone, Loader2, Download, RefreshCw, ScanFace, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Settings, Lock, Palette, Wifi, WifiOff, Navigation, Smartphone, Loader2, Download, RefreshCw, ScanFace, CheckCircle2, ShieldCheck, Trash2, AlertTriangle } from "lucide-react";
 import { FaceCaptureDialog } from "@/components/facial-recognition/FaceCaptureDialog";
 import { FaceVerifyDialog } from "@/components/facial-recognition/FaceVerifyDialog";
 import { resolveMediaUrl } from "@/lib/media";
@@ -23,6 +23,10 @@ export default function PromotorConfig() {
   const [updating, setUpdating] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [confirmUpdateOpen, setConfirmUpdateOpen] = useState(false);
+  const [hardResetOpen, setHardResetOpen] = useState(false);
+  const [hardResetConfirmText, setHardResetConfirmText] = useState('');
+  const [hardResetting, setHardResetting] = useState(false);
+  const [queueCount, setQueueCount] = useState(0);
   const { sync, isSyncing } = useOfflineSync();
   const { data: settings } = usePromotorSettings();
   const updateSettings = usePromotorUpdateSettings();
@@ -188,6 +192,62 @@ export default function PromotorConfig() {
       setUpdating(false);
     }
   };
+
+  const openHardReset = async () => {
+    const total = await checkPending();
+    setQueueCount(total);
+    setHardResetConfirmText('');
+    setHardResetOpen(true);
+  };
+
+  const doHardReset = async () => {
+    setHardResetting(true);
+    try {
+      // 1) Apaga toda a fila offline (IndexedDB Dexie)
+      await Promise.all([
+        db.pending_uploads.clear(),
+        db.pending_api_calls.clear(),
+        db.upload_mappings.clear(),
+      ]);
+      // 2) Remove qualquer IndexedDB residual do app
+      try {
+        if ('databases' in indexedDB) {
+          // @ts-ignore
+          const dbs = await indexedDB.databases();
+          await Promise.all(
+            (dbs || []).map((d: any) => d?.name && indexedDB.deleteDatabase(d.name))
+          );
+        } else {
+          (indexedDB as any).deleteDatabase('AyraOfflineDB');
+        }
+      } catch {}
+      // 3) Service workers + caches
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      // 4) localStorage — preserva token/employee/tema para não deslogar
+      const token = localStorage.getItem('promotor_token');
+      const emp = localStorage.getItem('promotor_employee');
+      const thm = localStorage.getItem('promotor-theme');
+      localStorage.clear();
+      sessionStorage.clear();
+      if (token) localStorage.setItem('promotor_token', token);
+      if (emp) localStorage.setItem('promotor_employee', emp);
+      if (thm) localStorage.setItem('promotor-theme', thm);
+
+      toast({ title: '✅ Fila limpa e app resetado', description: 'Recarregando...' });
+      setTimeout(() => window.location.reload(), 800);
+    } catch (err: any) {
+      toast({ title: 'Erro no reset', description: err.message, variant: 'destructive' });
+      setHardResetting(false);
+    }
+  };
+
 
   const handleFaceCaptured = (data: { descriptor: number[]; landmarks: number[][]; imageDataUrl: string; geometricProfile: Record<string, number> }) => {
     setPendingFace(data);
@@ -377,6 +437,25 @@ export default function PromotorConfig() {
           </CardContent>
         </Card>
 
+        {/* Hard Reset - Limpar Fila */}
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardHeader className="p-3 pb-1">
+            <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" /> Reset Total (Emergência)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0 space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Use apenas se a fila de sincronização estiver travada e as fotos não subirem mesmo online.
+              <strong className="text-destructive"> Todas as fotos pendentes serão apagadas permanentemente.</strong>
+            </p>
+            <Button onClick={openHardReset} variant="destructive" size="sm" className="w-full gap-2">
+              <Trash2 className="h-4 w-4" />
+              Limpar fila e resetar app
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* Status */}
         <Card>
           <CardHeader className="p-3 pb-1"><CardTitle className="text-sm flex items-center gap-2"><Smartphone className="h-4 w-4" /> Status do Dispositivo</CardTitle></CardHeader>
@@ -443,6 +522,49 @@ export default function PromotorConfig() {
             >
               Atualizar mesmo assim (perder pendentes)
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={hardResetOpen} onOpenChange={(o) => { if (!hardResetting) setHardResetOpen(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" /> Reset Total do App
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Esta ação vai <strong>apagar permanentemente {queueCount} item(ns)</strong> da fila
+                  de sincronização, limpar caches e recarregar o app.
+                </p>
+                <p className="text-destructive font-medium">
+                  ⚠️ Fotos que ainda não subiram para o servidor serão perdidas e o promotor
+                  precisará tirar novamente.
+                </p>
+                <p>Use somente quando a fila estiver travada e não subir mesmo online.</p>
+                <p className="pt-2">Digite <strong>RESETAR</strong> para confirmar:</p>
+                <Input
+                  autoFocus
+                  value={hardResetConfirmText}
+                  onChange={(e) => setHardResetConfirmText(e.target.value)}
+                  placeholder="RESETAR"
+                  disabled={hardResetting}
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            <AlertDialogCancel className="w-full mt-0" disabled={hardResetting}>Cancelar</AlertDialogCancel>
+            <Button
+              onClick={doHardReset}
+              disabled={hardResetting || hardResetConfirmText.trim().toUpperCase() !== 'RESETAR'}
+              variant="destructive"
+              className="w-full"
+            >
+              {hardResetting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              {hardResetting ? 'Resetando...' : 'Apagar fila e resetar'}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
