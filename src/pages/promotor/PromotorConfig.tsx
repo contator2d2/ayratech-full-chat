@@ -193,6 +193,62 @@ export default function PromotorConfig() {
     }
   };
 
+  const openHardReset = async () => {
+    const total = await checkPending();
+    setQueueCount(total);
+    setHardResetConfirmText('');
+    setHardResetOpen(true);
+  };
+
+  const doHardReset = async () => {
+    setHardResetting(true);
+    try {
+      // 1) Apaga toda a fila offline (IndexedDB Dexie)
+      await Promise.all([
+        db.pending_uploads.clear(),
+        db.pending_api_calls.clear(),
+        db.upload_mappings.clear(),
+      ]);
+      // 2) Remove qualquer IndexedDB residual do app
+      try {
+        if ('databases' in indexedDB) {
+          // @ts-ignore
+          const dbs = await indexedDB.databases();
+          await Promise.all(
+            (dbs || []).map((d: any) => d?.name && indexedDB.deleteDatabase(d.name))
+          );
+        } else {
+          indexedDB.deleteDatabase('AyraOfflineDB');
+        }
+      } catch {}
+      // 3) Service workers + caches
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      // 4) localStorage — preserva token/employee/tema para não deslogar
+      const token = localStorage.getItem('promotor_token');
+      const emp = localStorage.getItem('promotor_employee');
+      const thm = localStorage.getItem('promotor-theme');
+      localStorage.clear();
+      sessionStorage.clear();
+      if (token) localStorage.setItem('promotor_token', token);
+      if (emp) localStorage.setItem('promotor_employee', emp);
+      if (thm) localStorage.setItem('promotor-theme', thm);
+
+      toast({ title: '✅ Fila limpa e app resetado', description: 'Recarregando...' });
+      setTimeout(() => window.location.reload(), 800);
+    } catch (err: any) {
+      toast({ title: 'Erro no reset', description: err.message, variant: 'destructive' });
+      setHardResetting(false);
+    }
+  };
+
+
   const handleFaceCaptured = (data: { descriptor: number[]; landmarks: number[][]; imageDataUrl: string; geometricProfile: Record<string, number> }) => {
     setPendingFace(data);
     setFaceCaptureOpen(false);
