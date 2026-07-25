@@ -320,5 +320,5 @@ export function useOfflineSync() {
     return () => clearInterval(interval);
   }, [isOnline, sync]);
 
-  return { isOnline, isSyncing, queueUpload, queueApiCall, sync, getLocalFileUrl };
+  return { isOnline, isSyncing, syncProgress, queueUpload, queueApiCall, sync, getLocalFileUrl };
 }
