@@ -525,6 +525,49 @@ export default function PromotorConfig() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={hardResetOpen} onOpenChange={(o) => { if (!hardResetting) setHardResetOpen(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" /> Reset Total do App
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Esta ação vai <strong>apagar permanentemente {queueCount} item(ns)</strong> da fila
+                  de sincronização, limpar caches e recarregar o app.
+                </p>
+                <p className="text-destructive font-medium">
+                  ⚠️ Fotos que ainda não subiram para o servidor serão perdidas e o promotor
+                  precisará tirar novamente.
+                </p>
+                <p>Use somente quando a fila estiver travada e não subir mesmo online.</p>
+                <p className="pt-2">Digite <strong>RESETAR</strong> para confirmar:</p>
+                <Input
+                  autoFocus
+                  value={hardResetConfirmText}
+                  onChange={(e) => setHardResetConfirmText(e.target.value)}
+                  placeholder="RESETAR"
+                  disabled={hardResetting}
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            <AlertDialogCancel className="w-full mt-0" disabled={hardResetting}>Cancelar</AlertDialogCancel>
+            <Button
+              onClick={doHardReset}
+              disabled={hardResetting || hardResetConfirmText.trim().toUpperCase() !== 'RESETAR'}
+              variant="destructive"
+              className="w-full"
+            >
+              {hardResetting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              {hardResetting ? 'Resetando...' : 'Apagar fila e resetar'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PromotorLayout>
   );
 }
