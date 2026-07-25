@@ -18,6 +18,8 @@ import { canInstallPWA, installPWA, isPWAInstalled } from "@/lib/pwa";
 import { db } from "@/lib/offline-db";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Progress } from "@/components/ui/progress";
+import { useLiveQuery } from "dexie-react-hooks";
 
 export default function PromotorConfig() {
   const [updating, setUpdating] = useState(false);
