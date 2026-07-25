@@ -20,6 +20,7 @@ import { useOfflineSync } from "@/hooks/use-offline-sync";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { useLiveQuery } from "dexie-react-hooks";
+import { cn } from "@/lib/utils";
 
 export default function PromotorConfig() {
   const [updating, setUpdating] = useState(false);
