@@ -120,11 +120,28 @@ async function ensureStockCountExecutionsForRoute(route) {
       if (effectiveWd && effectiveWd.length && !effectiveWd.map(Number).includes(visitDow)) continue;
       const { start, end } = computeStockPeriodWindow(route.visit_date, rule.frequency, rule.frequency_interval || 1, rule.custom_days);
       const existing = (await query(
-        `SELECT id FROM stock_count_executions
+        `SELECT id, status, route_id FROM stock_count_executions
          WHERE organization_id=$1 AND brand_id=$2 AND pdv_id=$3 AND week_start=$4 LIMIT 1`,
         [route.organization_id, rule.brand_id, route.pdv_id, start]
       )).rows[0];
-      if (existing) continue;
+      if (existing) {
+        // Self-heal: if marked justified/postponed without any actual record, revert to pending
+        if (existing.status === 'justified' || existing.status === 'postponed') {
+          let hasRecord = false;
+          try {
+            const table = existing.status === 'justified' ? 'stock_count_justifications' : 'stock_count_postponements';
+            const rec = await query(`SELECT 1 FROM ${table} WHERE execution_id=$1 LIMIT 1`, [existing.id]);
+            hasRecord = rec.rowCount > 0;
+          } catch { hasRecord = true; /* if table missing, don't reset */ }
+          if (!hasRecord) {
+            await query(
+              `UPDATE stock_count_executions SET status='pending', route_id=$1, updated_at=NOW() WHERE id=$2`,
+              [route.id, existing.id]
+            );
+          }
+        }
+        continue;
+      }
       await query(
         `INSERT INTO stock_count_executions
          (organization_id, route_id, brand_id, pdv_id, promoter_id, rule_id, status, week_start, week_end)
