@@ -313,13 +313,12 @@ router.post('/rules', authenticate, async (req, res) => {
       const nextMonday = new Date(currentMonday); nextMonday.setDate(currentMonday.getDate() + 7);
       const scopeStart = apply_scope === 'current_and_future' ? currentMonday : nextMonday;
       const scopeStartStr = formatLocalDate(scopeStart);
-      // Only delete truly pending executions (never started, no items collected).
+      // Only delete truly pending executions (no items collected).
       const del = await query(
         `DELETE FROM stock_count_executions
          WHERE organization_id=$1 AND brand_id=$2
-           AND status='pending'
+           AND status IN ('pending','in_progress')
            AND COALESCE(completed_items,0) = 0
-           AND started_at IS NULL
            AND (week_start >= $3 OR (week_start IS NULL AND created_at >= $3::timestamptz))
          RETURNING id`,
         [orgId, saved.brand_id, scopeStartStr]
