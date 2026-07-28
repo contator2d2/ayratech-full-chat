@@ -461,7 +461,14 @@ export default function MerchRotas() {
                                 <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onClick={() => setViewRoute(r)}>
                                   <div className="text-sm font-mono font-medium">{r.scheduled_time?.slice(0, 5) || '--:--'}</div>
                                   <div className="min-w-0">
-                                    <div className="text-sm font-semibold truncate">{r.pdv_name}</div>
+                                    <div className="text-sm font-semibold truncate flex items-center gap-1.5">
+                                      {r.pdv_name}
+                                      {r.has_stock_count && (
+                                        <Badge variant="outline" className="border-amber-500/50 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 gap-1 px-1.5 py-0 h-4 text-[9px]">
+                                          <Boxes className="h-2.5 w-2.5" /> Saldo
+                                        </Badge>
+                                      )}
+                                    </div>
                                     <div className="text-xs text-muted-foreground flex items-center gap-2">
                                       <span className="flex items-center gap-1"><User className="h-3 w-3" />{r.promoter_name}</span>
                                       <span>•</span>
