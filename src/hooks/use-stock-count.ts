@@ -13,7 +13,12 @@ export function useUpsertStockCountRule() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: any) => api<any>('/api/stock-count/rules', { method: 'POST', body: data }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['stock-count-rules'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['stock-count-rules'] });
+      qc.invalidateQueries({ queryKey: ['stock-count-route'] });
+      qc.invalidateQueries({ queryKey: ['promotor-agenda'] });
+      qc.invalidateQueries({ queryKey: ['merch-routes'] });
+    },
   });
 }
 
