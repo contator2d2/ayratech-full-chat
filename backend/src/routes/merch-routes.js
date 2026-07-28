@@ -388,6 +388,52 @@ router.get('/routes', async (req, res) => {
       }
     } catch (e) { logWarn('routes.list.stock_count_flag_failed', e); }
 
+    // Enrich with stock_count_status (aggregate) for rows that have has_stock_count
+    try {
+      const scRouteIds = rows.filter(r => r.has_stock_count).map(r => r.id);
+      if (scRouteIds.length && (await hasTable('stock_count_executions'))) {
+        // Self-heal: revert justified/postponed executions without records back to pending
+        try {
+          if (await hasTable('stock_count_justifications')) {
+            await query(
+              `UPDATE stock_count_executions e SET status='pending', updated_at=NOW()
+               WHERE e.route_id = ANY($1::uuid[]) AND e.status='justified'
+                 AND NOT EXISTS (SELECT 1 FROM stock_count_justifications j WHERE j.execution_id = e.id)`,
+              [scRouteIds]
+            );
+          }
+          if (await hasTable('stock_count_postponements')) {
+            await query(
+              `UPDATE stock_count_executions e SET status='pending', updated_at=NOW()
+               WHERE e.route_id = ANY($1::uuid[]) AND e.status='postponed'
+                 AND NOT EXISTS (SELECT 1 FROM stock_count_postponements p WHERE p.execution_id = e.id)`,
+              [scRouteIds]
+            );
+          }
+        } catch (e) { logWarn('routes.list.stock_count_selfheal_failed', e); }
+
+        const execRes = await query(
+          `SELECT route_id, status FROM stock_count_executions WHERE route_id = ANY($1::uuid[])`,
+          [scRouteIds]
+        );
+        const byRoute = new Map();
+        for (const e of execRes.rows) {
+          if (!byRoute.has(e.route_id)) byRoute.set(e.route_id, []);
+          byRoute.get(e.route_id).push(e.status);
+        }
+        for (const r of rows) {
+          if (!r.has_stock_count) continue;
+          const statuses = byRoute.get(r.id) || [];
+          if (!statuses.length) r.stock_count_status = 'pending';
+          else if (statuses.every(s => s === 'completed')) r.stock_count_status = 'completed';
+          else if (statuses.some(s => s === 'postponed')) r.stock_count_status = 'postponed';
+          else if (statuses.some(s => s === 'justified')) r.stock_count_status = 'justified';
+          else if (statuses.some(s => s === 'in_progress')) r.stock_count_status = 'in_progress';
+          else r.stock_count_status = 'pending';
+        }
+      }
+    } catch (e) { logWarn('routes.list.stock_count_status_failed', e); }
+
     res.json(rows);
   } catch (err) {
     logError('routes.list', err);
