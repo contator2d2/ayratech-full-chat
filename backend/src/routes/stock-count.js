@@ -423,11 +423,27 @@ router.get('/route/:route_id', authenticate, async (req, res) => {
            VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8) RETURNING *`,
           [orgId, routeId, rule.brand_id, routeRow.pdv_id, routeRow.promoter_id, rule.id, weekStart, weekEnd]
         )).rows[0];
-      } else if (exec.route_id !== routeId && exec.status === 'postponed') {
-        // Reactivate on the new visit within the same week
-        exec = (await query(
-          `UPDATE stock_count_executions SET route_id=$1, status='pending', updated_at=NOW()
-           WHERE id=$2 RETURNING *`, [routeId, exec.id])).rows[0];
+      } else {
+        // Self-heal: if marked justified/postponed but no actual record exists, revert to pending
+        if (exec.status === 'justified' || exec.status === 'postponed') {
+          const table = exec.status === 'justified' ? 'stock_count_justifications' : 'stock_count_postponements';
+          let hasRecord = true;
+          try {
+            const rec = await query(`SELECT 1 FROM ${table} WHERE execution_id=$1 LIMIT 1`, [exec.id]);
+            hasRecord = rec.rowCount > 0;
+          } catch { hasRecord = true; }
+          if (!hasRecord) {
+            exec = (await query(
+              `UPDATE stock_count_executions SET status='pending', route_id=$1, updated_at=NOW()
+               WHERE id=$2 RETURNING *`, [routeId, exec.id])).rows[0];
+          }
+        }
+        // Reactivate postponed execution on new visit within the same week
+        if (exec.route_id !== routeId && exec.status === 'postponed') {
+          exec = (await query(
+            `UPDATE stock_count_executions SET route_id=$1, status='pending', updated_at=NOW()
+             WHERE id=$2 RETURNING *`, [routeId, exec.id])).rows[0];
+        }
       }
 
       // Fetch items already saved
