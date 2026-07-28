@@ -183,13 +183,18 @@ export default function PromotorAgenda() {
                 const dayStr = format(day, 'yyyy-MM-dd');
                 const dayRoutes = routesByDay[dayStr] || [];
                 const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+                const hasStock = dayRoutes.some((r: any) => r.has_stock_count);
                 return (
                   <div key={dayStr}
                     onClick={() => { setCurrentDate(day); setViewMode('day'); }}
-                    className={`aspect-square flex flex-col items-center justify-center rounded-lg text-xs cursor-pointer transition-colors
+                    className={`aspect-square flex flex-col items-center justify-center rounded-lg text-xs cursor-pointer transition-colors relative
                       ${isTodayFn(day) ? 'bg-primary text-primary-foreground font-bold' : ''}
-                      ${!isCurrentMonth ? 'opacity-30' : 'hover:bg-muted'}`}>
+                      ${!isCurrentMonth ? 'opacity-30' : 'hover:bg-muted'}
+                      ${hasStock && !isTodayFn(day) ? 'ring-1 ring-amber-500/50 bg-amber-50 dark:bg-amber-950/20' : ''}`}>
                     <span>{format(day, 'd')}</span>
+                    {hasStock && (
+                      <Boxes className={`h-2.5 w-2.5 absolute top-0.5 right-0.5 ${isTodayFn(day) ? 'text-primary-foreground' : 'text-amber-600'}`} />
+                    )}
                     {dayRoutes.length > 0 && (
                       <div className="flex gap-0.5 mt-0.5">
                         {dayRoutes.slice(0, 3).map((_, i) => <div key={i} className="w-1 h-1 rounded-full bg-primary" />)}
