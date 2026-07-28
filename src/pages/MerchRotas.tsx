@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, User, UserPlus, Eye, Copy, Trash2, Edit, Filter, Repeat, Sparkles, Package, RefreshCw, X, CheckCircle2, Activity, Store, Info, ChevronsUpDown, Check, AlertTriangle, Camera } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Plus, MapPin, Clock, User, UserPlus, Eye, Copy, Trash2, Edit, Filter, Repeat, Sparkles, Package, RefreshCw, X, CheckCircle2, Activity, Store, Info, ChevronsUpDown, Check, AlertTriangle, Camera, Boxes } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AIRoutePlanner from "@/components/merch/AIRoutePlanner";
 import { useMerchRoutes, useCreateMerchRoute, useUpdateMerchRoute, useDeleteMerchRoute, useDuplicateMerchRoute, useBulkDeleteMerchRoutes, useBrandChecklists, useBrandPromoters, useRouteMixPreview, useRouteProducts, useAddRouteProduct, useRemoveRouteProduct, useSyncRouteProducts, useJustifyRoute, useAssignPromoter } from "@/hooks/use-merch-routes";
@@ -461,7 +461,14 @@ export default function MerchRotas() {
                                 <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer" onClick={() => setViewRoute(r)}>
                                   <div className="text-sm font-mono font-medium">{r.scheduled_time?.slice(0, 5) || '--:--'}</div>
                                   <div className="min-w-0">
-                                    <div className="text-sm font-semibold truncate">{r.pdv_name}</div>
+                                    <div className="text-sm font-semibold truncate flex items-center gap-1.5">
+                                      {r.pdv_name}
+                                      {r.has_stock_count && (
+                                        <Badge variant="outline" className="border-amber-500/50 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 gap-1 px-1.5 py-0 h-4 text-[9px]">
+                                          <Boxes className="h-2.5 w-2.5" /> Saldo
+                                        </Badge>
+                                      )}
+                                    </div>
                                     <div className="text-xs text-muted-foreground flex items-center gap-2">
                                       <span className="flex items-center gap-1"><User className="h-3 w-3" />{r.promoter_name}</span>
                                       <span>•</span>
@@ -488,21 +495,27 @@ export default function MerchRotas() {
                 }
 
 
+                const hasStock = dayRoutes.some((r: any) => r.has_stock_count);
                 return (
                   <div key={dayStr}
                     onClick={() => { setCurrentDate(day); if (viewMode === 'month') setViewMode('day'); }}
-                    className={`min-h-[80px] p-1 rounded-lg border cursor-pointer transition-colors
+                    className={`min-h-[80px] p-1 rounded-lg border cursor-pointer transition-colors relative
                       ${isToday ? 'border-primary bg-primary/5' : 'border-border/50 hover:bg-muted/30'}
+                      ${hasStock && !isToday ? 'ring-1 ring-amber-500/50 bg-amber-50/40 dark:bg-amber-950/10' : ''}
                       ${!isCurrentMonth && viewMode === 'month' ? 'opacity-40' : ''}`}>
+                    {hasStock && (
+                      <Boxes className="h-3 w-3 absolute top-1 right-1 text-amber-600" />
+                    )}
                     <div className="text-xs font-medium mb-0.5">
                       {format(day, 'd')}
                       {dayRoutes.length > 0 && <Badge variant="secondary" className="ml-1 text-[9px] h-4 px-1">{dayRoutes.length}</Badge>}
                     </div>
                     <div className="space-y-0.5">
                       {dayRoutes.slice(0, 3).map((r: any) => (
-                        <div key={r.id} className={`text-[10px] px-1 py-0.5 rounded truncate ${STATUS_COLORS[r.status] || 'bg-muted'}`}
+                        <div key={r.id} className={`text-[10px] px-1 py-0.5 rounded truncate flex items-center gap-1 ${STATUS_COLORS[r.status] || 'bg-muted'}`}
                           onClick={(e) => { e.stopPropagation(); setViewRoute(r); }}>
-                          {r.scheduled_time?.slice(0, 5)} {r.pdv_name}
+                          <span className="flex-1 truncate">{r.scheduled_time?.slice(0, 5)} {r.pdv_name}</span>
+                          {r.has_stock_count && <Boxes className="h-2.5 w-2.5 text-amber-600 shrink-0" />}
                         </div>
                       ))}
                       {dayRoutes.length > 3 && <div className="text-[10px] text-muted-foreground pl-1">+{dayRoutes.length - 3} mais</div>}
