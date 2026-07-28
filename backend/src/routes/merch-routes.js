@@ -2405,6 +2405,32 @@ router.get('/promotor/agenda', promotorAuth, async (req, res) => {
         }
         r.has_stock_count = has;
       }
+      // Enrich with stock_count_status (aggregate) for rows that have has_stock_count
+      try {
+        const scRouteIds = rows.filter(r => r.has_stock_count).map(r => r.id);
+        if (scRouteIds.length) {
+          const scRes = await query(
+            `SELECT route_id, status FROM stock_count_executions WHERE route_id = ANY($1::uuid[])`,
+            [scRouteIds]
+          );
+          const byRoute = new Map();
+          for (const row of scRes.rows) {
+            const arr = byRoute.get(row.route_id) || [];
+            arr.push(row.status);
+            byRoute.set(row.route_id, arr);
+          }
+          for (const r of rows) {
+            if (!r.has_stock_count) continue;
+            const statuses = byRoute.get(r.id) || [];
+            if (!statuses.length) r.stock_count_status = 'pending';
+            else if (statuses.every(s => s === 'completed')) r.stock_count_status = 'completed';
+            else if (statuses.some(s => s === 'postponed')) r.stock_count_status = 'postponed';
+            else if (statuses.some(s => s === 'justified')) r.stock_count_status = 'justified';
+            else if (statuses.some(s => s === 'in_progress')) r.stock_count_status = 'in_progress';
+            else r.stock_count_status = 'pending';
+          }
+        }
+      } catch (e) { logWarn('promotor.agenda.stock_count_status_failed', e); }
     } catch {}
     res.json(rows);
 

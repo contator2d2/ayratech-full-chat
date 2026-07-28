@@ -810,13 +810,11 @@ export default function PromotorRota() {
   // Stock count executions (Contagem de Saldo) for this route
   const { data: stockCountExecs = [] } = useRouteStockCount(id);
   const stockCountBlocking = useMemo(() => {
-    // Bloqueia conclusão apenas quando a regra proíbe adiar (allow_postpone=false)
-    // e a contagem NÃO está completa, justificada ou adiada.
+    // Sempre bloqueia a conclusão da rota quando houver contagem pendente.
+    // Só libera se a contagem foi concluída, justificada ou adiada com motivo.
     return (stockCountExecs as any[]).filter((e: any) => {
-      const rule = e?.rule || {};
-      const mustBlock = rule.allow_postpone === false;
       const resolved = e.status === 'completed' || e.status === 'justified' || e.status === 'postponed';
-      return mustBlock && !resolved;
+      return !resolved;
     });
   }, [stockCountExecs]);
 

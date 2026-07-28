@@ -109,11 +109,22 @@ export default function PromotorAgenda() {
                       </div>
                       <Badge className={STATUS_COLORS[r.status] || 'bg-muted'}>{STATUS_LABELS[r.status] || r.status}</Badge>
                     </div>
-                    {r.has_stock_count && (
-                      <Badge variant="outline" className="mb-2 border-amber-500/50 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 gap-1">
-                        <Boxes className="h-3 w-3" /> Contagem de estoque
-                      </Badge>
-                    )}
+                    {r.has_stock_count && (() => {
+                      const s = r.stock_count_status || 'pending';
+                      const cfg: Record<string, { cls: string; label: string }> = {
+                        pending: { cls: 'border-amber-500/50 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400', label: 'Contagem pendente' },
+                        in_progress: { cls: 'border-orange-500/50 bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400', label: 'Contagem em andamento' },
+                        completed: { cls: 'border-green-500/50 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400', label: 'Contagem concluída' },
+                        postponed: { cls: 'border-blue-500/50 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400', label: 'Contagem adiada' },
+                        justified: { cls: 'border-slate-400/50 bg-slate-50 text-slate-700 dark:bg-slate-950/30 dark:text-slate-300', label: 'Contagem não realizada' },
+                      };
+                      const c = cfg[s] || cfg.pending;
+                      return (
+                        <Badge variant="outline" className={`mb-2 gap-1 ${c.cls}`}>
+                          <Boxes className="h-3 w-3" /> {c.label}
+                        </Badge>
+                      );
+                    })()}
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{r.scheduled_time?.slice(0, 5) || '--:--'}</span>
                       {r.estimated_duration_min && <span>{r.estimated_duration_min}min</span>}
