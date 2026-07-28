@@ -153,24 +153,38 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
     }
   };
 
+  const isPostponed = status === 'postponed';
+  const isJustified = status === 'justified';
+  const isResolved = allDone || isPostponed || isJustified;
+
   const bannerClass = allDone
     ? 'border-green-500/60 bg-green-500/10'
-    : isMandatory
-      ? 'border-destructive/70 bg-destructive/10'
-      : 'border-amber-500/60 bg-amber-500/10';
-  const iconClass = allDone ? 'text-green-600' : isMandatory ? 'text-destructive' : 'text-amber-600';
+    : isPostponed
+      ? 'border-blue-500/60 bg-blue-500/10'
+      : isJustified
+        ? 'border-slate-400/60 bg-slate-500/10'
+        : isMandatory
+          ? 'border-destructive/70 bg-destructive/10'
+          : 'border-amber-500/60 bg-amber-500/10';
+  const iconClass = allDone
+    ? 'text-green-600'
+    : isPostponed
+      ? 'text-blue-600'
+      : isJustified
+        ? 'text-slate-600'
+        : isMandatory ? 'text-destructive' : 'text-amber-600';
 
   return (
     <>
       <div className={`rounded-lg border ${bannerClass} p-3`}>
         <div className="flex items-center gap-3">
           <div className={`h-9 w-9 rounded-full bg-background/60 flex items-center justify-center ${iconClass}`}>
-            {allDone ? <CheckCircle2 className="h-5 w-5" /> : <Boxes className="h-5 w-5" />}
+            {allDone ? <CheckCircle2 className="h-5 w-5" /> : isPostponed ? <CalendarClock className="h-5 w-5" /> : <Boxes className="h-5 w-5" />}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-sm">Contagem de Saldo — {brandName}</p>
-              {isMandatory && !allDone && (
+              {isMandatory && !isResolved && (
                 <Badge variant="destructive" className="h-5 text-[10px]">
                   <AlertTriangle className="h-3 w-3 mr-1" />Obrigatória
                 </Badge>
@@ -180,8 +194,18 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
                   <CheckCircle2 className="h-3 w-3 mr-1" />Concluída
                 </Badge>
               )}
+              {isPostponed && (
+                <Badge className="h-5 text-[10px] bg-blue-600 hover:bg-blue-600">
+                  <CalendarClock className="h-3 w-3 mr-1" />Adiada
+                </Badge>
+              )}
+              {isJustified && (
+                <Badge className="h-5 text-[10px] bg-slate-500 hover:bg-slate-500">
+                  Justificada
+                </Badge>
+              )}
             </div>
-            {total > 0 && (
+            {total > 0 && !isPostponed && !isJustified && (
               <div className="mt-1.5">
                 <div className="flex justify-between text-[11px] text-muted-foreground mb-1">
                   <span>{filled}/{total} produtos</span>
@@ -190,25 +214,42 @@ export function StockCountCard({ routeId, brandId, brandName, pdvId, promoterId 
                 <Progress value={pct} className="h-1.5" />
               </div>
             )}
+            {isPostponed && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Adiada — a contagem reaparecerá na próxima visita desta semana. Você pode concluir a rota normalmente.
+              </p>
+            )}
+            {isJustified && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Justificada — registrada para o gestor. Você pode concluir a rota.
+              </p>
+            )}
           </div>
         </div>
-        <div className="flex gap-2 mt-3">
-          <Button size="sm" onClick={() => setSheetOpen(true)} className="flex-1">
-            {allDone ? 'Revisar contagem' : 'Contar agora'}
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-          {canDefer && (
-            <Button size="sm" variant="outline" onClick={() => setPostponeOpen(true)}>
-              <CalendarClock className="h-4 w-4 mr-1" />
-              {blockCompletion ? 'Não fiz hoje' : 'Adiar'}
+        {!isPostponed && !isJustified && (
+          <div className="flex gap-2 mt-3">
+            <Button size="sm" onClick={() => setSheetOpen(true)} className="flex-1">
+              {allDone ? 'Revisar contagem' : 'Contar agora'}
+              <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
-          )}
-        </div>
-        {!allDone && status !== 'justified' && (!allowPostpone || blockCompletion) && (
+            {canDefer && (
+              <Button size="sm" variant="outline" onClick={() => setPostponeOpen(true)}>
+                <CalendarClock className="h-4 w-4 mr-1" />
+                {blockCompletion ? 'Não fiz hoje' : 'Adiar'}
+              </Button>
+            )}
+          </div>
+        )}
+        {isPostponed && (
+          <Button size="sm" variant="outline" onClick={() => setSheetOpen(true)} className="mt-3 w-full">
+            Contar mesmo assim
+          </Button>
+        )}
+        {!allDone && !isPostponed && !isJustified && (!allowPostpone || blockCompletion) && (
           <p className="text-[11px] text-muted-foreground mt-2">
             {!allowPostpone
               ? 'Esta contagem é obrigatória e não pode ser adiada — é necessário concluir para finalizar a rota.'
-              : 'Esta contagem é obrigatória para concluir a rota. Se não puder fazer, use “Não fiz hoje” e justifique.'}
+              : 'Esta contagem é obrigatória para concluir a rota. Se não puder fazer, use "Não fiz hoje" e justifique.'}
           </p>
         )}
       </div>
