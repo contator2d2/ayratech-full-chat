@@ -550,6 +550,13 @@ export default function MerchRotas() {
                   )}
                 </div>
 
+                {viewRoute.has_stock_count && (
+                  <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300 bg-amber-500/10 gap-1">
+                    <Boxes className="h-3 w-3" /> Contagem de saldo neste dia
+                  </Badge>
+                )}
+
+
                 {(viewRoute.has_alert || viewRoute.not_done_reason) && (
                   <Card className="border-red-500/40 bg-red-500/5">
                     <CardContent className="p-3">
