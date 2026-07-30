@@ -2418,6 +2418,7 @@ async function ensureRouteBrandsTables() {
   } catch (e) { logWarn('ensureRouteBrandsTables.failed', { error: e?.message }); }
 }
 ensureRouteBrandsTables().catch(() => {});
+ensureChecklistMergeColumns().catch(() => {});
 
 // Helper: hydrate products for a route_brand
 async function hydrateRouteBrandProducts(routeId, routeBrandId, pdvId, brandId) {
