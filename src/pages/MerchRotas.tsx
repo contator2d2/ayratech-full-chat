@@ -1489,49 +1489,6 @@ function RouteFormDialog({ open, route, onClose, pdvs, employees, onSave, onDele
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Data início *</Label>
-              <Input type="date" value={form.visit_date || ''} onChange={e => setForm({ ...form, visit_date: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-xs">Horário</Label>
-              <Input type="time" value={form.scheduled_time || ''} onChange={e => setForm({ ...form, scheduled_time: e.target.value })} />
-            </div>
-          </div>
-
-          {!route && (
-            <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Repeat className="h-4 w-4 text-primary" /> Recorrência
-              </div>
-              <Select value={form.recurrence_type || 'none'} onValueChange={v => setForm({ ...form, recurrence_type: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sem recorrência (única)</SelectItem>
-                  <SelectItem value="daily">Diária</SelectItem>
-                  <SelectItem value="weekly">Semanal</SelectItem>
-                  <SelectItem value="monthly">Mensal</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {form.recurrence_type && form.recurrence_type !== 'none' && (
-                <div className="space-y-3 pt-1">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs">Intervalo</Label>
-                      <Input type="number" min={1} value={form.recurrence_interval || 1} onChange={e => setForm({ ...form, recurrence_interval: parseInt(e.target.value) || 1 })} />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Até (data fim)</Label>
-                      <Input type="date" value={form.recurrence_until || ''} onChange={e => setForm({ ...form, recurrence_until: e.target.value })} />
-                    </div>
-                  </div>
-
-                </div>
-              )}
-            </div>
-          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
