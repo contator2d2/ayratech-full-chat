@@ -1006,39 +1006,116 @@ function RouteFormDialog({ open, route, onClose, pdvs, employees, onSave, onDele
   const routeProductIds = new Set(routeProducts.map((p: any) => p.product_id));
   const WEEKDAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
-  // Per-brand checklists for multi-brand
-  const BrandChecklistSelector = ({ brandId, checklistId, onChange }: { brandId: string; checklistId?: string; onChange: (v: string) => void }) => {
+  // Múltiplos checklists por marca, cada um com sua própria recorrência de dias
+  const BrandChecklistsEditor = ({
+    brandId,
+    entries,
+    onChange,
+    showWeekdays,
+  }: {
+    brandId: string;
+    entries: { checklist_id: string; weekdays: number[] }[];
+    onChange: (v: { checklist_id: string; weekdays: number[] }[]) => void;
+    showWeekdays: boolean;
+  }) => {
     const { data: cls = [] } = useBrandChecklists(brandId);
     const brandName = brands.find((b: any) => b.id === brandId)?.name || brandId;
+    const available = cls.filter((c: any) => c?.id);
+
+    const update = (idx: number, patch: Partial<{ checklist_id: string; weekdays: number[] }>) =>
+      onChange(entries.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
+
+    if (available.length === 0) {
+      return (
+        <div className="text-[10px] p-2 bg-muted/20 rounded border border-dashed text-center">
+          Nenhum checklist disponível para {brandName}
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Checklist da Marca</Label>
-          {cls.length === 0 && (
-            <span className="text-[10px] text-muted-foreground italic">Opcional (nenhum checklist encontrado)</span>
-          )}
+          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Checklists da Marca</Label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[10px] text-primary hover:bg-primary/10"
+            onClick={() => onChange([...entries, { checklist_id: '', weekdays: [] }])}
+          >
+            + Adicionar checklist
+          </Button>
         </div>
-        
-        {cls.length > 0 ? (
-          <Select value={checklistId || '__none__'} onValueChange={(v) => onChange(v === '__none__' ? '' : v)}>
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue placeholder="Selecione o checklist" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">Sem checklist (apenas instrução)</SelectItem>
-              {cls.filter((c: any) => c?.id).map((c: any) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
+
+        {entries.length === 0 && (
           <div className="text-[10px] p-2 bg-muted/20 rounded border border-dashed text-center">
-            Nenhum checklist disponível para {brandName}
+            Nenhum checklist adicionado — clique em "+ Adicionar checklist"
           </div>
         )}
+
+        {entries.map((entry, idx) => (
+          <div key={idx} className="rounded-md border bg-muted/10 p-2 space-y-2">
+            <div className="flex items-center gap-2">
+              <Select
+                value={entry.checklist_id || '__none__'}
+                onValueChange={(v) => update(idx, { checklist_id: v === '__none__' ? '' : v })}
+              >
+                <SelectTrigger className="h-8 text-xs flex-1">
+                  <SelectValue placeholder="Selecione o checklist" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sem checklist (apenas instrução)</SelectItem>
+                  {available.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                type="button"
+                onClick={() => onChange(entries.filter((_, i) => i !== idx))}
+                className="p-1 rounded hover:bg-destructive/10 text-muted-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {showWeekdays && (
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dias deste checklist</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {WEEKDAY_LABELS.map((lbl, i) => {
+                    const wd = i === 6 ? 0 : i + 1;
+                    const active = (entry.weekdays || []).includes(wd);
+                    return (
+                      <button
+                        key={wd}
+                        type="button"
+                        onClick={() => {
+                          const cur = entry.weekdays || [];
+                          update(idx, { weekdays: cur.includes(wd) ? cur.filter(d => d !== wd) : [...cur, wd] });
+                        }}
+                        className={cn(
+                          'h-7 px-2.5 rounded-md border text-[11px] font-medium transition-colors',
+                          active
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background text-muted-foreground border-border hover:bg-muted'
+                        )}
+                      >{lbl}</button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Vazio = vale em todos os dias gerados. Ex: checklist A seg–sex, checklist B ter/qua (complementar).
+                </p>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     );
   };
+
 
   useEffect(() => {
     if (open) {
