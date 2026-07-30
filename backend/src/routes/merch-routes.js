@@ -694,10 +694,11 @@ router.post('/routes', async (req, res) => {
 
     const created = [];
     for (const d of dates) {
+      const dWeekday = new Date(d + 'T12:00:00Z').getUTCDay(); // 0=Sun..6=Sat
+
       // For multi-brand weekly: determine which brands apply on this date
       let applicableBrands = isMultiBrand ? multiBrands : null;
       if (isMultiBrand && recurrence_type === 'weekly') {
-        const dWeekday = new Date(d + 'T12:00:00Z').getUTCDay(); // 0=Sun..6=Sat
         applicableBrands = multiBrands.filter(mb => {
           const set = brandWeekdays[mb.brand_id];
           if (!set || set.size === 0) {
@@ -709,12 +710,27 @@ router.post('/routes', async (req, res) => {
         if (applicableBrands.length === 0) continue; // skip date if no brand applies
       }
 
+      // Checklists aplicáveis nesta data para a marca única
+      let singleBrandChecklistIds = [];
+      if (!isMultiBrand) {
+        const entries = brandChecklists[primaryBrandId] || [];
+        if (entries.length > 0) {
+          singleBrandChecklistIds = checklistsForWeekday(entries, dWeekday).map((c) => c.checklist_id);
+          if (singleBrandChecklistIds.length === 0 && (recurrence_type === 'daily' || recurrence_type === 'weekly')) {
+            continue; // nenhum checklist aplica nesta data
+          }
+        } else if (effectiveChecklistId) {
+          singleBrandChecklistIds = [effectiveChecklistId];
+        }
+      }
+      const singlePrimaryChecklistId = singleBrandChecklistIds[0] || effectiveChecklistId || null;
+
       const result = await query(
         `INSERT INTO merch_routes (organization_id, promoter_id, supervisor_id, pdv_id, brand_id, checklist_id,
          visit_date, scheduled_time, window_start, window_end, estimated_duration_min, priority, visit_type,
          recurrence, notes, created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
-        [orgId, promoter_id, supervisor_id, pdv_id, isMultiBrand ? null : (primaryBrandId || null), isMultiBrand ? null : (effectiveChecklistId || null), d, scheduled_time,
+        [orgId, promoter_id, supervisor_id, pdv_id, isMultiBrand ? null : (primaryBrandId || null), isMultiBrand ? null : singlePrimaryChecklistId, d, scheduled_time,
          window_start, window_end, estimated_duration_min || 60, priority || 'normal', visit_type || 'regular',
           recurrence, notes || null, req.userId]
       );
@@ -723,23 +739,35 @@ router.post('/routes', async (req, res) => {
 
       if (isMultiBrand) {
         const brandsForThisDate = applicableBrands || multiBrands;
+        let insertedBrands = 0;
         for (let i = 0; i < brandsForThisDate.length; i++) {
           const mb = brandsForThisDate[i];
-          let mbChecklistId = mb.checklist_id || null;
-          if (!mbChecklistId && mb.brand_id) {
+          const entries = brandChecklists[mb.brand_id] || [];
+          let ids = entries.length > 0 ? checklistsForWeekday(entries, dWeekday).map((c) => c.checklist_id) : [];
+          if (entries.length > 0 && ids.length === 0) continue; // marca sem checklist válido nesta data
+          if (ids.length === 0 && mb.brand_id) {
             try {
               const cr = await query(`SELECT id FROM brand_checklists WHERE organization_id=$1 AND brand_id=$2 AND active=true ORDER BY created_at DESC LIMIT 1`, [orgId, mb.brand_id]);
-              mbChecklistId = cr.rows[0]?.id || null;
+              if (cr.rows[0]?.id) ids = [cr.rows[0].id];
             } catch {}
           }
           const rbRes = await query(
             `INSERT INTO route_brands (route_id, brand_id, checklist_id, sort_order) VALUES ($1,$2,$3,$4) RETURNING *`,
-            [routeId, mb.brand_id, mbChecklistId, i]
+            [routeId, mb.brand_id, ids[0] || null, i]
           );
-          if (rbRes.rows[0]) await hydrateRouteBrandProducts(routeId, rbRes.rows[0].id, pdv_id, mb.brand_id);
+          if (rbRes.rows[0]) {
+            insertedBrands++;
+            await persistMergedChecklist('route_brands', rbRes.rows[0].id, ids);
+            await hydrateRouteBrandProducts(routeId, rbRes.rows[0].id, pdv_id, mb.brand_id);
+          }
         }
-        logInfo('routes.multi_brand_created', { route_id: routeId, brand_count: brandsForThisDate.length, date: d });
+        if (insertedBrands === 0) {
+          await query('DELETE FROM merch_routes WHERE id=$1', [routeId]).catch(() => {});
+          continue;
+        }
+        logInfo('routes.multi_brand_created', { route_id: routeId, brand_count: insertedBrands, date: d });
       } else {
+        await persistMergedChecklist('merch_routes', routeId, singleBrandChecklistIds);
         try {
           const mixProducts = await query(
             `SELECT pbp.product_id, p.category_id FROM merch_pdv_brand_products pbp
@@ -753,6 +781,7 @@ router.post('/routes', async (req, res) => {
           logInfo('routes.products_hydrated', { route_id: routeId, count: mixProducts.rows.length });
         } catch (e) { logError('routes.hydrate_products', e); }
       }
+
 
       created.push(result.rows[0]);
     }
