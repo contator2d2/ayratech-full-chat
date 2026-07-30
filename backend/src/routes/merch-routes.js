@@ -3441,15 +3441,16 @@ router.post('/promotor/routes/:routeId/categories/:catId/after-photo', promotorA
     let minAfter = 1;
     try {
       // Prioritize brand-specific checklist if multi-brand
-      let checklistQuery = `SELECT bc.min_category_photos_after FROM merch_routes r
+      let checklistQuery = `SELECT COALESCE(r.eff_min_category_photos_after, bc.min_category_photos_after) as min_category_photos_after FROM merch_routes r
          LEFT JOIN brand_checklists bc ON bc.id = r.checklist_id WHERE r.id=$1`;
       let checklistParams = [req.params.routeId];
 
       if (route_brand_id) {
-        checklistQuery = `SELECT bc.min_category_photos_after FROM route_brands rb
+        checklistQuery = `SELECT COALESCE(rb.eff_min_category_photos_after, bc.min_category_photos_after) as min_category_photos_after FROM route_brands rb
            LEFT JOIN brand_checklists bc ON bc.id = rb.checklist_id WHERE rb.id=$1`;
         checklistParams = [route_brand_id];
       }
+
 
       const minRes = await query(checklistQuery, checklistParams);
       if (minRes.rows[0]?.min_category_photos_after) minAfter = Math.max(1, parseInt(minRes.rows[0].min_category_photos_after, 10));
