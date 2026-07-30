@@ -1138,11 +1138,18 @@ function RouteFormDialog({ open, route, onClose, pdvs, employees, onSave, onDele
         // Load multi-brand data with fallbacks
         const rawBrands = route.route_brands || route.brands;
         if (Array.isArray(rawBrands) && rawBrands.length > 0) {
-          setMultiBrands(rawBrands.map((rb: any) => ({ 
-            brand_id: rb.brand_id || rb.id || rb, 
-            checklist_id: rb.checklist_id || null,
-            weekdays: Array.isArray(rb.weekdays) ? rb.weekdays : [],
-          })));
+          setMultiBrands(rawBrands.map((rb: any) => {
+            const ids: string[] = Array.isArray(rb.checklist_ids)
+              ? rb.checklist_ids
+              : (rb.checklist_id ? [rb.checklist_id] : []);
+            return {
+              brand_id: rb.brand_id || rb.id || rb,
+              checklist_id: ids[0] || null,
+              checklists: ids.map((id: string) => ({ checklist_id: id, weekdays: [] })),
+              weekdays: Array.isArray(rb.weekdays) ? rb.weekdays : [],
+            };
+          }));
+
         } else if (route.brand_id) {
           setMultiBrands([{ 
             brand_id: route.brand_id, 
