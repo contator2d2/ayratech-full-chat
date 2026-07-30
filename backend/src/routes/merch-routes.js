@@ -2417,8 +2417,11 @@ async function ensureRouteBrandsTables() {
     await query(`CREATE INDEX IF NOT EXISTS idx_route_product_exec_route_brand ON route_product_executions(route_brand_id)`);
   } catch (e) { logWarn('ensureRouteBrandsTables.failed', { error: e?.message }); }
 }
-ensureRouteBrandsTables().catch(() => {});
-ensureChecklistMergeColumns().catch(() => {});
+ensureRouteBrandsTables()
+  .catch(() => {})
+  .then(() => { checklistMergeColumnsReady = null; return ensureChecklistMergeColumns(); })
+  .catch(() => {});
+
 
 // Helper: hydrate products for a route_brand
 async function hydrateRouteBrandProducts(routeId, routeBrandId, pdvId, brandId) {
