@@ -854,35 +854,46 @@ router.put('/routes/:id', async (req, res) => {
         // Clear stale route_brand_id refs on executions so we can re-link cleanly
         try { await query('UPDATE route_product_executions SET route_brand_id=NULL WHERE route_id=$1', [req.params.id]); } catch {}
         const pdvIdForHydrate = req.body.pdv_id || old.pdv_id;
+        const editDate = getDatePart(req.body.visit_date || old.visit_date);
+        const editWeekday = editDate ? new Date(editDate + 'T12:00:00Z').getUTCDay() : null;
+        let singleIds = [];
         for (let i = 0; i < brandsPayload.length; i++) {
           const mb = brandsPayload[i];
           if (!mb?.brand_id) continue;
-          let mbChecklistId = mb.checklist_id || null;
-          if (!mbChecklistId) {
+          const entries = normalizeBrandChecklists(mb);
+          let ids = entries.length > 0 && editWeekday !== null
+            ? checklistsForWeekday(entries, editWeekday).map((c) => c.checklist_id)
+            : entries.map((c) => c.checklist_id);
+          if (ids.length === 0) {
             try {
               const cr = await query(`SELECT id FROM brand_checklists WHERE organization_id=$1 AND brand_id=$2 AND active=true ORDER BY created_at DESC LIMIT 1`, [orgId, mb.brand_id]);
-              mbChecklistId = cr.rows[0]?.id || null;
+              if (cr.rows[0]?.id) ids = [cr.rows[0].id];
             } catch {}
           }
+          if (brandsPayload.length === 1) singleIds = ids;
           const rbRes = await query(
             `INSERT INTO route_brands (route_id, brand_id, checklist_id, sort_order) VALUES ($1,$2,$3,$4)
              ON CONFLICT (route_id, brand_id) DO UPDATE SET checklist_id=EXCLUDED.checklist_id, sort_order=EXCLUDED.sort_order
              RETURNING *`,
-            [req.params.id, mb.brand_id, mbChecklistId, i]
+            [req.params.id, mb.brand_id, ids[0] || null, i]
           );
           // Hydrate products from PDV mix for this brand
-          if (rbRes.rows[0] && pdvIdForHydrate) {
-            await hydrateRouteBrandProducts(req.params.id, rbRes.rows[0].id, pdvIdForHydrate, mb.brand_id);
+          if (rbRes.rows[0]) {
+            await persistMergedChecklist('route_brands', rbRes.rows[0].id, ids);
+            if (pdvIdForHydrate) await hydrateRouteBrandProducts(req.params.id, rbRes.rows[0].id, pdvIdForHydrate, mb.brand_id);
           }
         }
         // If multi-brand, null root brand/checklist; if single, keep as scalar
         if (brandsPayload.length > 1) {
           req.body.brand_id = null;
           req.body.checklist_id = null;
+          await persistMergedChecklist('merch_routes', req.params.id, []);
         } else if (brandsPayload.length === 1) {
           req.body.brand_id = brandsPayload[0].brand_id;
-          if (brandsPayload[0].checklist_id !== undefined) req.body.checklist_id = brandsPayload[0].checklist_id;
+          req.body.checklist_id = singleIds[0] ?? (brandsPayload[0].checklist_id !== undefined ? brandsPayload[0].checklist_id : req.body.checklist_id);
+          await persistMergedChecklist('merch_routes', req.params.id, singleIds);
         }
+
         logInfo('routes.brands_synced', { route_id: req.params.id, count: brandsPayload.length });
       } catch (e) { logError('routes.brands_sync', e); }
     }
