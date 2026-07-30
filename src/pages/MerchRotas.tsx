@@ -1509,11 +1509,20 @@ function RouteFormDialog({ open, route, onClose, pdvs, employees, onSave, onDele
                   </Button>
                 </div>
                 
-                <BrandChecklistSelector
+                <BrandChecklistsEditor
                   brandId={configuringBrandId}
-                  checklistId={multiBrands.find(b => b.brand_id === configuringBrandId)?.checklist_id}
-                  onChange={(v) => setMultiBrands(prev => prev.map(b => b.brand_id === configuringBrandId ? { ...b, checklist_id: v } : b))}
+                  showWeekdays={!route && (form.recurrence_type === 'weekly' || form.recurrence_type === 'daily')}
+                  entries={(() => {
+                    const cfg = multiBrands.find(b => b.brand_id === configuringBrandId);
+                    if (cfg?.checklists && cfg.checklists.length > 0) return cfg.checklists;
+                    if (cfg?.checklist_id) return [{ checklist_id: cfg.checklist_id, weekdays: [] }];
+                    return [];
+                  })()}
+                  onChange={(v) => setMultiBrands(prev => prev.map(b => b.brand_id === configuringBrandId
+                    ? { ...b, checklists: v, checklist_id: v[0]?.checklist_id || '' }
+                    : b))}
                 />
+
 
                 {!route && form.recurrence_type === 'weekly' && (
                   <div className="space-y-1 border-t pt-2">
