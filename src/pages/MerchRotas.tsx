@@ -1139,11 +1139,18 @@ function RouteFormDialog({ open, route, onClose, pdvs, employees, onSave, onDele
   });
 
   const handleSave = () => {
-    const brandsPayload = multiBrands.map(mb => ({
-      brand_id: mb.brand_id,
-      checklist_id: mb.checklist_id || null,
-      weekdays: Array.isArray(mb.weekdays) ? mb.weekdays : [],
-    }));
+    const brandsPayload = multiBrands.map(mb => {
+      const checklists = (mb.checklists && mb.checklists.length > 0)
+        ? mb.checklists.filter(c => c.checklist_id).map(c => ({ checklist_id: c.checklist_id, weekdays: c.weekdays || [] }))
+        : (mb.checklist_id ? [{ checklist_id: mb.checklist_id, weekdays: [] }] : []);
+      return {
+        brand_id: mb.brand_id,
+        checklist_id: checklists[0]?.checklist_id || mb.checklist_id || null,
+        checklists,
+        weekdays: Array.isArray(mb.weekdays) ? mb.weekdays : [],
+      };
+    });
+
 
     // CRIAÇÃO EM LOTE: múltiplos promotores e/ou múltiplos PDVs
     if (isCreating) {
