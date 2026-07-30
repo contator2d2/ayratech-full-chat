@@ -601,16 +601,31 @@ router.post('/routes', async (req, res) => {
       } catch (e) { logError('checklist resolve fail', e); }
     }
 
+    // Checklists por marca (podem ser vários, cada um com sua recorrência)
+    const hasBrandsArray = Array.isArray(multiBrands) && multiBrands.length > 0;
+    const brandChecklists = {}; // brand_id -> [{ checklist_id, weekdays[] }]
+    if (hasBrandsArray) {
+      for (const mb of multiBrands) brandChecklists[mb.brand_id] = normalizeBrandChecklists(mb);
+    }
+
     // Per-brand weekdays (for weekly recurrence — applies for single or multi-brand)
     // Encoding: Sun=0, Mon=1..Sat=6 (matches JS getUTCDay)
-    const hasBrandsArray = Array.isArray(multiBrands) && multiBrands.length > 0;
     const brandWeekdays = {}; // brand_id -> Set<number> (empty set = applies to all dates)
     if (hasBrandsArray && recurrence_type === 'weekly') {
       for (const mb of multiBrands) {
-        const wds = (Array.isArray(mb.weekdays) && mb.weekdays.length > 0) ? mb.weekdays : [];
-        brandWeekdays[mb.brand_id] = new Set(wds);
+        const wds = new Set(Array.isArray(mb.weekdays) ? mb.weekdays.map(Number) : []);
+        // A marca também precisa rodar nos dias exigidos por qualquer um dos seus checklists
+        const entries = brandChecklists[mb.brand_id] || [];
+        const anyChecklistAllDays = entries.length > 0 && entries.some((c) => !c.weekdays || c.weekdays.length === 0);
+        if (!anyChecklistAllDays) {
+          for (const c of entries) for (const w of (c.weekdays || [])) wds.add(Number(w));
+        } else {
+          wds.clear();
+        }
+        brandWeekdays[mb.brand_id] = wds;
       }
     }
+
 
     // Effective weekdays for date generation = union of brand weekdays (fallback to recurrence_weekdays)
     let effectiveWeekdays = recurrence_weekdays;
