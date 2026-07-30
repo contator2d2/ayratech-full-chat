@@ -2683,16 +2683,16 @@ router.get('/promotor/routes/:id', promotorAuth, async (req, res) => {
        p.latitude as pdv_lat, p.longitude as pdv_lng, p.radius_meters as pdv_radius,
        b.name as brand_name, 
        COALESCE(bc.name, bc2.name) as checklist_name,
-       COALESCE(bc.require_checkin_photo, bc2.require_checkin_photo, true) as require_checkin_photo,
-       COALESCE(bc.require_checkout_photo, bc2.require_checkout_photo, false) as require_checkout_photo,
-       COALESCE(bc.require_stock_count, bc2.require_stock_count, false) as require_stock_count,
-       COALESCE(bc.require_validity_check, bc2.require_validity_check, false) as require_validity_check,
-       COALESCE(bc.require_extra_point, bc2.require_extra_point, false) as require_extra_point,
-       COALESCE(bc.require_category_photos, bc2.require_category_photos, true) as require_category_photos,
-       COALESCE(bc.category_photo_mode, bc2.category_photo_mode, 'both') as category_photo_mode,
-        COALESCE(bc.min_category_photos_before, bc2.min_category_photos_before, 1) as min_category_photos_before,
-        COALESCE(bc.min_category_photos_after, bc2.min_category_photos_after, 1) as min_category_photos_after,
-        COALESCE(bc.category_photo_mode, bc2.category_photo_mode, 'both') as category_photo_mode
+       COALESCE(r.eff_require_checkin_photo, bc.require_checkin_photo, bc2.require_checkin_photo, true) as require_checkin_photo,
+       COALESCE(r.eff_require_checkout_photo, bc.require_checkout_photo, bc2.require_checkout_photo, false) as require_checkout_photo,
+       COALESCE(r.eff_require_stock_count, bc.require_stock_count, bc2.require_stock_count, false) as require_stock_count,
+       COALESCE(r.eff_require_validity_check, bc.require_validity_check, bc2.require_validity_check, false) as require_validity_check,
+       COALESCE(r.eff_require_extra_point, bc.require_extra_point, bc2.require_extra_point, false) as require_extra_point,
+       COALESCE(r.eff_require_category_photos, bc.require_category_photos, bc2.require_category_photos, true) as require_category_photos,
+        COALESCE(r.eff_min_category_photos_before, bc.min_category_photos_before, bc2.min_category_photos_before, 1) as min_category_photos_before,
+        COALESCE(r.eff_min_category_photos_after, bc.min_category_photos_after, bc2.min_category_photos_after, 1) as min_category_photos_after,
+        COALESCE(r.eff_category_photo_mode, bc.category_photo_mode, bc2.category_photo_mode, 'both') as category_photo_mode
+
        FROM merch_routes r
        LEFT JOIN pdvs p ON p.id = r.pdv_id
        LEFT JOIN merch_brands b ON b.id = r.brand_id
