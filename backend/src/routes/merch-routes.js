@@ -2758,15 +2758,16 @@ router.get('/promotor/routes/:id', promotorAuth, async (req, res) => {
       const rbRes = await query(
         `SELECT DISTINCT ON (rb.id) rb.*, b.name as brand_name, 
          COALESCE(bc.name, bc2.name) as checklist_name,
-         COALESCE(bc.require_checkin_photo, bc2.require_checkin_photo, true) as require_checkin_photo,
-         COALESCE(bc.require_checkout_photo, bc2.require_checkout_photo, false) as require_checkout_photo,
-         COALESCE(bc.require_stock_count, bc2.require_stock_count, false) as require_stock_count,
-         COALESCE(bc.require_validity_check, bc2.require_validity_check, false) as require_validity_check,
-         COALESCE(bc.require_extra_point, bc2.require_extra_point, false) as require_extra_point,
-         COALESCE(bc.require_category_photos, bc2.require_category_photos, true) as require_category_photos,
-         COALESCE(bc.category_photo_mode, bc2.category_photo_mode, 'both') as category_photo_mode,
-         COALESCE(bc.min_category_photos_before, bc2.min_category_photos_before, 1) as min_category_photos_before,
-         COALESCE(bc.min_category_photos_after, bc2.min_category_photos_after, 1) as min_category_photos_after,
+         COALESCE(rb.eff_require_checkin_photo, bc.require_checkin_photo, bc2.require_checkin_photo, true) as require_checkin_photo,
+         COALESCE(rb.eff_require_checkout_photo, bc.require_checkout_photo, bc2.require_checkout_photo, false) as require_checkout_photo,
+         COALESCE(rb.eff_require_stock_count, bc.require_stock_count, bc2.require_stock_count, false) as require_stock_count,
+         COALESCE(rb.eff_require_validity_check, bc.require_validity_check, bc2.require_validity_check, false) as require_validity_check,
+         COALESCE(rb.eff_require_extra_point, bc.require_extra_point, bc2.require_extra_point, false) as require_extra_point,
+         COALESCE(rb.eff_require_category_photos, bc.require_category_photos, bc2.require_category_photos, true) as require_category_photos,
+         COALESCE(rb.eff_category_photo_mode, bc.category_photo_mode, bc2.category_photo_mode, 'both') as category_photo_mode,
+         COALESCE(rb.eff_min_category_photos_before, bc.min_category_photos_before, bc2.min_category_photos_before, 1) as min_category_photos_before,
+         COALESCE(rb.eff_min_category_photos_after, bc.min_category_photos_after, bc2.min_category_photos_after, 1) as min_category_photos_after,
+
          (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id) as total_products,
          (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id AND rpe.status = 'completed') as completed_products
          FROM route_brands rb
