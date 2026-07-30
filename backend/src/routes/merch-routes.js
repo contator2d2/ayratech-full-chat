@@ -93,6 +93,130 @@ function parseJsonMaybe(value, fallback = null) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
+// ============================================================
+// Multi-checklist por marca/rota (checklists complementares)
+// Uma rota pode ter vários checklists da mesma marca, cada um com
+// sua própria recorrência (dias da semana). Na data da visita os
+// checklists aplicáveis são mesclados num "checklist efetivo".
+// ============================================================
+
+const EFF_CHECKLIST_COLUMNS = [
+  ['eff_require_checkin_photo', 'BOOLEAN'],
+  ['eff_require_checkout_photo', 'BOOLEAN'],
+  ['eff_require_stock_count', 'BOOLEAN'],
+  ['eff_require_validity_check', 'BOOLEAN'],
+  ['eff_require_extra_point', 'BOOLEAN'],
+  ['eff_require_category_photos', 'BOOLEAN'],
+  ['eff_category_photo_mode', 'VARCHAR(20)'],
+  ['eff_min_category_photos_before', 'INT'],
+  ['eff_min_category_photos_after', 'INT'],
+];
+
+let checklistMergeColumnsReady = null;
+async function ensureChecklistMergeColumns() {
+  if (checklistMergeColumnsReady) return checklistMergeColumnsReady;
+  checklistMergeColumnsReady = (async () => {
+    for (const table of ['merch_routes', 'route_brands']) {
+      try {
+        await query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS checklist_ids JSONB`);
+        for (const [col, type] of EFF_CHECKLIST_COLUMNS) {
+          await query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${col} ${type}`);
+        }
+      } catch (e) { /* tabela pode não existir ainda */ }
+    }
+  })().catch(() => {});
+  return checklistMergeColumnsReady;
+}
+
+// Normaliza o payload de checklists de uma marca:
+// aceita { checklists: [{checklist_id, weekdays}] } ou o legado { checklist_id, weekdays }
+function normalizeBrandChecklists(mb) {
+  if (!mb) return [];
+  if (Array.isArray(mb.checklists) && mb.checklists.length > 0) {
+    return mb.checklists
+      .filter((c) => c && c.checklist_id)
+      .map((c) => ({
+        checklist_id: c.checklist_id,
+        weekdays: Array.isArray(c.weekdays) ? c.weekdays.map(Number) : [],
+      }));
+  }
+  if (mb.checklist_id) {
+    return [{ checklist_id: mb.checklist_id, weekdays: Array.isArray(mb.weekdays) ? mb.weekdays.map(Number) : [] }];
+  }
+  return [];
+}
+
+// Retorna os checklists da marca aplicáveis numa data (0=Dom..6=Sáb).
+// Checklist sem dias definidos aplica-se em todas as datas geradas.
+function checklistsForWeekday(entries, weekday) {
+  if (!entries || entries.length === 0) return [];
+  const applicable = entries.filter((c) => !c.weekdays || c.weekdays.length === 0 || c.weekdays.includes(weekday));
+  return applicable;
+}
+
+function mergePhotoModes(modes) {
+  const set = new Set(modes.filter(Boolean));
+  if (set.size === 0) return null;
+  if (set.has('both')) return 'both';
+  if (set.has('before') && set.has('after')) return 'both';
+  return [...set][0];
+}
+
+// Mescla N checklists num objeto efetivo (união das exigências)
+async function computeMergedChecklist(checklistIds) {
+  const ids = [...new Set((checklistIds || []).filter(Boolean))];
+  if (ids.length === 0) return null;
+  let rows = [];
+  try {
+    const r = await query(`SELECT * FROM brand_checklists WHERE id = ANY($1::uuid[])`, [ids]);
+    rows = r.rows;
+  } catch (e) { return null; }
+  if (rows.length === 0) return null;
+
+  const anyTrue = (field, def = false) => rows.some((r) => (r[field] === undefined || r[field] === null ? def : r[field]) === true);
+  const maxInt = (field, def) => rows.reduce((acc, r) => {
+    const v = r[field] == null ? def : parseInt(r[field], 10);
+    return Number.isFinite(v) ? Math.max(acc, v) : acc;
+  }, 0);
+
+  return {
+    checklist_ids: ids,
+    eff_require_checkin_photo: anyTrue('require_checkin_photo', true),
+    eff_require_checkout_photo: anyTrue('require_checkout_photo', false),
+    eff_require_stock_count: anyTrue('require_stock_count', false),
+    eff_require_validity_check: anyTrue('require_validity_check', false),
+    eff_require_extra_point: anyTrue('require_extra_point', false),
+    eff_require_category_photos: anyTrue('require_category_photos', true),
+    eff_category_photo_mode: mergePhotoModes(rows.map((r) => r.category_photo_mode || 'both')) || 'both',
+    eff_min_category_photos_before: maxInt('min_category_photos_before', 1) || 0,
+    eff_min_category_photos_after: maxInt('min_category_photos_after', 1) || 0,
+  };
+}
+
+// Persiste o checklist efetivo mesclado numa linha de merch_routes ou route_brands
+async function persistMergedChecklist(table, rowId, checklistIds) {
+  try {
+    await ensureChecklistMergeColumns();
+    const merged = await computeMergedChecklist(checklistIds);
+    if (!merged) {
+      await query(`UPDATE ${table} SET checklist_ids=NULL WHERE id=$1`, [rowId]).catch(() => {});
+      return null;
+    }
+    const cols = EFF_CHECKLIST_COLUMNS.map(([c]) => c);
+    const sets = cols.map((c, i) => `${c}=$${i + 3}`).join(', ');
+    await query(
+      `UPDATE ${table} SET checklist_ids=$2::jsonb, ${sets} WHERE id=$1`,
+      [rowId, JSON.stringify(merged.checklist_ids), ...cols.map((c) => merged[c])]
+    );
+    return merged;
+  } catch (e) {
+    logWarn('persistMergedChecklist.failed', { table, rowId, error: e?.message });
+    return null;
+  }
+}
+
+
+
 // Fallback: create stock_count_executions on-demand for any matching rule that
 // doesn't have one yet (covers routes scheduled before the rule was created).
 async function ensureStockCountExecutionsForRoute(route) {
@@ -477,16 +601,31 @@ router.post('/routes', async (req, res) => {
       } catch (e) { logError('checklist resolve fail', e); }
     }
 
+    // Checklists por marca (podem ser vários, cada um com sua recorrência)
+    const hasBrandsArray = Array.isArray(multiBrands) && multiBrands.length > 0;
+    const brandChecklists = {}; // brand_id -> [{ checklist_id, weekdays[] }]
+    if (hasBrandsArray) {
+      for (const mb of multiBrands) brandChecklists[mb.brand_id] = normalizeBrandChecklists(mb);
+    }
+
     // Per-brand weekdays (for weekly recurrence — applies for single or multi-brand)
     // Encoding: Sun=0, Mon=1..Sat=6 (matches JS getUTCDay)
-    const hasBrandsArray = Array.isArray(multiBrands) && multiBrands.length > 0;
     const brandWeekdays = {}; // brand_id -> Set<number> (empty set = applies to all dates)
     if (hasBrandsArray && recurrence_type === 'weekly') {
       for (const mb of multiBrands) {
-        const wds = (Array.isArray(mb.weekdays) && mb.weekdays.length > 0) ? mb.weekdays : [];
-        brandWeekdays[mb.brand_id] = new Set(wds);
+        const wds = new Set(Array.isArray(mb.weekdays) ? mb.weekdays.map(Number) : []);
+        // A marca também precisa rodar nos dias exigidos por qualquer um dos seus checklists
+        const entries = brandChecklists[mb.brand_id] || [];
+        const anyChecklistAllDays = entries.length > 0 && entries.some((c) => !c.weekdays || c.weekdays.length === 0);
+        if (!anyChecklistAllDays) {
+          for (const c of entries) for (const w of (c.weekdays || [])) wds.add(Number(w));
+        } else {
+          wds.clear();
+        }
+        brandWeekdays[mb.brand_id] = wds;
       }
     }
+
 
     // Effective weekdays for date generation = union of brand weekdays (fallback to recurrence_weekdays)
     let effectiveWeekdays = recurrence_weekdays;
@@ -555,10 +694,11 @@ router.post('/routes', async (req, res) => {
 
     const created = [];
     for (const d of dates) {
+      const dWeekday = new Date(d + 'T12:00:00Z').getUTCDay(); // 0=Sun..6=Sat
+
       // For multi-brand weekly: determine which brands apply on this date
       let applicableBrands = isMultiBrand ? multiBrands : null;
       if (isMultiBrand && recurrence_type === 'weekly') {
-        const dWeekday = new Date(d + 'T12:00:00Z').getUTCDay(); // 0=Sun..6=Sat
         applicableBrands = multiBrands.filter(mb => {
           const set = brandWeekdays[mb.brand_id];
           if (!set || set.size === 0) {
@@ -570,12 +710,27 @@ router.post('/routes', async (req, res) => {
         if (applicableBrands.length === 0) continue; // skip date if no brand applies
       }
 
+      // Checklists aplicáveis nesta data para a marca única
+      let singleBrandChecklistIds = [];
+      if (!isMultiBrand) {
+        const entries = brandChecklists[primaryBrandId] || [];
+        if (entries.length > 0) {
+          singleBrandChecklistIds = checklistsForWeekday(entries, dWeekday).map((c) => c.checklist_id);
+          if (singleBrandChecklistIds.length === 0 && (recurrence_type === 'daily' || recurrence_type === 'weekly')) {
+            continue; // nenhum checklist aplica nesta data
+          }
+        } else if (effectiveChecklistId) {
+          singleBrandChecklistIds = [effectiveChecklistId];
+        }
+      }
+      const singlePrimaryChecklistId = singleBrandChecklistIds[0] || effectiveChecklistId || null;
+
       const result = await query(
         `INSERT INTO merch_routes (organization_id, promoter_id, supervisor_id, pdv_id, brand_id, checklist_id,
          visit_date, scheduled_time, window_start, window_end, estimated_duration_min, priority, visit_type,
          recurrence, notes, created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
-        [orgId, promoter_id, supervisor_id, pdv_id, isMultiBrand ? null : (primaryBrandId || null), isMultiBrand ? null : (effectiveChecklistId || null), d, scheduled_time,
+        [orgId, promoter_id, supervisor_id, pdv_id, isMultiBrand ? null : (primaryBrandId || null), isMultiBrand ? null : singlePrimaryChecklistId, d, scheduled_time,
          window_start, window_end, estimated_duration_min || 60, priority || 'normal', visit_type || 'regular',
           recurrence, notes || null, req.userId]
       );
@@ -584,23 +739,35 @@ router.post('/routes', async (req, res) => {
 
       if (isMultiBrand) {
         const brandsForThisDate = applicableBrands || multiBrands;
+        let insertedBrands = 0;
         for (let i = 0; i < brandsForThisDate.length; i++) {
           const mb = brandsForThisDate[i];
-          let mbChecklistId = mb.checklist_id || null;
-          if (!mbChecklistId && mb.brand_id) {
+          const entries = brandChecklists[mb.brand_id] || [];
+          let ids = entries.length > 0 ? checklistsForWeekday(entries, dWeekday).map((c) => c.checklist_id) : [];
+          if (entries.length > 0 && ids.length === 0) continue; // marca sem checklist válido nesta data
+          if (ids.length === 0 && mb.brand_id) {
             try {
               const cr = await query(`SELECT id FROM brand_checklists WHERE organization_id=$1 AND brand_id=$2 AND active=true ORDER BY created_at DESC LIMIT 1`, [orgId, mb.brand_id]);
-              mbChecklistId = cr.rows[0]?.id || null;
+              if (cr.rows[0]?.id) ids = [cr.rows[0].id];
             } catch {}
           }
           const rbRes = await query(
             `INSERT INTO route_brands (route_id, brand_id, checklist_id, sort_order) VALUES ($1,$2,$3,$4) RETURNING *`,
-            [routeId, mb.brand_id, mbChecklistId, i]
+            [routeId, mb.brand_id, ids[0] || null, i]
           );
-          if (rbRes.rows[0]) await hydrateRouteBrandProducts(routeId, rbRes.rows[0].id, pdv_id, mb.brand_id);
+          if (rbRes.rows[0]) {
+            insertedBrands++;
+            await persistMergedChecklist('route_brands', rbRes.rows[0].id, ids);
+            await hydrateRouteBrandProducts(routeId, rbRes.rows[0].id, pdv_id, mb.brand_id);
+          }
         }
-        logInfo('routes.multi_brand_created', { route_id: routeId, brand_count: brandsForThisDate.length, date: d });
+        if (insertedBrands === 0) {
+          await query('DELETE FROM merch_routes WHERE id=$1', [routeId]).catch(() => {});
+          continue;
+        }
+        logInfo('routes.multi_brand_created', { route_id: routeId, brand_count: insertedBrands, date: d });
       } else {
+        await persistMergedChecklist('merch_routes', routeId, singleBrandChecklistIds);
         try {
           const mixProducts = await query(
             `SELECT pbp.product_id, p.category_id FROM merch_pdv_brand_products pbp
@@ -614,6 +781,7 @@ router.post('/routes', async (req, res) => {
           logInfo('routes.products_hydrated', { route_id: routeId, count: mixProducts.rows.length });
         } catch (e) { logError('routes.hydrate_products', e); }
       }
+
 
       created.push(result.rows[0]);
     }
@@ -686,35 +854,46 @@ router.put('/routes/:id', async (req, res) => {
         // Clear stale route_brand_id refs on executions so we can re-link cleanly
         try { await query('UPDATE route_product_executions SET route_brand_id=NULL WHERE route_id=$1', [req.params.id]); } catch {}
         const pdvIdForHydrate = req.body.pdv_id || old.pdv_id;
+        const editDate = getDatePart(req.body.visit_date || old.visit_date);
+        const editWeekday = editDate ? new Date(editDate + 'T12:00:00Z').getUTCDay() : null;
+        let singleIds = [];
         for (let i = 0; i < brandsPayload.length; i++) {
           const mb = brandsPayload[i];
           if (!mb?.brand_id) continue;
-          let mbChecklistId = mb.checklist_id || null;
-          if (!mbChecklistId) {
+          const entries = normalizeBrandChecklists(mb);
+          let ids = entries.length > 0 && editWeekday !== null
+            ? checklistsForWeekday(entries, editWeekday).map((c) => c.checklist_id)
+            : entries.map((c) => c.checklist_id);
+          if (ids.length === 0) {
             try {
               const cr = await query(`SELECT id FROM brand_checklists WHERE organization_id=$1 AND brand_id=$2 AND active=true ORDER BY created_at DESC LIMIT 1`, [orgId, mb.brand_id]);
-              mbChecklistId = cr.rows[0]?.id || null;
+              if (cr.rows[0]?.id) ids = [cr.rows[0].id];
             } catch {}
           }
+          if (brandsPayload.length === 1) singleIds = ids;
           const rbRes = await query(
             `INSERT INTO route_brands (route_id, brand_id, checklist_id, sort_order) VALUES ($1,$2,$3,$4)
              ON CONFLICT (route_id, brand_id) DO UPDATE SET checklist_id=EXCLUDED.checklist_id, sort_order=EXCLUDED.sort_order
              RETURNING *`,
-            [req.params.id, mb.brand_id, mbChecklistId, i]
+            [req.params.id, mb.brand_id, ids[0] || null, i]
           );
           // Hydrate products from PDV mix for this brand
-          if (rbRes.rows[0] && pdvIdForHydrate) {
-            await hydrateRouteBrandProducts(req.params.id, rbRes.rows[0].id, pdvIdForHydrate, mb.brand_id);
+          if (rbRes.rows[0]) {
+            await persistMergedChecklist('route_brands', rbRes.rows[0].id, ids);
+            if (pdvIdForHydrate) await hydrateRouteBrandProducts(req.params.id, rbRes.rows[0].id, pdvIdForHydrate, mb.brand_id);
           }
         }
         // If multi-brand, null root brand/checklist; if single, keep as scalar
         if (brandsPayload.length > 1) {
           req.body.brand_id = null;
           req.body.checklist_id = null;
+          await persistMergedChecklist('merch_routes', req.params.id, []);
         } else if (brandsPayload.length === 1) {
           req.body.brand_id = brandsPayload[0].brand_id;
-          if (brandsPayload[0].checklist_id !== undefined) req.body.checklist_id = brandsPayload[0].checklist_id;
+          req.body.checklist_id = singleIds[0] ?? (brandsPayload[0].checklist_id !== undefined ? brandsPayload[0].checklist_id : req.body.checklist_id);
+          await persistMergedChecklist('merch_routes', req.params.id, singleIds);
         }
+
         logInfo('routes.brands_synced', { route_id: req.params.id, count: brandsPayload.length });
       } catch (e) { logError('routes.brands_sync', e); }
     }
@@ -2238,7 +2417,11 @@ async function ensureRouteBrandsTables() {
     await query(`CREATE INDEX IF NOT EXISTS idx_route_product_exec_route_brand ON route_product_executions(route_brand_id)`);
   } catch (e) { logWarn('ensureRouteBrandsTables.failed', { error: e?.message }); }
 }
-ensureRouteBrandsTables().catch(() => {});
+ensureRouteBrandsTables()
+  .catch(() => {})
+  .then(() => { checklistMergeColumnsReady = null; return ensureChecklistMergeColumns(); })
+  .catch(() => {});
+
 
 // Helper: hydrate products for a route_brand
 async function hydrateRouteBrandProducts(routeId, routeBrandId, pdvId, brandId) {
@@ -2291,8 +2474,8 @@ async function calculateRouteExecutionProgress(routeId, routeBrandId = null) {
             COALESCE(mec.category_before_photo, '') as category_before_photo,
             COALESCE(mec.category_after_photo, '') as category_after_photo,
             COALESCE(mec.completed, false) as category_completed,
-            COALESCE(bc_rb.require_category_photos, bc_route.require_category_photos, bc_brand.require_category_photos, true) as require_category_photos,
-            COALESCE(bc_rb.category_photo_mode, bc_route.category_photo_mode, bc_brand.category_photo_mode, 'both') as category_photo_mode
+            COALESCE(rb.eff_require_category_photos, r.eff_require_category_photos, bc_rb.require_category_photos, bc_route.require_category_photos, bc_brand.require_category_photos, true) as require_category_photos,
+            COALESCE(rb.eff_category_photo_mode, r.eff_category_photo_mode, bc_rb.category_photo_mode, bc_route.category_photo_mode, bc_brand.category_photo_mode, 'both') as category_photo_mode
      FROM route_product_executions rpe
      JOIN merch_routes r ON r.id = rpe.route_id
      LEFT JOIN route_brands rb ON rb.id = rpe.route_brand_id
@@ -2309,8 +2492,11 @@ async function calculateRouteExecutionProgress(routeId, routeBrandId = null) {
       AND mec.route_brand_id IS NOT DISTINCT FROM rpe.route_brand_id
      WHERE rpe.route_id = $1 ${brandFilter}
      GROUP BY rpe.category_id, rpe.route_brand_id, mec.category_before_photo, mec.category_after_photo, mec.completed,
+              rb.eff_require_category_photos, r.eff_require_category_photos,
               bc_rb.require_category_photos, bc_route.require_category_photos, bc_brand.require_category_photos,
+              rb.eff_category_photo_mode, r.eff_category_photo_mode,
               bc_rb.category_photo_mode, bc_route.category_photo_mode, bc_brand.category_photo_mode`,
+
     params
   );
 
@@ -2512,16 +2698,16 @@ router.get('/promotor/routes/:id', promotorAuth, async (req, res) => {
        p.latitude as pdv_lat, p.longitude as pdv_lng, p.radius_meters as pdv_radius,
        b.name as brand_name, 
        COALESCE(bc.name, bc2.name) as checklist_name,
-       COALESCE(bc.require_checkin_photo, bc2.require_checkin_photo, true) as require_checkin_photo,
-       COALESCE(bc.require_checkout_photo, bc2.require_checkout_photo, false) as require_checkout_photo,
-       COALESCE(bc.require_stock_count, bc2.require_stock_count, false) as require_stock_count,
-       COALESCE(bc.require_validity_check, bc2.require_validity_check, false) as require_validity_check,
-       COALESCE(bc.require_extra_point, bc2.require_extra_point, false) as require_extra_point,
-       COALESCE(bc.require_category_photos, bc2.require_category_photos, true) as require_category_photos,
-       COALESCE(bc.category_photo_mode, bc2.category_photo_mode, 'both') as category_photo_mode,
-        COALESCE(bc.min_category_photos_before, bc2.min_category_photos_before, 1) as min_category_photos_before,
-        COALESCE(bc.min_category_photos_after, bc2.min_category_photos_after, 1) as min_category_photos_after,
-        COALESCE(bc.category_photo_mode, bc2.category_photo_mode, 'both') as category_photo_mode
+       COALESCE(r.eff_require_checkin_photo, bc.require_checkin_photo, bc2.require_checkin_photo, true) as require_checkin_photo,
+       COALESCE(r.eff_require_checkout_photo, bc.require_checkout_photo, bc2.require_checkout_photo, false) as require_checkout_photo,
+       COALESCE(r.eff_require_stock_count, bc.require_stock_count, bc2.require_stock_count, false) as require_stock_count,
+       COALESCE(r.eff_require_validity_check, bc.require_validity_check, bc2.require_validity_check, false) as require_validity_check,
+       COALESCE(r.eff_require_extra_point, bc.require_extra_point, bc2.require_extra_point, false) as require_extra_point,
+       COALESCE(r.eff_require_category_photos, bc.require_category_photos, bc2.require_category_photos, true) as require_category_photos,
+        COALESCE(r.eff_min_category_photos_before, bc.min_category_photos_before, bc2.min_category_photos_before, 1) as min_category_photos_before,
+        COALESCE(r.eff_min_category_photos_after, bc.min_category_photos_after, bc2.min_category_photos_after, 1) as min_category_photos_after,
+        COALESCE(r.eff_category_photo_mode, bc.category_photo_mode, bc2.category_photo_mode, 'both') as category_photo_mode
+
        FROM merch_routes r
        LEFT JOIN pdvs p ON p.id = r.pdv_id
        LEFT JOIN merch_brands b ON b.id = r.brand_id
@@ -2587,15 +2773,16 @@ router.get('/promotor/routes/:id', promotorAuth, async (req, res) => {
       const rbRes = await query(
         `SELECT DISTINCT ON (rb.id) rb.*, b.name as brand_name, 
          COALESCE(bc.name, bc2.name) as checklist_name,
-         COALESCE(bc.require_checkin_photo, bc2.require_checkin_photo, true) as require_checkin_photo,
-         COALESCE(bc.require_checkout_photo, bc2.require_checkout_photo, false) as require_checkout_photo,
-         COALESCE(bc.require_stock_count, bc2.require_stock_count, false) as require_stock_count,
-         COALESCE(bc.require_validity_check, bc2.require_validity_check, false) as require_validity_check,
-         COALESCE(bc.require_extra_point, bc2.require_extra_point, false) as require_extra_point,
-         COALESCE(bc.require_category_photos, bc2.require_category_photos, true) as require_category_photos,
-         COALESCE(bc.category_photo_mode, bc2.category_photo_mode, 'both') as category_photo_mode,
-         COALESCE(bc.min_category_photos_before, bc2.min_category_photos_before, 1) as min_category_photos_before,
-         COALESCE(bc.min_category_photos_after, bc2.min_category_photos_after, 1) as min_category_photos_after,
+         COALESCE(rb.eff_require_checkin_photo, bc.require_checkin_photo, bc2.require_checkin_photo, true) as require_checkin_photo,
+         COALESCE(rb.eff_require_checkout_photo, bc.require_checkout_photo, bc2.require_checkout_photo, false) as require_checkout_photo,
+         COALESCE(rb.eff_require_stock_count, bc.require_stock_count, bc2.require_stock_count, false) as require_stock_count,
+         COALESCE(rb.eff_require_validity_check, bc.require_validity_check, bc2.require_validity_check, false) as require_validity_check,
+         COALESCE(rb.eff_require_extra_point, bc.require_extra_point, bc2.require_extra_point, false) as require_extra_point,
+         COALESCE(rb.eff_require_category_photos, bc.require_category_photos, bc2.require_category_photos, true) as require_category_photos,
+         COALESCE(rb.eff_category_photo_mode, bc.category_photo_mode, bc2.category_photo_mode, 'both') as category_photo_mode,
+         COALESCE(rb.eff_min_category_photos_before, bc.min_category_photos_before, bc2.min_category_photos_before, 1) as min_category_photos_before,
+         COALESCE(rb.eff_min_category_photos_after, bc.min_category_photos_after, bc2.min_category_photos_after, 1) as min_category_photos_after,
+
          (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id) as total_products,
          (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id AND rpe.status = 'completed') as completed_products
          FROM route_brands rb
@@ -3168,15 +3355,18 @@ router.post('/promotor/routes/:routeId/categories/:catId/photo', promotorAuth, a
     let minBefore = 1;
     try {
       // Prioritize brand-specific checklist if multi-brand
-      let checklistQuery = `SELECT bc.min_category_photos_before, bc.category_photo_mode FROM merch_routes r
+      let checklistQuery = `SELECT COALESCE(r.eff_min_category_photos_before, bc.min_category_photos_before) as min_category_photos_before,
+           COALESCE(r.eff_category_photo_mode, bc.category_photo_mode) as category_photo_mode FROM merch_routes r
          LEFT JOIN brand_checklists bc ON bc.id = r.checklist_id WHERE r.id=$1`;
       let checklistParams = [req.params.routeId];
 
       if (route_brand_id) {
-        checklistQuery = `SELECT bc.min_category_photos_before, bc.category_photo_mode FROM route_brands rb
+        checklistQuery = `SELECT COALESCE(rb.eff_min_category_photos_before, bc.min_category_photos_before) as min_category_photos_before,
+             COALESCE(rb.eff_category_photo_mode, bc.category_photo_mode) as category_photo_mode FROM route_brands rb
            LEFT JOIN brand_checklists bc ON bc.id = rb.checklist_id WHERE rb.id=$1`;
         checklistParams = [route_brand_id];
       }
+
 
       const minRes = await query(checklistQuery, checklistParams);
       if (minRes.rows[0]?.min_category_photos_before !== undefined) {
@@ -3266,15 +3456,16 @@ router.post('/promotor/routes/:routeId/categories/:catId/after-photo', promotorA
     let minAfter = 1;
     try {
       // Prioritize brand-specific checklist if multi-brand
-      let checklistQuery = `SELECT bc.min_category_photos_after FROM merch_routes r
+      let checklistQuery = `SELECT COALESCE(r.eff_min_category_photos_after, bc.min_category_photos_after) as min_category_photos_after FROM merch_routes r
          LEFT JOIN brand_checklists bc ON bc.id = r.checklist_id WHERE r.id=$1`;
       let checklistParams = [req.params.routeId];
 
       if (route_brand_id) {
-        checklistQuery = `SELECT bc.min_category_photos_after FROM route_brands rb
+        checklistQuery = `SELECT COALESCE(rb.eff_min_category_photos_after, bc.min_category_photos_after) as min_category_photos_after FROM route_brands rb
            LEFT JOIN brand_checklists bc ON bc.id = rb.checklist_id WHERE rb.id=$1`;
         checklistParams = [route_brand_id];
       }
+
 
       const minRes = await query(checklistQuery, checklistParams);
       if (minRes.rows[0]?.min_category_photos_after) minAfter = Math.max(1, parseInt(minRes.rows[0].min_category_photos_after, 10));
