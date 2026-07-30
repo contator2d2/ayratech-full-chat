@@ -2459,8 +2459,8 @@ async function calculateRouteExecutionProgress(routeId, routeBrandId = null) {
             COALESCE(mec.category_before_photo, '') as category_before_photo,
             COALESCE(mec.category_after_photo, '') as category_after_photo,
             COALESCE(mec.completed, false) as category_completed,
-            COALESCE(bc_rb.require_category_photos, bc_route.require_category_photos, bc_brand.require_category_photos, true) as require_category_photos,
-            COALESCE(bc_rb.category_photo_mode, bc_route.category_photo_mode, bc_brand.category_photo_mode, 'both') as category_photo_mode
+            COALESCE(rb.eff_require_category_photos, r.eff_require_category_photos, bc_rb.require_category_photos, bc_route.require_category_photos, bc_brand.require_category_photos, true) as require_category_photos,
+            COALESCE(rb.eff_category_photo_mode, r.eff_category_photo_mode, bc_rb.category_photo_mode, bc_route.category_photo_mode, bc_brand.category_photo_mode, 'both') as category_photo_mode
      FROM route_product_executions rpe
      JOIN merch_routes r ON r.id = rpe.route_id
      LEFT JOIN route_brands rb ON rb.id = rpe.route_brand_id
@@ -2477,8 +2477,11 @@ async function calculateRouteExecutionProgress(routeId, routeBrandId = null) {
       AND mec.route_brand_id IS NOT DISTINCT FROM rpe.route_brand_id
      WHERE rpe.route_id = $1 ${brandFilter}
      GROUP BY rpe.category_id, rpe.route_brand_id, mec.category_before_photo, mec.category_after_photo, mec.completed,
+              rb.eff_require_category_photos, r.eff_require_category_photos,
               bc_rb.require_category_photos, bc_route.require_category_photos, bc_brand.require_category_photos,
+              rb.eff_category_photo_mode, r.eff_category_photo_mode,
               bc_rb.category_photo_mode, bc_route.category_photo_mode, bc_brand.category_photo_mode`,
+
     params
   );
 
