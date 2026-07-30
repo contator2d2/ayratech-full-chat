@@ -93,6 +93,130 @@ function parseJsonMaybe(value, fallback = null) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
+// ============================================================
+// Multi-checklist por marca/rota (checklists complementares)
+// Uma rota pode ter vários checklists da mesma marca, cada um com
+// sua própria recorrência (dias da semana). Na data da visita os
+// checklists aplicáveis são mesclados num "checklist efetivo".
+// ============================================================
+
+const EFF_CHECKLIST_COLUMNS = [
+  ['eff_require_checkin_photo', 'BOOLEAN'],
+  ['eff_require_checkout_photo', 'BOOLEAN'],
+  ['eff_require_stock_count', 'BOOLEAN'],
+  ['eff_require_validity_check', 'BOOLEAN'],
+  ['eff_require_extra_point', 'BOOLEAN'],
+  ['eff_require_category_photos', 'BOOLEAN'],
+  ['eff_category_photo_mode', 'VARCHAR(20)'],
+  ['eff_min_category_photos_before', 'INT'],
+  ['eff_min_category_photos_after', 'INT'],
+];
+
+let checklistMergeColumnsReady = null;
+async function ensureChecklistMergeColumns() {
+  if (checklistMergeColumnsReady) return checklistMergeColumnsReady;
+  checklistMergeColumnsReady = (async () => {
+    for (const table of ['merch_routes', 'route_brands']) {
+      try {
+        await query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS checklist_ids JSONB`);
+        for (const [col, type] of EFF_CHECKLIST_COLUMNS) {
+          await query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${col} ${type}`);
+        }
+      } catch (e) { /* tabela pode não existir ainda */ }
+    }
+  })().catch(() => {});
+  return checklistMergeColumnsReady;
+}
+
+// Normaliza o payload de checklists de uma marca:
+// aceita { checklists: [{checklist_id, weekdays}] } ou o legado { checklist_id, weekdays }
+function normalizeBrandChecklists(mb) {
+  if (!mb) return [];
+  if (Array.isArray(mb.checklists) && mb.checklists.length > 0) {
+    return mb.checklists
+      .filter((c) => c && c.checklist_id)
+      .map((c) => ({
+        checklist_id: c.checklist_id,
+        weekdays: Array.isArray(c.weekdays) ? c.weekdays.map(Number) : [],
+      }));
+  }
+  if (mb.checklist_id) {
+    return [{ checklist_id: mb.checklist_id, weekdays: Array.isArray(mb.weekdays) ? mb.weekdays.map(Number) : [] }];
+  }
+  return [];
+}
+
+// Retorna os checklists da marca aplicáveis numa data (0=Dom..6=Sáb).
+// Checklist sem dias definidos aplica-se em todas as datas geradas.
+function checklistsForWeekday(entries, weekday) {
+  if (!entries || entries.length === 0) return [];
+  const applicable = entries.filter((c) => !c.weekdays || c.weekdays.length === 0 || c.weekdays.includes(weekday));
+  return applicable;
+}
+
+function mergePhotoModes(modes) {
+  const set = new Set(modes.filter(Boolean));
+  if (set.size === 0) return null;
+  if (set.has('both')) return 'both';
+  if (set.has('before') && set.has('after')) return 'both';
+  return [...set][0];
+}
+
+// Mescla N checklists num objeto efetivo (união das exigências)
+async function computeMergedChecklist(checklistIds) {
+  const ids = [...new Set((checklistIds || []).filter(Boolean))];
+  if (ids.length === 0) return null;
+  let rows = [];
+  try {
+    const r = await query(`SELECT * FROM brand_checklists WHERE id = ANY($1::uuid[])`, [ids]);
+    rows = r.rows;
+  } catch (e) { return null; }
+  if (rows.length === 0) return null;
+
+  const anyTrue = (field, def = false) => rows.some((r) => (r[field] === undefined || r[field] === null ? def : r[field]) === true);
+  const maxInt = (field, def) => rows.reduce((acc, r) => {
+    const v = r[field] == null ? def : parseInt(r[field], 10);
+    return Number.isFinite(v) ? Math.max(acc, v) : acc;
+  }, 0);
+
+  return {
+    checklist_ids: ids,
+    eff_require_checkin_photo: anyTrue('require_checkin_photo', true),
+    eff_require_checkout_photo: anyTrue('require_checkout_photo', false),
+    eff_require_stock_count: anyTrue('require_stock_count', false),
+    eff_require_validity_check: anyTrue('require_validity_check', false),
+    eff_require_extra_point: anyTrue('require_extra_point', false),
+    eff_require_category_photos: anyTrue('require_category_photos', true),
+    eff_category_photo_mode: mergePhotoModes(rows.map((r) => r.category_photo_mode || 'both')) || 'both',
+    eff_min_category_photos_before: maxInt('min_category_photos_before', 1) || 0,
+    eff_min_category_photos_after: maxInt('min_category_photos_after', 1) || 0,
+  };
+}
+
+// Persiste o checklist efetivo mesclado numa linha de merch_routes ou route_brands
+async function persistMergedChecklist(table, rowId, checklistIds) {
+  try {
+    await ensureChecklistMergeColumns();
+    const merged = await computeMergedChecklist(checklistIds);
+    if (!merged) {
+      await query(`UPDATE ${table} SET checklist_ids=NULL WHERE id=$1`, [rowId]).catch(() => {});
+      return null;
+    }
+    const cols = EFF_CHECKLIST_COLUMNS.map(([c]) => c);
+    const sets = cols.map((c, i) => `${c}=$${i + 3}`).join(', ');
+    await query(
+      `UPDATE ${table} SET checklist_ids=$2::jsonb, ${sets} WHERE id=$1`,
+      [rowId, JSON.stringify(merged.checklist_ids), ...cols.map((c) => merged[c])]
+    );
+    return merged;
+  } catch (e) {
+    logWarn('persistMergedChecklist.failed', { table, rowId, error: e?.message });
+    return null;
+  }
+}
+
+
+
 // Fallback: create stock_count_executions on-demand for any matching rule that
 // doesn't have one yet (covers routes scheduled before the rule was created).
 async function ensureStockCountExecutionsForRoute(route) {
