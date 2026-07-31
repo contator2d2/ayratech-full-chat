@@ -215,6 +215,44 @@ async function persistMergedChecklist(table, rowId, checklistIds) {
   }
 }
 
+// Marca has_stock_count também quando o CHECKLIST da rota (ou de qualquer marca da
+// rota) exige contagem de saldo — não só quando existe regra em stock_count_rules.
+// Assim o ícone/tag de saldo fica visual no dia e na rota.
+async function enrichStockCountFromChecklists(rows) {
+  try {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    if (!(await hasTable('brand_checklists'))) return;
+    await ensureChecklistMergeColumns();
+    const ids = rows.map((r) => r.id).filter(Boolean);
+    if (!ids.length) return;
+    const r = await query(
+      `SELECT rt.id,
+              (
+                COALESCE(rt.eff_require_stock_count, false)
+                OR COALESCE(rc.require_stock_count, false)
+                OR EXISTS (
+                  SELECT 1 FROM route_brands rb
+                   LEFT JOIN brand_checklists bc ON bc.id = rb.checklist_id
+                   WHERE rb.route_id = rt.id
+                     AND (COALESCE(rb.eff_require_stock_count, false) OR COALESCE(bc.require_stock_count, false))
+                )
+              ) AS checklist_stock_count
+         FROM merch_routes rt
+         LEFT JOIN brand_checklists rc ON rc.id = rt.checklist_id
+        WHERE rt.id = ANY($1::uuid[])`,
+      [ids]
+    );
+    const flag = new Map(r.rows.map((x) => [x.id, x.checklist_stock_count === true]));
+    for (const row of rows) {
+      if (flag.get(row.id)) {
+        row.has_stock_count = true;
+        if (!row.stock_count_source) row.stock_count_source = 'checklist';
+      }
+    }
+  } catch (e) {
+    logWarn('routes.stock_count_checklist_flag_failed', { error: e?.message });
+  }
+}
 
 
 // Fallback: create stock_count_executions on-demand for any matching rule that
@@ -515,8 +553,12 @@ router.get('/routes', async (req, res) => {
           if (!eff || !eff.length || eff.map(Number).includes(dow)) { has = true; break; }
         }
         r.has_stock_count = has;
+        if (has) r.stock_count_source = 'rule';
       }
     } catch (e) { logWarn('routes.list.stock_count_flag_failed', e); }
+
+    await enrichStockCountFromChecklists(rows);
+
 
     // Enrich with stock_count_status (aggregate) for rows that have has_stock_count
     try {
@@ -2682,8 +2724,11 @@ router.get('/promotor/agenda', promotorAuth, async (req, res) => {
           if (!eff || !eff.length || eff.map(Number).includes(dow)) { has = true; break; }
         }
         r.has_stock_count = has;
+        if (has) r.stock_count_source = 'rule';
       }
+      await enrichStockCountFromChecklists(rows);
       // Enrich with stock_count_status (aggregate) for rows that have has_stock_count
+
       try {
         const scRouteIds = rows.filter(r => r.has_stock_count).map(r => r.id);
         if (scRouteIds.length) {
