@@ -2046,8 +2046,17 @@ router.get('/photo-book', authenticate, async (req, res) => {
     if (city) applyList('pdv_city', city, false);
     if (date_from) { sql += ` AND captured_at >= $${idx++}`; params.push(date_from); }
     if (date_to) { sql += ` AND captured_at <= $${idx++}`; params.push(date_to + ' 23:59:59'); }
-    sql += ' ORDER BY captured_at DESC LIMIT 500';
-    res.json((await query(sql, params)).rows);
+    sql += ' ORDER BY captured_at DESC LIMIT 1000';
+    const rows = (await query(sql, params)).rows;
+    // Desduplica a mesma foto (mesma URL na mesma rota) que pode existir nas duas tabelas
+    const seen = new Set();
+    const unique = rows.filter(r => {
+      const k = `${r.route_id || ''}|${r.photo_url}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    res.json(unique);
   } catch (err) {
     if (err.code === '42P01') return res.json([]);
     logError('photo-book', err);
