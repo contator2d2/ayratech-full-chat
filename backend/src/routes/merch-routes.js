@@ -553,8 +553,12 @@ router.get('/routes', async (req, res) => {
           if (!eff || !eff.length || eff.map(Number).includes(dow)) { has = true; break; }
         }
         r.has_stock_count = has;
+        if (has) r.stock_count_source = 'rule';
       }
     } catch (e) { logWarn('routes.list.stock_count_flag_failed', e); }
+
+    await enrichStockCountFromChecklists(rows);
+
 
     // Enrich with stock_count_status (aggregate) for rows that have has_stock_count
     try {
