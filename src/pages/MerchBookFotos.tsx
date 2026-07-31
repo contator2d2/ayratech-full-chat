@@ -15,9 +15,11 @@ import { usePromoters } from "@/hooks/use-access-control";
 import { useRedes } from "@/hooks/use-price-research";
 import { resolveMediaUrl } from "@/lib/media";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare, RotateCw, RotateCcw, ChevronDown, X } from "lucide-react";
+import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare, RotateCw, RotateCcw, ChevronDown, X, Download } from "lucide-react";
 import { BookEditorDialog } from "@/components/merch/BookEditorDialog";
+import { exportPhotosAsJpg } from "@/lib/photo-export";
 import { toast } from "sonner";
+
 
 const PHOTO_TYPES: Record<string, string> = {
   checkin: 'Check-in', checkout: 'Check-out', before: 'Antes', after: 'Depois',
