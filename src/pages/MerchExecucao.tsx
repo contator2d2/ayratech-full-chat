@@ -674,7 +674,7 @@ export default function MerchExecucao() {
                               src={resolveMediaUrl(viewRoute.checkout_photo)!} 
                               alt="Check-out" 
                               className="w-full h-full object-cover cursor-pointer" 
-                              onClick={() => window.open(resolveMediaUrl(viewRoute.checkout_photo)!, '_blank')} 
+                              onClick={() => setViewPhoto({ id: `${viewRoute.id}-checkout`, photo_url: viewRoute.checkout_photo, photo_type: 'checkout', pdv_name: viewRoute.pdv_name, promoter_name: viewRoute.promoter_name, captured_at: viewRoute.checkout_at })} 
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display = 'none';
                                 const parent = (e.target as HTMLImageElement).parentElement;
