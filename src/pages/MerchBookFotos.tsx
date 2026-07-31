@@ -305,10 +305,15 @@ export default function MerchBookFotos() {
               <>
                 <Badge variant="default" className="text-sm">{selectedIds.size} selecionadas</Badge>
                 <Button size="sm" onClick={() => setBookEditorOpen(true)}>
-                  <FileText className="h-4 w-4 mr-1" /> Criar Book
+                  <FileText className="h-4 w-4 mr-1" /> Criar Book (PDF)
+                </Button>
+                <Button size="sm" variant="outline" disabled={exporting} onClick={handleExportJpg}>
+                  <Download className="h-4 w-4 mr-1" />
+                  {exporting ? `Exportando ${exportProgress}%` : 'Exportar JPG'}
                 </Button>
               </>
             )}
+
           </div>
         )}
 
