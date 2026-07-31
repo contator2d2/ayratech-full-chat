@@ -114,11 +114,50 @@ export default function MerchExecucao() {
   const [contingencyCategoryId, setContingencyCategoryId] = useState<string>('');
   const [contingencyPhotoType, setContingencyPhotoType] = useState<string>('contingency');
   const [contingencyReason, setContingencyReason] = useState<string>('');
+  const [viewPhoto, setViewPhoto] = useState<any>(null);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set());
+  const [exportingJpg, setExportingJpg] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
 
   const { data: routeDetail, isLoading: isLoadingDetail } = useMerchRouteDetail(viewRouteId || undefined);
   const viewRoute = routeDetail || liveRoutes.find((r: any) => r.id === viewRouteId);
   const manualComplete = useManualCompleteRoute();
   const contingencyUpload = useContingencyPhotoUpload();
+
+  // Somente fotos exibíveis (URLs sincronizadas) — evita divergência entre total e galeria
+  const routePhotos = useMemo(
+    () => ((viewRoute?.photos || []) as any[]).filter((p: any) => !!resolveMediaUrl(p.photo_url)),
+    [viewRoute]
+  );
+  const pendingPhotos = ((viewRoute?.photos || []) as any[]).length - routePhotos.length;
+
+  const togglePhoto = (id: string) => setSelectedPhotoIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const handleExportRoutePhotos = async () => {
+    const list = selectedPhotoIds.size > 0
+      ? routePhotos.filter((p: any) => selectedPhotoIds.has(p.id))
+      : routePhotos;
+    if (list.length === 0) return;
+    setExportingJpg(true);
+    setExportProgress(0);
+    try {
+      const { ok, failed } = await exportPhotosAsJpg(list, {
+        zipName: `execucao-${viewRoute?.pdv_name || 'rota'}-${(viewRoute?.scheduled_date || '').slice(0, 10)}`,
+        onProgress: (done, total) => setExportProgress(Math.round((done / total) * 100)),
+      });
+      if (ok > 0) toast.success(`${ok} foto(s) exportada(s) em JPG${failed ? ` — ${failed} falharam` : ''}`);
+      else toast.error('Não foi possível exportar as fotos');
+    } catch {
+      toast.error('Erro ao exportar fotos');
+    } finally {
+      setExportingJpg(false);
+    }
+  };
+
 
   const handleManualComplete = () => {
     if (!viewRouteId) return;
