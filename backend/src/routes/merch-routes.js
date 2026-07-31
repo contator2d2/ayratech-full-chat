@@ -2724,8 +2724,11 @@ router.get('/promotor/agenda', promotorAuth, async (req, res) => {
           if (!eff || !eff.length || eff.map(Number).includes(dow)) { has = true; break; }
         }
         r.has_stock_count = has;
+        if (has) r.stock_count_source = 'rule';
       }
+      await enrichStockCountFromChecklists(rows);
       // Enrich with stock_count_status (aggregate) for rows that have has_stock_count
+
       try {
         const scRouteIds = rows.filter(r => r.has_stock_count).map(r => r.id);
         if (scRouteIds.length) {
