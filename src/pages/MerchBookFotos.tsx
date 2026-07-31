@@ -18,6 +18,7 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare, RotateCw, RotateCcw, ChevronDown, X, Download } from "lucide-react";
 import { BookEditorDialog } from "@/components/merch/BookEditorDialog";
 import { exportPhotosAsJpg } from "@/lib/photo-export";
+import { PhotoLightbox } from "@/components/merch/PhotoLightbox";
 import { toast } from "sonner";
 
 
