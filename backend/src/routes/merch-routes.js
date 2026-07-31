@@ -2026,7 +2026,9 @@ router.get('/photo-book', authenticate, async (req, res) => {
       LEFT JOIN merch_brands b2 ON b2.id=r.brand_id
       WHERE r.organization_id=$1
         AND NOT EXISTS (SELECT 1 FROM live_photo_books lpb2 WHERE lpb2.route_id=rp.route_id AND lpb2.photo_url=rp.photo_url)
-    ) combined WHERE 1=1`;
+    ) combined WHERE photo_url IS NOT NULL
+      AND photo_url NOT LIKE 'blob:%'
+      AND photo_url NOT LIKE 'local-file:%'`;
     const params = [orgId];
     let idx = 2;
     const applyList = (col, val, isUuid = true) => {
