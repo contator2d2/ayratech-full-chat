@@ -975,6 +975,9 @@ export default function MerchExecucao() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Photo Lightbox (ampliar / girar / baixar JPG) */}
+        <PhotoLightbox photo={viewPhoto} onClose={() => setViewPhoto(null)} />
       </div>
     </MainLayout>
   );
