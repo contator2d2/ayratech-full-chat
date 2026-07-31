@@ -436,7 +436,7 @@ export default function MerchExecucao() {
                       {photoUrl && (
                         <div 
                           className="h-10 w-10 rounded overflow-hidden border bg-muted cursor-pointer shadow-sm"
-                          onClick={() => window.open(photoUrl, '_blank')}
+                          onClick={() => setViewPhoto({ id: d.id, photo_url: d.photo_url, photo_type: 'damage', product_name: d.product_name, pdv_name: d.pdv_name, brand_name: d.brand_name, promoter_name: d.promoter_name })}
                         >
                           <img 
                             src={photoUrl} 
