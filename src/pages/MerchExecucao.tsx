@@ -15,6 +15,10 @@ import { useLiveRoutes, useMerchDamages, useReturnRequests, useMerchRouteDetail,
 import { MapPin, Clock, User, Camera, AlertTriangle, CheckCircle2, Activity, Package, Eye, Store, ChevronRight, Calendar, Filter, Upload } from "lucide-react";
 import { CameraCapture } from "@/components/promotor/CameraCapture";
 import { resolveMediaUrl } from "@/lib/media";
+import { exportPhotosAsJpg } from "@/lib/photo-export";
+import { PhotoLightbox } from "@/components/merch/PhotoLightbox";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Download, CheckSquare } from "lucide-react";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
