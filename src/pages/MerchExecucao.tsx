@@ -699,39 +699,50 @@ export default function MerchExecucao() {
                 )}
 
                 {/* Photos Section */}
-                {viewRoute.photos && viewRoute.photos.length > 0 && (
+                {routePhotos.length > 0 && (
                   <div className="space-y-2">
-                    <div className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                      <Camera className="h-4 w-4" /> Fotos da Execução ({viewRoute.photos.length})
+                    <div className="text-xs font-semibold text-muted-foreground flex items-center gap-2 flex-wrap">
+                      <span className="flex items-center gap-1"><Camera className="h-4 w-4" /> Fotos da Execução ({routePhotos.length})</span>
+                      {pendingPhotos > 0 && (
+                        <Badge variant="outline" className="text-[9px] border-amber-400 text-amber-700">
+                          {pendingPhotos} aguardando sincronismo do app
+                        </Badge>
+                      )}
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={() => {
+                        setSelectedPhotoIds(prev => prev.size === routePhotos.length ? new Set() : new Set(routePhotos.map((p: any) => p.id)));
+                      }}>
+                        <CheckSquare className="h-3 w-3 mr-1" />
+                        {selectedPhotoIds.size === routePhotos.length ? 'Desmarcar tudo' : 'Selecionar tudo'}
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" disabled={exportingJpg} onClick={handleExportRoutePhotos}>
+                        <Download className="h-3 w-3 mr-1" />
+                        {exportingJpg ? `Exportando ${exportProgress}%` : selectedPhotoIds.size > 0 ? `Exportar JPG (${selectedPhotoIds.size})` : 'Exportar todas JPG'}
+                      </Button>
                     </div>
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                      {viewRoute.photos.map((photo: any) => {
-                        const url = resolveMediaUrl(photo.photo_url);
+                      {routePhotos.map((photo: any) => {
+                        const url = resolveMediaUrl(photo.photo_url)!;
+                        const isSelected = selectedPhotoIds.has(photo.id);
                         return (
-                        <div key={photo.id} className="relative aspect-square rounded-md overflow-hidden bg-muted border group">
-                          {url ? (
-                            <img 
-                              src={url} 
-                              alt="Execução" 
-                              className="w-full h-full object-cover cursor-pointer transition-transform group-hover:scale-110" 
-                              onClick={() => window.open(url, '_blank')} 
-                              onError={(e) => {
-                                // If photo fails to load, hide the group
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                const parent = target.closest('.relative');
-                                if (parent) {
-                                  (parent as HTMLElement).style.display = 'none';
-                                }
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                              <Camera className="h-6 w-6" />
-                            </div>
-                          )}
+                        <div key={photo.id} className={`relative aspect-square rounded-md overflow-hidden bg-muted border group ${isSelected ? 'ring-2 ring-primary' : ''}`}>
+                          <div className="absolute top-1 left-1 z-10" onClick={(e) => { e.stopPropagation(); togglePhoto(photo.id); }}>
+                            <Checkbox checked={isSelected} className="bg-background/80 border-background/80" />
+                          </div>
+                          <img 
+                            src={url} 
+                            alt={photo.category_name || 'Foto de execução'} 
+                            className="w-full h-full object-cover cursor-pointer transition-transform group-hover:scale-105" 
+                            style={photo.rotation ? { transform: `rotate(${photo.rotation}deg)` } : undefined}
+                            loading="lazy"
+                            onClick={() => setViewPhoto({
+                              ...photo,
+                              pdv_name: viewRoute.pdv_name,
+                              brand_name: photo.brand_name || viewRoute.brand_name,
+                              promoter_name: viewRoute.promoter_name,
+                            })}
+                          />
                           {photo.category_name && (
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] text-white p-1 truncate">
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] text-white p-1 truncate pointer-events-none">
                               {photo.category_name}
                             </div>
                           )}
@@ -740,6 +751,7 @@ export default function MerchExecucao() {
                     </div>
                   </div>
                 )}
+
 
                 {/* Damages & Ruptures */}
                 {(viewRoute.damages?.length > 0 || viewRoute.ruptures?.length > 0) && (
