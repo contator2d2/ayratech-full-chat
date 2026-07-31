@@ -206,6 +206,28 @@ export default function MerchBookFotos() {
     [photos, selectedIds]
   );
 
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+
+  const handleExportJpg = async () => {
+    if (selectedPhotos.length === 0) return;
+    setExporting(true);
+    setExportProgress(0);
+    try {
+      const { ok, failed } = await exportPhotosAsJpg(selectedPhotos, {
+        zipName: `fotos-${dateFrom}_${dateTo}`,
+        onProgress: (done, total) => setExportProgress(Math.round((done / total) * 100)),
+      });
+      if (ok > 0) toast.success(`${ok} foto(s) exportada(s) em JPG${failed ? ` — ${failed} falharam` : ''}`);
+      else toast.error('Não foi possível exportar as fotos selecionadas');
+    } catch {
+      toast.error('Erro ao exportar fotos');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+
   // Get the first brand name from selection for the editor
   const firstBrand = selectedPhotos.length > 0 ? selectedPhotos[0].brand_name : '';
   
