@@ -1384,7 +1384,15 @@ router.get('/routes/:id', authenticate, async (req, res) => {
        WHERE rpe.route_id=$1 ORDER BY pc.name, ps.name, pr.name`, [req.params.id]
     );
 
-    const photos = await query('SELECT * FROM route_photos WHERE route_id=$1 ORDER BY captured_at', [req.params.id]);
+    // Somente fotos sincronizadas (URLs válidas) e sem duplicatas de reenvio
+    const photos = await query(
+      `SELECT DISTINCT ON (photo_url) * FROM route_photos
+       WHERE route_id=$1
+         AND photo_url IS NOT NULL
+         AND photo_url NOT LIKE 'blob:%'
+         AND photo_url NOT LIKE 'local-file:%'
+       ORDER BY photo_url, captured_at`, [req.params.id]);
+    photos.rows.sort((a, b) => new Date(a.captured_at || a.created_at || 0) - new Date(b.captured_at || b.created_at || 0));
     const logs = await query(
       `SELECT rel.*, e.full_name as performer_name FROM route_execution_logs rel
        LEFT JOIN employees e ON e.id = rel.performed_by
@@ -1400,7 +1408,11 @@ router.get('/routes/:id', authenticate, async (req, res) => {
         `SELECT rb.*, b.name as brand_name, bc.name as checklist_name,
          (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id) as total_products,
          (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id AND rpe.status = 'completed') as completed_products,
-         (SELECT COUNT(*) FROM route_photos rph WHERE rph.route_brand_id = rb.id) as photos_count
+         (SELECT COUNT(DISTINCT rph.photo_url) FROM route_photos rph
+           WHERE rph.route_brand_id = rb.id
+             AND rph.photo_url IS NOT NULL
+             AND rph.photo_url NOT LIKE 'blob:%'
+             AND rph.photo_url NOT LIKE 'local-file:%') as photos_count
          FROM route_brands rb
          LEFT JOIN merch_brands b ON b.id = rb.brand_id
          LEFT JOIN brand_checklists bc ON bc.id = rb.checklist_id
