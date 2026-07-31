@@ -15,9 +15,12 @@ import { usePromoters } from "@/hooks/use-access-control";
 import { useRedes } from "@/hooks/use-price-research";
 import { resolveMediaUrl } from "@/lib/media";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare, RotateCw, RotateCcw, ChevronDown, X } from "lucide-react";
+import { Camera, Image, Eye, Calendar, MapPin, Tag, User, ZoomIn, FileText, CheckSquare, RotateCw, RotateCcw, ChevronDown, X, Download } from "lucide-react";
 import { BookEditorDialog } from "@/components/merch/BookEditorDialog";
+import { exportPhotosAsJpg } from "@/lib/photo-export";
+import { PhotoLightbox } from "@/components/merch/PhotoLightbox";
 import { toast } from "sonner";
+
 
 const PHOTO_TYPES: Record<string, string> = {
   checkin: 'Check-in', checkout: 'Check-out', before: 'Antes', after: 'Depois',
@@ -204,6 +207,28 @@ export default function MerchBookFotos() {
     [photos, selectedIds]
   );
 
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+
+  const handleExportJpg = async () => {
+    if (selectedPhotos.length === 0) return;
+    setExporting(true);
+    setExportProgress(0);
+    try {
+      const { ok, failed } = await exportPhotosAsJpg(selectedPhotos, {
+        zipName: `fotos-${dateFrom}_${dateTo}`,
+        onProgress: (done, total) => setExportProgress(Math.round((done / total) * 100)),
+      });
+      if (ok > 0) toast.success(`${ok} foto(s) exportada(s) em JPG${failed ? ` — ${failed} falharam` : ''}`);
+      else toast.error('Não foi possível exportar as fotos selecionadas');
+    } catch {
+      toast.error('Erro ao exportar fotos');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+
   // Get the first brand name from selection for the editor
   const firstBrand = selectedPhotos.length > 0 ? selectedPhotos[0].brand_name : '';
   
@@ -305,10 +330,15 @@ export default function MerchBookFotos() {
               <>
                 <Badge variant="default" className="text-sm">{selectedIds.size} selecionadas</Badge>
                 <Button size="sm" onClick={() => setBookEditorOpen(true)}>
-                  <FileText className="h-4 w-4 mr-1" /> Criar Book
+                  <FileText className="h-4 w-4 mr-1" /> Criar Book (PDF)
+                </Button>
+                <Button size="sm" variant="outline" disabled={exporting} onClick={handleExportJpg}>
+                  <Download className="h-4 w-4 mr-1" />
+                  {exporting ? `Exportando ${exportProgress}%` : 'Exportar JPG'}
                 </Button>
               </>
             )}
+
           </div>
         )}
 
@@ -437,72 +467,19 @@ export default function MerchBookFotos() {
         )}
       </div>
 
-      {/* Photo Viewer */}
-      <Dialog open={!!viewPhoto} onOpenChange={() => setViewPhoto(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-sm flex items-center gap-2">
-              <Camera className="h-4 w-4" />
-              {PHOTO_TYPES[viewPhoto?.photo_type] || viewPhoto?.photo_type} — {viewPhoto?.product_name || viewPhoto?.category_name || 'Geral'}
-            </DialogTitle>
-            <DialogDescription>Detalhes da foto de execução</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            {viewPhoto?.photo_url && (
-              <div className="relative">
-                <div className="w-full rounded-lg max-h-[60vh] bg-muted overflow-hidden flex items-center justify-center">
-                  <img
-                    src={viewPhoto.photo_url}
-                    alt=""
-                    className="max-h-[60vh] max-w-full object-contain transition-transform"
-                    style={viewPhoto.rotation ? { transform: `rotate(${viewPhoto.rotation}deg)` } : undefined}
-                  />
-                </div>
-                <div className="absolute top-2 right-2 flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="h-8 w-8 p-0"
-                    disabled={rotateMut.isPending}
-                    onClick={async () => {
-                      try {
-                        const r = await rotateMut.mutateAsync({ id: viewPhoto.id, delta: -90 });
-                        setViewPhoto({ ...viewPhoto, rotation: r.rotation });
-                      } catch { toast.error('Não foi possível girar a foto'); }
-                    }}
-                    title="Girar 90° à esquerda"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="h-8 w-8 p-0"
-                    disabled={rotateMut.isPending}
-                    onClick={async () => {
-                      try {
-                        const r = await rotateMut.mutateAsync({ id: viewPhoto.id, delta: 90 });
-                        setViewPhoto({ ...viewPhoto, rotation: r.rotation });
-                      } catch { toast.error('Não foi possível girar a foto'); }
-                    }}
-                    title="Girar 90° à direita"
-                  >
-                    <RotateCw className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div><span className="text-muted-foreground">Promotor:</span> {viewPhoto?.promoter_name || '—'}</div>
-              <div><span className="text-muted-foreground">Data:</span> {viewPhoto?.captured_at ? new Date(viewPhoto.captured_at).toLocaleString('pt-BR') : '—'}</div>
-              <div><span className="text-muted-foreground">Produto:</span> {viewPhoto?.product_name || '—'}</div>
-              <div><span className="text-muted-foreground">Categoria:</span> {viewPhoto?.category_name || '—'}</div>
-              <div><span className="text-muted-foreground">Origem:</span> {viewPhoto?.upload_source === 'web' ? '🖥️ Upload via Web (supervisor)' : '📱 App do promotor'}</div>
-              {viewPhoto?.contingency_reason && <div className="col-span-2"><span className="text-muted-foreground">Motivo contingência:</span> {viewPhoto.contingency_reason}</div>}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Photo Viewer (zoom + rotação + download JPG) */}
+      <PhotoLightbox
+        photo={viewPhoto}
+        onClose={() => setViewPhoto(null)}
+        typeLabels={PHOTO_TYPES}
+        onRotate={async (delta) => {
+          try {
+            const r = await rotateMut.mutateAsync({ id: viewPhoto.id, delta });
+            setViewPhoto({ ...viewPhoto, rotation: r.rotation });
+          } catch { toast.error('Não foi possível girar a foto'); }
+        }}
+      />
+
 
       {/* Book Editor */}
       {bookEditorOpen && (

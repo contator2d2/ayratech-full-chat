@@ -404,7 +404,13 @@ router.get('/routes', async (req, res) => {
                   b.name as brand_name, bc.name as checklist_name,
                   (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id) as total_products,
                   (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id AND rpe.status = 'completed') as completed_products,
-                  (SELECT COUNT(*) FROM route_photos rph WHERE rph.route_brand_id = rb.id) as photos_count
+                  -- Conta apenas fotos realmente sincronizadas (ignora blob:/local-file: pendentes)
+                  -- e desduplica URLs repetidas por reenvio do app.
+                  (SELECT COUNT(DISTINCT rph.photo_url) FROM route_photos rph
+                    WHERE rph.route_brand_id = rb.id
+                      AND rph.photo_url IS NOT NULL
+                      AND rph.photo_url NOT LIKE 'blob:%'
+                      AND rph.photo_url NOT LIKE 'local-file:%') as photos_count
            FROM route_brands rb
            LEFT JOIN merch_brands b ON b.id = rb.brand_id
            LEFT JOIN brand_checklists bc ON bc.id = rb.checklist_id
@@ -1378,7 +1384,15 @@ router.get('/routes/:id', authenticate, async (req, res) => {
        WHERE rpe.route_id=$1 ORDER BY pc.name, ps.name, pr.name`, [req.params.id]
     );
 
-    const photos = await query('SELECT * FROM route_photos WHERE route_id=$1 ORDER BY captured_at', [req.params.id]);
+    // Somente fotos sincronizadas (URLs válidas) e sem duplicatas de reenvio
+    const photos = await query(
+      `SELECT DISTINCT ON (photo_url) * FROM route_photos
+       WHERE route_id=$1
+         AND photo_url IS NOT NULL
+         AND photo_url NOT LIKE 'blob:%'
+         AND photo_url NOT LIKE 'local-file:%'
+       ORDER BY photo_url, captured_at`, [req.params.id]);
+    photos.rows.sort((a, b) => new Date(a.captured_at || a.created_at || 0) - new Date(b.captured_at || b.created_at || 0));
     const logs = await query(
       `SELECT rel.*, e.full_name as performer_name FROM route_execution_logs rel
        LEFT JOIN employees e ON e.id = rel.performed_by
@@ -1394,7 +1408,11 @@ router.get('/routes/:id', authenticate, async (req, res) => {
         `SELECT rb.*, b.name as brand_name, bc.name as checklist_name,
          (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id) as total_products,
          (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id AND rpe.status = 'completed') as completed_products,
-         (SELECT COUNT(*) FROM route_photos rph WHERE rph.route_brand_id = rb.id) as photos_count
+         (SELECT COUNT(DISTINCT rph.photo_url) FROM route_photos rph
+           WHERE rph.route_brand_id = rb.id
+             AND rph.photo_url IS NOT NULL
+             AND rph.photo_url NOT LIKE 'blob:%'
+             AND rph.photo_url NOT LIKE 'local-file:%') as photos_count
          FROM route_brands rb
          LEFT JOIN merch_brands b ON b.id = rb.brand_id
          LEFT JOIN brand_checklists bc ON bc.id = rb.checklist_id
@@ -2008,7 +2026,9 @@ router.get('/photo-book', authenticate, async (req, res) => {
       LEFT JOIN merch_brands b2 ON b2.id=r.brand_id
       WHERE r.organization_id=$1
         AND NOT EXISTS (SELECT 1 FROM live_photo_books lpb2 WHERE lpb2.route_id=rp.route_id AND lpb2.photo_url=rp.photo_url)
-    ) combined WHERE 1=1`;
+    ) combined WHERE photo_url IS NOT NULL
+      AND photo_url NOT LIKE 'blob:%'
+      AND photo_url NOT LIKE 'local-file:%'`;
     const params = [orgId];
     let idx = 2;
     const applyList = (col, val, isUuid = true) => {
@@ -2026,8 +2046,17 @@ router.get('/photo-book', authenticate, async (req, res) => {
     if (city) applyList('pdv_city', city, false);
     if (date_from) { sql += ` AND captured_at >= $${idx++}`; params.push(date_from); }
     if (date_to) { sql += ` AND captured_at <= $${idx++}`; params.push(date_to + ' 23:59:59'); }
-    sql += ' ORDER BY captured_at DESC LIMIT 500';
-    res.json((await query(sql, params)).rows);
+    sql += ' ORDER BY captured_at DESC LIMIT 1000';
+    const rows = (await query(sql, params)).rows;
+    // Desduplica a mesma foto (mesma URL na mesma rota) que pode existir nas duas tabelas
+    const seen = new Set();
+    const unique = rows.filter(r => {
+      const k = `${r.route_id || ''}|${r.photo_url}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    res.json(unique);
   } catch (err) {
     if (err.code === '42P01') return res.json([]);
     logError('photo-book', err);
