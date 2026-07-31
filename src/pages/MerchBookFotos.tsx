@@ -466,72 +466,19 @@ export default function MerchBookFotos() {
         )}
       </div>
 
-      {/* Photo Viewer */}
-      <Dialog open={!!viewPhoto} onOpenChange={() => setViewPhoto(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-sm flex items-center gap-2">
-              <Camera className="h-4 w-4" />
-              {PHOTO_TYPES[viewPhoto?.photo_type] || viewPhoto?.photo_type} — {viewPhoto?.product_name || viewPhoto?.category_name || 'Geral'}
-            </DialogTitle>
-            <DialogDescription>Detalhes da foto de execução</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            {viewPhoto?.photo_url && (
-              <div className="relative">
-                <div className="w-full rounded-lg max-h-[60vh] bg-muted overflow-hidden flex items-center justify-center">
-                  <img
-                    src={viewPhoto.photo_url}
-                    alt=""
-                    className="max-h-[60vh] max-w-full object-contain transition-transform"
-                    style={viewPhoto.rotation ? { transform: `rotate(${viewPhoto.rotation}deg)` } : undefined}
-                  />
-                </div>
-                <div className="absolute top-2 right-2 flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="h-8 w-8 p-0"
-                    disabled={rotateMut.isPending}
-                    onClick={async () => {
-                      try {
-                        const r = await rotateMut.mutateAsync({ id: viewPhoto.id, delta: -90 });
-                        setViewPhoto({ ...viewPhoto, rotation: r.rotation });
-                      } catch { toast.error('Não foi possível girar a foto'); }
-                    }}
-                    title="Girar 90° à esquerda"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="h-8 w-8 p-0"
-                    disabled={rotateMut.isPending}
-                    onClick={async () => {
-                      try {
-                        const r = await rotateMut.mutateAsync({ id: viewPhoto.id, delta: 90 });
-                        setViewPhoto({ ...viewPhoto, rotation: r.rotation });
-                      } catch { toast.error('Não foi possível girar a foto'); }
-                    }}
-                    title="Girar 90° à direita"
-                  >
-                    <RotateCw className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div><span className="text-muted-foreground">Promotor:</span> {viewPhoto?.promoter_name || '—'}</div>
-              <div><span className="text-muted-foreground">Data:</span> {viewPhoto?.captured_at ? new Date(viewPhoto.captured_at).toLocaleString('pt-BR') : '—'}</div>
-              <div><span className="text-muted-foreground">Produto:</span> {viewPhoto?.product_name || '—'}</div>
-              <div><span className="text-muted-foreground">Categoria:</span> {viewPhoto?.category_name || '—'}</div>
-              <div><span className="text-muted-foreground">Origem:</span> {viewPhoto?.upload_source === 'web' ? '🖥️ Upload via Web (supervisor)' : '📱 App do promotor'}</div>
-              {viewPhoto?.contingency_reason && <div className="col-span-2"><span className="text-muted-foreground">Motivo contingência:</span> {viewPhoto.contingency_reason}</div>}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Photo Viewer (zoom + rotação + download JPG) */}
+      <PhotoLightbox
+        photo={viewPhoto}
+        onClose={() => setViewPhoto(null)}
+        typeLabels={PHOTO_TYPES}
+        onRotate={async (delta) => {
+          try {
+            const r = await rotateMut.mutateAsync({ id: viewPhoto.id, delta });
+            setViewPhoto({ ...viewPhoto, rotation: r.rotation });
+          } catch { toast.error('Não foi possível girar a foto'); }
+        }}
+      />
+
 
       {/* Book Editor */}
       {bookEditorOpen && (
