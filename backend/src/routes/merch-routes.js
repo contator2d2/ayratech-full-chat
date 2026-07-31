@@ -404,7 +404,13 @@ router.get('/routes', async (req, res) => {
                   b.name as brand_name, bc.name as checklist_name,
                   (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id) as total_products,
                   (SELECT COUNT(*) FROM route_product_executions rpe WHERE rpe.route_brand_id = rb.id AND rpe.status = 'completed') as completed_products,
-                  (SELECT COUNT(*) FROM route_photos rph WHERE rph.route_brand_id = rb.id) as photos_count
+                  -- Conta apenas fotos realmente sincronizadas (ignora blob:/local-file: pendentes)
+                  -- e desduplica URLs repetidas por reenvio do app.
+                  (SELECT COUNT(DISTINCT rph.photo_url) FROM route_photos rph
+                    WHERE rph.route_brand_id = rb.id
+                      AND rph.photo_url IS NOT NULL
+                      AND rph.photo_url NOT LIKE 'blob:%'
+                      AND rph.photo_url NOT LIKE 'local-file:%') as photos_count
            FROM route_brands rb
            LEFT JOIN merch_brands b ON b.id = rb.brand_id
            LEFT JOIN brand_checklists bc ON bc.id = rb.checklist_id
