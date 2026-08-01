@@ -16,8 +16,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, UserCircle, Building2, FileText, Edit, Trash2, Eye, EyeOff, Users, Loader2, Calendar, Briefcase, X, MapPin, UserCog, DollarSign, Gift, Smartphone, KeyRound, Copy, RefreshCw, FileSpreadsheet, UserPlus, UserMinus } from "lucide-react";
+import { Plus, Search, UserCircle, Building2, FileText, Edit, Trash2, Eye, EyeOff, Users, Loader2, Calendar, Briefcase, X, MapPin, UserCog, DollarSign, Gift, Smartphone, KeyRound, Copy, RefreshCw, FileSpreadsheet, UserPlus, UserMinus, Link2 } from "lucide-react";
 import { EmployeeImportExportDialog } from "@/components/rh/EmployeeImportExportDialog";
+import { EmployeeOnboardingLinkDialog } from "@/components/rh/EmployeeOnboardingLinkDialog";
 import { useUpload } from "@/hooks/use-upload";
 import { format, differenceInYears, differenceInMonths, differenceInDays, addYears, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -153,6 +154,7 @@ export default function RHColaboradores() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [profileFilter, setProfileFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [onboardingTarget, setOnboardingTarget] = useState<{ id: string | null; name: string | null } | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({ ...EMPTY_FORM });
   const [showSensitive, setShowSensitive] = useState(false);
@@ -342,6 +344,7 @@ export default function RHColaboradores() {
               </Button>
             )}
             <Button variant="outline" onClick={() => setImportExportOpen(true)} className="gap-2"><FileSpreadsheet className="h-4 w-4" /> Importar / Exportar</Button>
+            <Button variant="outline" onClick={() => setOnboardingTarget({ id: null, name: null })} className="gap-2"><Link2 className="h-4 w-4" /> Link de Auto-Cadastro</Button>
             <Button variant="outline" onClick={() => navigate("/rh/admissao")} className="gap-2"><UserPlus className="h-4 w-4" /> Nova Admissão (Wizard)</Button>
             <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> Novo Colaborador</Button>
           </div>
@@ -447,6 +450,7 @@ export default function RHColaboradores() {
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); openEdit(emp); }}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" title="Gerar link de auto-cadastro" onClick={e => { e.stopPropagation(); setOnboardingTarget({ id: emp.id, name: emp.full_name }); }}><Link2 className="h-4 w-4 text-primary" /></Button>
                         {emp.status !== 'desligado' && (
                           <Button variant="ghost" size="icon" title="Demitir" onClick={e => { e.stopPropagation(); navigate(`/rh/demissao/${emp.id}`); }}><UserMinus className="h-4 w-4 text-orange-600" /></Button>
                         )}
@@ -1116,6 +1120,12 @@ export default function RHColaboradores() {
           </div>
         </DialogContent>
       </Dialog>
+      <EmployeeOnboardingLinkDialog
+        open={!!onboardingTarget}
+        onOpenChange={(o) => !o && setOnboardingTarget(null)}
+        employeeId={onboardingTarget?.id || null}
+        employeeName={onboardingTarget?.name || null}
+      />
       <EmployeeImportExportDialog
         open={importExportOpen}
         onOpenChange={setImportExportOpen}

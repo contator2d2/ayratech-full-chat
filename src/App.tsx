@@ -44,6 +44,7 @@ import TermosServico from "./pages/TermosServico";
 import ExclusaoDados from "./pages/ExclusaoDados";
 import FluxosExternos from "./pages/FluxosExternos";
 import PublicFormPage from "./pages/PublicFormPage";
+import PublicEmployeeOnboarding from "./pages/PublicEmployeeOnboarding";
 import LeadWebhooks from "./pages/LeadWebhooks";
 import SequenciasNurturing from "./pages/SequenciasNurturing";
 import CTWAAnalytics from "./pages/CTWAAnalytics";
@@ -403,6 +404,7 @@ const App = () => (
             <Route path="/acesso/promotor/home" element={<AccessOnlyHome />} />
             <Route path="/api-docs" element={<ApiDocumentation />} />
             <Route path="/f/:slug" element={<PublicFormPage />} />
+            <Route path="/cadastro-colaborador/:token" element={<PublicEmployeeOnboarding />} />
             <Route path="/assinar/:token" element={<AssinarDocumento />} />
             <Route path="/book/:token" element={<PublicPhotoBook />} />
             <Route path="/verificar/:documentId" element={<VerificarDocumento />} />
