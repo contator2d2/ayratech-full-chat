@@ -49,6 +49,7 @@ import rhRoutes from './routes/rh.js';
 import rhExtendedRoutes from './routes/rh-extended.js';
 import rhFlowsRoutes from './routes/rh-flows.js';
 import rhSchedulesRoutes from './routes/rh-schedules.js';
+import rhOnboardingRoutes, { rhOnboardingPublicRouter } from './routes/rh-onboarding.js';
 import promotorRoutes from './routes/promotor.js';
 import merchandisingRoutes from './routes/merchandising.js';
 import merchRoutesRoutes from './routes/merch-routes.js';
