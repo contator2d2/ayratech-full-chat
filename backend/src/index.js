@@ -452,6 +452,9 @@ app.use('/api/rh', rhRoutes);
 app.use('/api/rh', rhExtendedRoutes);
 app.use('/api/rh', rhFlowsRoutes);
 app.use('/api/rh', rhSchedulesRoutes);
+app.use('/api/rh', rhOnboardingRoutes);
+// Público (link com token + chave para o colaborador preencher os dados)
+app.use('/api/public/rh-onboarding', rhOnboardingPublicRouter);
 app.use('/api/promotor', promotorRoutes);
 app.use('/api/merchandising', merchandisingRoutes);
 app.use('/api/merch', merchRoutesRoutes);
