@@ -414,6 +414,8 @@ app.use('/api/asaas', asaasRoutes);
 // are not swallowed by adminRoutes' authenticate middleware at /api/public.
 app.use('/api', promoterAccessRoutes);
 app.use('/api/admin', adminRoutes);
+// Público: auto-cadastro de colaborador (token + chave). Deve vir antes de adminRoutes.
+app.use('/api/public/rh-onboarding', rhOnboardingPublicRouter);
 // Mount admin routes also at /api/public for public endpoints (pre-register, branding)
 app.use('/api/public', adminRoutes);
 app.use('/api/uploads', uploadsRoutes);
@@ -453,8 +455,6 @@ app.use('/api/rh', rhExtendedRoutes);
 app.use('/api/rh', rhFlowsRoutes);
 app.use('/api/rh', rhSchedulesRoutes);
 app.use('/api/rh', rhOnboardingRoutes);
-// Público (link com token + chave para o colaborador preencher os dados)
-app.use('/api/public/rh-onboarding', rhOnboardingPublicRouter);
 app.use('/api/promotor', promotorRoutes);
 app.use('/api/merchandising', merchandisingRoutes);
 app.use('/api/merch', merchRoutesRoutes);
