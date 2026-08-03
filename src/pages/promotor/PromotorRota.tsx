@@ -327,8 +327,8 @@ function CategoryPreparation({ category, catId, routeBrandId, categoryName, rout
 }
 
 // ===== Extra Point Photo Gate (no point type, only photo) =====
-function ExtraPointPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, onPhotoTaken }: {
-  catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; onPhotoTaken: () => void;
+function ExtraPointPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, onPhotoTaken, onCaptureOptimistic }: {
+  catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; onPhotoTaken: () => void; onCaptureOptimistic?: (url: string, type: string) => void;
 }) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [isSending, setIsSending] = useState(false);
@@ -340,9 +340,7 @@ function ExtraPointPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvNa
     if (effective.length === 0) return toast.error('É necessário tirar pelo menos 1 foto do ponto extra.');
     setIsSending(true);
     try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 5000 })
-      ).catch(() => null);
+      const pos = await import('@/lib/photo-perf').then(m => m.getCachedGeolocation({ timeoutMs: 1500 })).catch(() => null);
 
       const body = {
         photo_type: 'extra_point',
@@ -363,6 +361,7 @@ function ExtraPointPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvNa
       
       setPhotos([]);
       setIsSending(false);
+      onCaptureOptimistic?.(effective[0], 'extra_point');
       onPhotoTaken();
     } catch { 
       setIsSending(false); 
@@ -1229,6 +1228,7 @@ export default function PromotorRota() {
                       promotorName={route.promotor_name}
                       qualityConfig={photoQualityConfig}
                       onPhotoTaken={() => setExtraGroupPhotos(prev => ({ ...prev, [extraPhotoKey]: true }))}
+                      onCaptureOptimistic={(url, type) => setOptimisticPhotos(prev => [...prev, { photo_url: url, photo_type: type, category_id: catId, route_brand_id: routeBrandId }])}
                     />
                   )}
 
