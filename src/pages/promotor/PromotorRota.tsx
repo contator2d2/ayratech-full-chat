@@ -140,8 +140,8 @@ const usePromotorPdvCheckout = () => {
 };
 
 // ===== Category Preparation Component =====
-function CategoryPreparation({ category, catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, minPhotos, photoMode, onUnlocked, onPointTypeSet }: {
-  category: any; catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; minPhotos: number; photoMode?: 'before' | 'after' | 'both'; onUnlocked: () => void; onPointTypeSet?: () => void;
+function CategoryPreparation({ category, catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, minPhotos, photoMode, onUnlocked, onPointTypeSet, onCaptureOptimistic }: {
+  category: any; catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; minPhotos: number; photoMode?: 'before' | 'after' | 'both'; onUnlocked: () => void; onPointTypeSet?: () => void; onCaptureOptimistic?: (url: string, type: string) => void;
 }) {
   const setPointType = usePromotorSetPointType();
   const setCategoryPhoto = usePromotorCategoryPhoto();
@@ -226,7 +226,7 @@ function CategoryPreparation({ category, catId, routeBrandId, categoryName, rout
       
       setPhotos([]);
       setIsSending(false);
-      setOptimisticPhotos(prev => [...prev, { photo_url: effective[0], photo_type: 'category_before', category_id: catId, route_brand_id: routeBrandId }]);
+      onCaptureOptimistic?.(effective[0], 'category_before');
       onUnlocked();
     } catch {
       setIsSending(false);
@@ -424,8 +424,8 @@ function ExtraPointPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvNa
 }
 
 // ===== Category After Photo Gate (required to close/complete category) =====
-function CategoryAfterPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, minPhotos, onCompleted }: {
-  catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; minPhotos: number; onCompleted: () => void;
+function CategoryAfterPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, minPhotos, onCompleted, onCaptureOptimistic }: {
+  catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; minPhotos: number; onCompleted: () => void; onCaptureOptimistic?: (url: string, type: string) => void;
 }) {
   const setCategoryAfterPhoto = usePromotorCategoryAfterPhoto();
   const [photos, setPhotos] = useState<string[]>([]);
@@ -455,6 +455,7 @@ function CategoryAfterPhotoGate({ catId, routeBrandId, categoryName, routeId, pd
       
       setPhotos([]);
       setIsSending(false);
+      onCaptureOptimistic?.(effective[0], 'category_after');
       onCompleted();
     } catch { 
       setIsSending(false); 
@@ -1379,6 +1380,7 @@ export default function PromotorRota() {
                       qualityConfig={photoQualityConfig}
                       minPhotos={Math.max(1, parseInt((rb || route as any)?.min_category_photos_after, 10) || 1)}
                       onCompleted={() => { setOptimisticAfterPhoto(p => ({ ...p, [afterPhotoKey]: true })); refetch(); }}
+                      onCaptureOptimistic={(url, type) => setOptimisticPhotos(prev => [...prev, { photo_url: url, photo_type: type, category_id: catId, route_brand_id: routeBrandId }])}
                     />
                   )}
                 </div>
