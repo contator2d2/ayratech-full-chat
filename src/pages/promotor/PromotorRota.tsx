@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react"; // nao é isso..  no app do promotor  dentro da categoria ele tem que tirar as fotos do depois.. ai essas fotos é que nao carregam a thumb e nem mostra a foto tirada. danodo erro
 import { useOfflineSync } from "@/hooks/use-offline-sync";
 import { useParams, useNavigate } from "react-router-dom";
 import { PromotorLayout } from "./PromotorLayout";
