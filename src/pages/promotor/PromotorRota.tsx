@@ -1213,6 +1213,7 @@ export default function PromotorRota() {
                       minPhotos={Math.max(1, parseInt((rb || route as any)?.min_category_photos_before, 10) || 1)}
                       onUnlocked={() => { setOptimisticBeforeUnlock(prev => ({ ...prev, [categoryKey]: true })); refetch(); }}
                       onPointTypeSet={() => { refetch(); }}
+                      onCaptureOptimistic={(url, type) => setOptimisticPhotos(prev => [...prev, { photo_url: url, photo_type: type, category_id: catId, route_brand_id: routeBrandId }])}
                     />
                   )}
 
