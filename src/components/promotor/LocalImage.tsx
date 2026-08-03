@@ -10,24 +10,19 @@ interface LocalImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
 export function LocalImage({ src, className, ...props }: LocalImageProps) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const { getLocalFileUrl } = useOfflineSync();
 
   useEffect(() => {
     let isMounted = true;
+    setHasError(false);
     
     async function resolve() {
       if (!src) {
-        setResolvedUrl(null);
-        setIsLoading(false);
-        return;
-      }
-
-      // If it's a blob: URL, it's likely from a previous session and invalid.
-      // We should not even try to load it to avoid "Not allowed to load local resource" errors.
-      if (src.startsWith('blob:')) {
-        console.warn('[LocalImage] Invalid blob URL from previous session detected and blocked:', src);
-        setResolvedUrl(null);
-        setIsLoading(false);
+        if (isMounted) {
+          setResolvedUrl(null);
+          setIsLoading(false);
+        }
         return;
       }
 
@@ -57,12 +52,24 @@ export function LocalImage({ src, className, ...props }: LocalImageProps) {
     return <Skeleton className={cn("w-full h-full", className)} />;
   }
 
-  if (!resolvedUrl) return null;
+  // If it's a blob URL and it failed to load, it's likely from a previous session.
+  // We show a placeholder or nothing instead of a broken icon.
+  if (!resolvedUrl || hasError) {
+    return (
+      <div className={cn("flex items-center justify-center bg-muted text-muted-foreground text-[10px] text-center p-1", className)}>
+        {hasError ? "Imagem indisponível" : "Sem imagem"}
+      </div>
+    );
+  }
 
   return (
     <img
       src={resolvedUrl}
       className={className}
+      onError={() => {
+        console.warn('[LocalImage] Failed to load image:', resolvedUrl);
+        setHasError(true);
+      }}
       {...props}
     />
   );
