@@ -739,6 +739,7 @@ export default function PromotorRota() {
   const [extraGroupPhotos, setExtraGroupPhotos] = useState<Record<string, boolean>>({});
   const [optimisticBeforeUnlock, setOptimisticBeforeUnlock] = useState<Record<string, boolean>>({});
   const [optimisticAfterPhoto, setOptimisticAfterPhoto] = useState<Record<string, boolean>>({});
+  const [optimisticPhotos, setOptimisticPhotos] = useState<any[]>([]);
 
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [extraPhotosOpen, setExtraPhotosOpen] = useState<Record<string, boolean>>({});
