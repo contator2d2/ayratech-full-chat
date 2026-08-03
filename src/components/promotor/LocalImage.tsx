@@ -26,6 +26,16 @@ export function LocalImage({ src, className, ...props }: LocalImageProps) {
         return;
       }
 
+      // If it's a transient blob: URL, it's likely from a previous session and invalid.
+      if (src.startsWith('blob:')) {
+        console.warn('[LocalImage] Blocked transient blob URL from previous session:', src);
+        if (isMounted) {
+          setResolvedUrl(null);
+          setIsLoading(false);
+        }
+        return;
+      }
+
       if (src.startsWith('local-file://')) {
         const localId = src.replace('local-file://', '');
         const url = await getLocalFileUrl(localId);
@@ -52,12 +62,12 @@ export function LocalImage({ src, className, ...props }: LocalImageProps) {
     return <Skeleton className={cn("w-full h-full", className)} />;
   }
 
-  // If it's a blob URL and it failed to load, it's likely from a previous session.
-  // We show a placeholder or nothing instead of a broken icon.
+  // Placeholder for unavailable images instead of broken icon
   if (!resolvedUrl || hasError) {
     return (
-      <div className={cn("flex items-center justify-center bg-muted text-muted-foreground text-[10px] text-center p-1", className)}>
-        {hasError ? "Imagem indisponível" : "Sem imagem"}
+      <div className={cn("flex flex-col items-center justify-center bg-muted/50 text-muted-foreground text-[8px] leading-tight text-center p-1 border border-dashed rounded", className)}>
+        <span>Sem prévia</span>
+        <span className="opacity-50 mt-0.5">Sincronizando...</span>
       </div>
     );
   }
@@ -68,7 +78,9 @@ export function LocalImage({ src, className, ...props }: LocalImageProps) {
       className={className}
       onError={() => {
         console.warn('[LocalImage] Failed to load image:', resolvedUrl);
-        setHasError(true);
+        if (resolvedUrl.startsWith('blob:')) {
+          setHasError(true);
+        }
       }}
       {...props}
     />

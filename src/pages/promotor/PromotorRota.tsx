@@ -438,9 +438,7 @@ function CategoryAfterPhotoGate({ catId, routeBrandId, categoryName, routeId, pd
     if (effective.length < min) return toast.error(`É necessário enviar pelo menos ${min} foto(s) DEPOIS.`);
     setIsSending(true);
     try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 5000 })
-      ).catch(() => null);
+      const pos = await import('@/lib/photo-perf').then(m => m.getCachedGeolocation({ timeoutMs: 1500 })).catch(() => null);
 
       const body = {
         routeId, catId, route_brand_id: routeBrandId, photo_url: effective[0], photos: effective,
@@ -572,8 +570,9 @@ function CategoryExtraPhotosPanel({
     // tirando fotos imediatamente; o upload segue pelo useOfflineSync.
     (async () => {
       try {
-        // Geolocalização cacheada com timeout curto (não trava a fila).
-        const { lat, lng } = await import('@/lib/photo-perf').then(m => m.getCachedGeolocation({ timeoutMs: 1500 })).catch(() => ({ lat: undefined, lng: undefined }));
+        const pos = await import('@/lib/photo-perf').then(m => m.getCachedGeolocation({ timeoutMs: 1500 })).catch(() => null);
+        const lat = pos?.coords?.latitude;
+        const lng = pos?.coords?.longitude;
         const endpoint = mode === 'before' ? 'photo' : 'after-photo';
         await queueApiCall({
           url: `/api/merch/promotor/routes/${routeId}/categories/${catId}/${endpoint}`,
