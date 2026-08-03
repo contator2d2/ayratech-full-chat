@@ -226,6 +226,7 @@ function CategoryPreparation({ category, catId, routeBrandId, categoryName, rout
       
       setPhotos([]);
       setIsSending(false);
+      setOptimisticPhotos(prev => [...prev, { photo_url: effective[0], photo_type: 'category_before', category_id: catId, route_brand_id: routeBrandId }]);
       onUnlocked();
     } catch {
       setIsSending(false);
@@ -521,7 +522,7 @@ function CategoryExtraPhotosPanel({
   unlockBeforeUrl?: string | null; unlockAfterUrl?: string | null;
   pdvName: string; brandName: string; promotorName?: string;
   qualityConfig?: PhotoQualityConfig;
-  onUploaded: () => void;
+  onUploaded: (url?: string, type?: 'category_before' | 'category_after') => void;
 }) {
   const { queueApiCall } = useOfflineSync();
   const [mode, setMode] = useState<'before' | 'after' | null>(null);
@@ -573,7 +574,9 @@ function CategoryExtraPhotosPanel({
         const pos = await import('@/lib/photo-perf').then(m => m.getCachedGeolocation({ timeoutMs: 1500 })).catch(() => null);
         const lat = pos?.coords?.latitude;
         const lng = pos?.coords?.longitude;
+        const type = mode === 'before' ? 'category_before' : 'category_after';
         const endpoint = mode === 'before' ? 'photo' : 'after-photo';
+        
         await queueApiCall({
           url: `/api/merch/promotor/routes/${routeId}/categories/${catId}/${endpoint}`,
           method: 'POST',
@@ -586,9 +589,10 @@ function CategoryExtraPhotosPanel({
             routeId, catId,
           },
           headers: { 'Authorization': `Bearer ${localStorage.getItem('promotor_token') || localStorage.getItem('auth_token')}` },
+          dependsOnUploadId: url.startsWith('local-file://') ? url.replace('local-file://', '') : undefined
         });
         toast.success('Foto adicionada');
-        onUploaded();
+        onUploaded(url, type);
       } catch {
         toast.error('Erro ao enviar foto');
       }
@@ -1269,9 +1273,9 @@ export default function PromotorRota() {
                       routeId={id!}
                       catId={catId}
                       routeBrandId={routeBrandId}
-                      photos={(route?.photos || []).filter((p: any) => (p.category_id || null) === (catId || null) && (p.photo_type === 'category_before' || p.photo_type === 'category_after'))}
-                      hasAnyBefore={!!catStatus?.category_before_photo || (route?.photos || []).some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_before')}
-                      hasAnyAfter={!!catStatus?.category_after_photo || (route?.photos || []).some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_after')}
+                      photos={[...(route?.photos || []), ...optimisticPhotos].filter((p: any) => (p.category_id || null) === (catId || null) && (p.photo_type === 'category_before' || p.photo_type === 'category_after'))}
+                      hasAnyBefore={!!catStatus?.category_before_photo || [...(route?.photos || []), ...optimisticPhotos].some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_before')}
+                      hasAnyAfter={!!catStatus?.category_after_photo || [...(route?.photos || []), ...optimisticPhotos].some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_after')}
                       completed={isCompletedCategory}
                       unlockBeforeUrl={catStatus?.category_before_photo || null}
                       unlockAfterUrl={catStatus?.category_after_photo || null}
@@ -1279,7 +1283,12 @@ export default function PromotorRota() {
                       brandName={currentBrand?.brand_name || route.brand_name}
                       promotorName={route.promotor_name}
                       qualityConfig={photoQualityConfig}
-                      onUploaded={() => refetch()}
+                      onUploaded={(url, type) => {
+                        if (url && type) {
+                          setOptimisticPhotos(prev => [...prev, { photo_url: url, photo_type: type, category_id: catId, route_brand_id: routeBrandId }]);
+                        }
+                        refetch();
+                      }}
                     />
                   )}
 
