@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react"; // nao é isso..  no app do promotor  dentro da categoria ele tem que tirar as fotos do depois.. ai essas fotos é que nao carregam a thumb e nem mostra a foto tirada. danodo erro
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
 import { useParams, useNavigate } from "react-router-dom";
 import { PromotorLayout } from "./PromotorLayout";
@@ -140,8 +140,8 @@ const usePromotorPdvCheckout = () => {
 };
 
 // ===== Category Preparation Component =====
-function CategoryPreparation({ category, catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, minPhotos, photoMode, onUnlocked, onPointTypeSet }: {
-  category: any; catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; minPhotos: number; photoMode?: 'before' | 'after' | 'both'; onUnlocked: () => void; onPointTypeSet?: () => void;
+function CategoryPreparation({ category, catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, minPhotos, photoMode, onUnlocked, onPointTypeSet, onCaptureOptimistic }: {
+  category: any; catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; minPhotos: number; photoMode?: 'before' | 'after' | 'both'; onUnlocked: () => void; onPointTypeSet?: () => void; onCaptureOptimistic?: (url: string, type: string) => void;
 }) {
   const setPointType = usePromotorSetPointType();
   const setCategoryPhoto = usePromotorCategoryPhoto();
@@ -226,6 +226,7 @@ function CategoryPreparation({ category, catId, routeBrandId, categoryName, rout
       
       setPhotos([]);
       setIsSending(false);
+      onCaptureOptimistic?.(effective[0], 'category_before');
       onUnlocked();
     } catch {
       setIsSending(false);
@@ -326,8 +327,8 @@ function CategoryPreparation({ category, catId, routeBrandId, categoryName, rout
 }
 
 // ===== Extra Point Photo Gate (no point type, only photo) =====
-function ExtraPointPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, onPhotoTaken }: {
-  catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; onPhotoTaken: () => void;
+function ExtraPointPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, onPhotoTaken, onCaptureOptimistic }: {
+  catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; onPhotoTaken: () => void; onCaptureOptimistic?: (url: string, type: string) => void;
 }) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [isSending, setIsSending] = useState(false);
@@ -339,9 +340,7 @@ function ExtraPointPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvNa
     if (effective.length === 0) return toast.error('É necessário tirar pelo menos 1 foto do ponto extra.');
     setIsSending(true);
     try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 5000 })
-      ).catch(() => null);
+      const pos = await import('@/lib/photo-perf').then(m => m.getCachedGeolocation({ timeoutMs: 1500 })).catch(() => null);
 
       const body = {
         photo_type: 'extra_point',
@@ -362,6 +361,7 @@ function ExtraPointPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvNa
       
       setPhotos([]);
       setIsSending(false);
+      onCaptureOptimistic?.(effective[0], 'extra_point');
       onPhotoTaken();
     } catch { 
       setIsSending(false); 
@@ -423,8 +423,8 @@ function ExtraPointPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvNa
 }
 
 // ===== Category After Photo Gate (required to close/complete category) =====
-function CategoryAfterPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, minPhotos, onCompleted }: {
-  catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; minPhotos: number; onCompleted: () => void;
+function CategoryAfterPhotoGate({ catId, routeBrandId, categoryName, routeId, pdvName, brandName, promotorName, qualityConfig, minPhotos, onCompleted, onCaptureOptimistic }: {
+  catId: string; routeBrandId?: string; categoryName: string; routeId: string; pdvName: string; brandName: string; promotorName?: string; qualityConfig?: PhotoQualityConfig; minPhotos: number; onCompleted: () => void; onCaptureOptimistic?: (url: string, type: string) => void;
 }) {
   const setCategoryAfterPhoto = usePromotorCategoryAfterPhoto();
   const [photos, setPhotos] = useState<string[]>([]);
@@ -438,9 +438,7 @@ function CategoryAfterPhotoGate({ catId, routeBrandId, categoryName, routeId, pd
     if (effective.length < min) return toast.error(`É necessário enviar pelo menos ${min} foto(s) DEPOIS.`);
     setIsSending(true);
     try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 5000 })
-      ).catch(() => null);
+      const pos = await import('@/lib/photo-perf').then(m => m.getCachedGeolocation({ timeoutMs: 1500 })).catch(() => null);
 
       const body = {
         routeId, catId, route_brand_id: routeBrandId, photo_url: effective[0], photos: effective,
@@ -456,6 +454,7 @@ function CategoryAfterPhotoGate({ catId, routeBrandId, categoryName, routeId, pd
       
       setPhotos([]);
       setIsSending(false);
+      onCaptureOptimistic?.(effective[0], 'category_after');
       onCompleted();
     } catch { 
       setIsSending(false); 
@@ -523,7 +522,7 @@ function CategoryExtraPhotosPanel({
   unlockBeforeUrl?: string | null; unlockAfterUrl?: string | null;
   pdvName: string; brandName: string; promotorName?: string;
   qualityConfig?: PhotoQualityConfig;
-  onUploaded: () => void;
+  onUploaded: (url?: string, type?: 'category_before' | 'category_after') => void;
 }) {
   const { queueApiCall } = useOfflineSync();
   const [mode, setMode] = useState<'before' | 'after' | null>(null);
@@ -572,9 +571,12 @@ function CategoryExtraPhotosPanel({
     // tirando fotos imediatamente; o upload segue pelo useOfflineSync.
     (async () => {
       try {
-        // Geolocalização cacheada com timeout curto (não trava a fila).
-        const { lat, lng } = await import('@/lib/photo-perf').then(m => m.getCachedGeolocation({ timeoutMs: 1500 })).catch(() => ({ lat: undefined, lng: undefined }));
+        const pos = await import('@/lib/photo-perf').then(m => m.getCachedGeolocation({ timeoutMs: 1500 })).catch(() => null);
+        const lat = pos?.coords?.latitude;
+        const lng = pos?.coords?.longitude;
+        const type = mode === 'before' ? 'category_before' : 'category_after';
         const endpoint = mode === 'before' ? 'photo' : 'after-photo';
+        
         await queueApiCall({
           url: `/api/merch/promotor/routes/${routeId}/categories/${catId}/${endpoint}`,
           method: 'POST',
@@ -587,9 +589,10 @@ function CategoryExtraPhotosPanel({
             routeId, catId,
           },
           headers: { 'Authorization': `Bearer ${localStorage.getItem('promotor_token') || localStorage.getItem('auth_token')}` },
+          dependsOnUploadId: url.startsWith('local-file://') ? url.replace('local-file://', '') : undefined
         });
         toast.success('Foto adicionada');
-        onUploaded();
+        onUploaded(url, type);
       } catch {
         toast.error('Erro ao enviar foto');
       }
@@ -740,6 +743,7 @@ export default function PromotorRota() {
   const [extraGroupPhotos, setExtraGroupPhotos] = useState<Record<string, boolean>>({});
   const [optimisticBeforeUnlock, setOptimisticBeforeUnlock] = useState<Record<string, boolean>>({});
   const [optimisticAfterPhoto, setOptimisticAfterPhoto] = useState<Record<string, boolean>>({});
+  const [optimisticPhotos, setOptimisticPhotos] = useState<any[]>([]);
 
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [extraPhotosOpen, setExtraPhotosOpen] = useState<Record<string, boolean>>({});
@@ -1208,6 +1212,7 @@ export default function PromotorRota() {
                       minPhotos={Math.max(1, parseInt((rb || route as any)?.min_category_photos_before, 10) || 1)}
                       onUnlocked={() => { setOptimisticBeforeUnlock(prev => ({ ...prev, [categoryKey]: true })); refetch(); }}
                       onPointTypeSet={() => { refetch(); }}
+                      onCaptureOptimistic={(url, type) => setOptimisticPhotos(prev => [...prev, { photo_url: url, photo_type: type, category_id: catId, route_brand_id: routeBrandId }])}
                     />
                   )}
 
@@ -1223,6 +1228,7 @@ export default function PromotorRota() {
                       promotorName={route.promotor_name}
                       qualityConfig={photoQualityConfig}
                       onPhotoTaken={() => setExtraGroupPhotos(prev => ({ ...prev, [extraPhotoKey]: true }))}
+                      onCaptureOptimistic={(url, type) => setOptimisticPhotos(prev => [...prev, { photo_url: url, photo_type: type, category_id: catId, route_brand_id: routeBrandId }])}
                     />
                   )}
 
@@ -1269,9 +1275,9 @@ export default function PromotorRota() {
                       routeId={id!}
                       catId={catId}
                       routeBrandId={routeBrandId}
-                      photos={(route?.photos || []).filter((p: any) => (p.category_id || null) === (catId || null) && (p.photo_type === 'category_before' || p.photo_type === 'category_after'))}
-                      hasAnyBefore={!!catStatus?.category_before_photo || (route?.photos || []).some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_before')}
-                      hasAnyAfter={!!catStatus?.category_after_photo || (route?.photos || []).some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_after')}
+                      photos={[...(route?.photos || []), ...optimisticPhotos].filter((p: any) => (p.category_id || null) === (catId || null) && (p.photo_type === 'category_before' || p.photo_type === 'category_after'))}
+                      hasAnyBefore={!!catStatus?.category_before_photo || [...(route?.photos || []), ...optimisticPhotos].some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_before')}
+                      hasAnyAfter={!!catStatus?.category_after_photo || [...(route?.photos || []), ...optimisticPhotos].some((p: any) => (p.category_id || null) === (catId || null) && p.photo_type === 'category_after')}
                       completed={isCompletedCategory}
                       unlockBeforeUrl={catStatus?.category_before_photo || null}
                       unlockAfterUrl={catStatus?.category_after_photo || null}
@@ -1279,7 +1285,12 @@ export default function PromotorRota() {
                       brandName={currentBrand?.brand_name || route.brand_name}
                       promotorName={route.promotor_name}
                       qualityConfig={photoQualityConfig}
-                      onUploaded={() => refetch()}
+                      onUploaded={(url, type) => {
+                        if (url && type) {
+                          setOptimisticPhotos(prev => [...prev, { photo_url: url, photo_type: type, category_id: catId, route_brand_id: routeBrandId }]);
+                        }
+                        refetch();
+                      }}
                     />
                   )}
 
@@ -1370,6 +1381,7 @@ export default function PromotorRota() {
                       qualityConfig={photoQualityConfig}
                       minPhotos={Math.max(1, parseInt((rb || route as any)?.min_category_photos_after, 10) || 1)}
                       onCompleted={() => { setOptimisticAfterPhoto(p => ({ ...p, [afterPhotoKey]: true })); refetch(); }}
+                      onCaptureOptimistic={(url, type) => setOptimisticPhotos(prev => [...prev, { photo_url: url, photo_type: type, category_id: catId, route_brand_id: routeBrandId }])}
                     />
                   )}
                 </div>

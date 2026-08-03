@@ -10,24 +10,29 @@ interface LocalImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
 export function LocalImage({ src, className, ...props }: LocalImageProps) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const { getLocalFileUrl } = useOfflineSync();
 
   useEffect(() => {
     let isMounted = true;
+    setHasError(false);
     
     async function resolve() {
       if (!src) {
-        setResolvedUrl(null);
-        setIsLoading(false);
+        if (isMounted) {
+          setResolvedUrl(null);
+          setIsLoading(false);
+        }
         return;
       }
 
-      // If it's a blob: URL, it's likely from a previous session and invalid.
-      // We should not even try to load it to avoid "Not allowed to load local resource" errors.
+      // If it's a transient blob: URL, it's likely from a previous session and invalid.
       if (src.startsWith('blob:')) {
-        console.warn('[LocalImage] Invalid blob URL from previous session detected and blocked:', src);
-        setResolvedUrl(null);
-        setIsLoading(false);
+        console.warn('[LocalImage] Blocked transient blob URL from previous session:', src);
+        if (isMounted) {
+          setResolvedUrl(null);
+          setIsLoading(false);
+        }
         return;
       }
 
@@ -57,12 +62,26 @@ export function LocalImage({ src, className, ...props }: LocalImageProps) {
     return <Skeleton className={cn("w-full h-full", className)} />;
   }
 
-  if (!resolvedUrl) return null;
+  // Placeholder for unavailable images instead of broken icon
+  if (!resolvedUrl || hasError) {
+    return (
+      <div className={cn("flex flex-col items-center justify-center bg-muted/50 text-muted-foreground text-[8px] leading-tight text-center p-1 border border-dashed rounded", className)}>
+        <span>Sem prévia</span>
+        <span className="opacity-50 mt-0.5">Sincronizando...</span>
+      </div>
+    );
+  }
 
   return (
     <img
       src={resolvedUrl}
       className={className}
+      onError={() => {
+        console.warn('[LocalImage] Failed to load image:', resolvedUrl);
+        if (resolvedUrl.startsWith('blob:')) {
+          setHasError(true);
+        }
+      }}
       {...props}
     />
   );
