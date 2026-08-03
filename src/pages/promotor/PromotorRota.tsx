@@ -454,7 +454,6 @@ function CategoryAfterPhotoGate({ catId, routeBrandId, categoryName, routeId, pd
         headers: { 'Authorization': `Bearer ${localStorage.getItem('promotor_token') || localStorage.getItem('auth_token')}` }
       });
       
-      setOptimisticAfterPhoto(prev => ({ ...prev, [afterPhotoKey]: true }));
       setPhotos([]);
       setIsSending(false);
       onCompleted();
