@@ -43,7 +43,12 @@ export function useOfflineSync() {
     if (upload && upload.file) {
       const url = URL.createObjectURL(upload.file);
       urlsToRevoke.current.add(url);
-      setLocalFileUrls(prev => ({ ...prev, [localId]: url }));
+      
+      // Update state and return the URL immediately
+      setLocalFileUrls(prev => {
+        const next = { ...prev, [localId]: url };
+        return next;
+      });
       return url;
     }
     return null;
